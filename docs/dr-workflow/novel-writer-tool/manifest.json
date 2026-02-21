@@ -1,0 +1,67 @@
+{
+  "project": "novel-writer-tool",
+  "type": "prd",
+  "created": "2026-02-21T10:30:00+08:00",
+  "current_phase": "DONE",
+  "current_version": 4,
+  "termination": { "score_threshold": 90, "max_iterations": 5 },
+  "iterations": [
+    {
+      "version": 1,
+      "phase_completed": "REVIEW",
+      "score": 88,
+      "new_dr_items": 5,
+      "dr_reports": [
+        "dr/dr-001-context-window.md",
+        "dr/dr-002-agent-concurrency.md",
+        "dr/dr-003-state-sync.md",
+        "dr/dr-004-generation-speed.md",
+        "dr/dr-005-style-analysis.md",
+        "dr/dr-006-state-concurrency.md",
+        "dr/dr-007-foreshadowing.md",
+        "dr/dr-008-user-acceptance.md",
+        "dr/dr-009-codeagent-backend.md",
+        "dr/dr-010-relationship-schema.md",
+        "dr/dr-011-ner-consistency.md",
+        "dr/dr-012-workflow-flexibility.md"
+      ],
+      "timestamp": "2026-02-21T12:00:00+08:00"
+    },
+    {
+      "version": 2,
+      "phase_completed": "REVIEW",
+      "score": 94,
+      "new_dr_items": 0,
+      "dr_reports": [
+        "dr/dr-013-api-cost.md",
+        "dr/dr-014-prompt-design.md",
+        "dr/dr-015-quality-eval.md",
+        "dr/dr-016-user-segments.md",
+        "dr/dr-017-competitors.md"
+      ],
+      "timestamp": "2026-02-21T18:55:00+08:00"
+    },
+    {
+      "version": 3,
+      "phase_completed": "BRAINSTORM_REVIEW",
+      "score": null,
+      "new_dr_items": 0,
+      "dr_reports": [],
+      "notes": "Brainstorming 深度分析，产出 4 项重大改进：卷制工作流、去AI化策略、Orchestrator规格、无状态冷启动",
+      "timestamp": "2026-02-21T19:30:00+08:00"
+    },
+    {
+      "version": 4,
+      "phase_completed": "REVIEW",
+      "score": 95,
+      "new_dr_items": 0,
+      "dr_reports": [
+        "dr/dr-018-plugin-api.md",
+        "dr/dr-019-haiku-summarizer.md",
+        "dr/dr-020-single-command-ux.md"
+      ],
+      "notes": "v4 Review：7 项 checklist 全部修复 + DR-020 UX 重设计（5 命令→3 命令混合模式）。Score 95/100，FINALIZE。",
+      "timestamp": "2026-02-21T23:00:00+08:00"
+    }
+  ]
+}

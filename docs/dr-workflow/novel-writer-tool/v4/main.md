@@ -1,0 +1,1044 @@
+# 小说自动化创作工具 PRD v4
+
+## 1. 产品概述
+
+基于 Claude Code 的多 agent 协作小说创作系统，面向中文网文作者，通过卷制滚动工作流实现长篇小说的高效续写和质量保证。
+
+**核心价值**：
+- **续写效率**：基于文件状态冷启动，随时续写下一章，无需重建上下文
+- **一致性保证**：自动追踪角色状态、伏笔、世界观，跨 100+ 章维持一致
+- **去 AI 化**：4 层风格策略确保输出贴近用户个人文风，降低 AI 痕迹
+- **成本可控**：混合模型策略（Opus + Sonnet），每章 ~$0.75
+
+**目标用户**：中文网文作者（MVP）[DR-016](../v2/dr/dr-016-user-segments.md)
+
+## 2. 产品形态：Claude Code Plugin
+
+### 2.1 交付格式
+
+本产品以 **Claude Code Plugin** 形式交付，包含 3 个斜杠命令（Commands）、8 个专业 Agent 和 1 个共享知识技能（Skill）。[DR-018](dr/dr-018-plugin-api.md) [DR-020](dr/dr-020-single-command-ux.md)
+
+```
+cc-novel-writer/
+├── .claude-plugin/
+│   └── plugin.json                    # 插件元数据（仅需 name 字段）
+├── commands/                          # 3 个斜杠命令（用户入口）
+│   ├── novel.md                       # /novel         状态感知交互入口（合并 create/plan/review）
+│   ├── novel-continue.md              # /novel-continue 续写下一章（高频快捷）
+│   └── novel-status.md                # /novel-status   只读状态查看
+├── agents/                            # 8 个专业 Agent（自动派生）
+│   ├── world-builder.md               # 世界观构建
+│   ├── character-weaver.md            # 角色网络
+│   ├── plot-architect.md              # 情节架构
+│   ├── chapter-writer.md              # 章节写作
+│   ├── summarizer.md                  # 摘要生成
+│   ├── style-analyzer.md              # 风格提取
+│   ├── style-refiner.md               # 去 AI 化润色
+│   └── quality-judge.md               # 质量评估
+├── skills/                            # 共享知识库
+│   └── novel-writing/
+│       ├── SKILL.md                   # 核心方法论 + 风格指南
+│       └── references/
+│           ├── style-guide.md         # 去 AI 化规则详解
+│           └── quality-rubric.md      # 7 维度评分标准
+└── templates/                         # 项目初始化模板
+    ├── brief-template.md
+    ├── ai-blacklist.json
+    └── style-profile-template.json
+```
+
+### 2.2 斜杠命令（三命令混合模式）
+
+采用"引导式入口 + 快捷命令"模式，认知负载 < Miller 下限（4 项），新老用户均可高效使用。[DR-020](dr/dr-020-single-command-ux.md)
+
+| 命令 | 用途 | 核心流程 |
+|------|------|---------|
+| `/novel` | 状态感知交互入口 | 读 checkpoint → 推荐下一步 → AskUserQuestion → Task 派发 agent |
+| `/novel-continue [N]` | 续写 N 章（默认 1） | 读 checkpoint → ChapterWriter → Summarizer → StyleRefiner → QualityJudge → 更新 checkpoint |
+| `/novel-status` | 只读状态查看 | 展示进度、评分均值、伏笔状态 |
+
+**`/novel` 入口逻辑**：
+```
+1. 读取 .checkpoint.json
+2. 状态感知推荐：
+   - 不存在 checkpoint → 推荐"创建新项目 (Recommended)"
+   - 当前卷未完成 → 推荐"继续写作 (Recommended)"
+   - 当前卷已完成 → 推荐"规划新卷 (Recommended)"
+3. AskUserQuestion(options=[推荐项, 质量回顾, 其余可用项])
+   约束：2-4 选项，单次最多 2-3 个问题（留余量给写作决策）
+4. 根据选择 → Task tool 派发对应 agent
+```
+
+**AskUserQuestion 约束**（[DR-020](dr/dr-020-single-command-ux.md)）：
+- 每次 2-4 选项（主菜单恰好 ≤4 项，刚好在限制内）
+- 60 秒超时 → 选项标记 "(Recommended)" 辅助快速决策
+- 子代理不可用 → `/novel` 必须在主 command 中调用 AskUserQuestion
+- 每会话 ~4-6 个问题 → 单次 `/novel` 最多用 2-3 个
+
+**Command 文件格式**（YAML frontmatter）：
+```yaml
+---
+description: 小说创作主入口 — 状态感知交互引导
+allowed-tools: Read, Write, Glob, Grep, Task, AskUserQuestion
+model: sonnet
+---
+```
+
+### 2.3 架构原则
+
+- **Commands = 入口 + 调度**：`/novel` 做状态感知路由，`/novel-continue` 和 `/novel-status` 为高频快捷命令
+- **Agents = 专业化执行**：每个 agent 有独立的 prompt 模板和 tools 权限，需包含 name/description/model/color/tools frontmatter
+- **Skill = 共享知识**：`novel-writing` skill 提供去 AI 化规则、质量评分标准等共享上下文
+- **Checkpoint 是衔接点**：commands 之间通过 `.checkpoint.json` 传递状态，支持冷启动
+- **Orchestrator 是逻辑抽象**：Section 8 定义的状态机是逻辑设计，实际由 3 个 command 分布实现（`/novel` 覆盖 INIT/QUICK_START/VOL_PLANNING/VOL_REVIEW，`/novel-continue` 覆盖 WRITING 循环，`/novel-status` 只读），见 Section 8.2 映射表
+
+### 2.4 用户体验示例
+
+```
+首次使用：
+> /novel
+Claude: 检测到无项目。推荐：创建新项目。
+       [AskUserQuestion: 创建新项目(Recommended) / 查看帮助]
+       [用户选择"创建新项目"]
+       请输入小说类型（如：玄幻、都市、悬疑）：
+       [用户输入：玄幻]
+       [WorldBuilder → 核心设定]
+       [CharacterWeaver → 主角+配角]
+       请提供 1-3 章风格样本文件路径。
+
+> @chapter-sample-1.md @chapter-sample-2.md
+Claude: [StyleAnalyzer → 风格指纹提取]
+       [ChapterWriter × 3 → StyleRefiner × 3]
+       3 章已生成，评分均值 3.7/5.0。继续？
+
+日常续写：
+> /novel-continue
+Claude: Vol 2 Ch 48 续写中...
+       第 48 章已生成（3120 字），评分 3.9/5.0 ✅
+
+> /novel-continue 3
+Claude: Ch 49: 3050字 4.1 ✅ | Ch 50: 2890字 3.2→修订→3.6 ✅ | Ch 51: 3200字 3.8 ✅
+
+卷末回顾（通过 /novel 进入）：
+> /novel
+Claude: Vol 2 已完成 51 章。推荐：规划新卷。
+       [AskUserQuestion: 规划新卷(Recommended) / 质量回顾 / 继续写作]
+       [用户选择"质量回顾"]
+       [NER 一致性检查 + 伏笔盘点 + 风格漂移报告]
+
+查看状态：
+> /novel-status
+Claude: Vol 2, Ch 51/50(超出), 总15万字, 均分3.7, 未回收伏笔3个
+```
+
+## 3. 用户画像与市场定位
+
+### 3.1 目标用户：网文作者
+
+**选择依据**（[DR-016](../v2/dr/dr-016-user-segments.md)）：AI 接受度高、产品匹配度高、市场规模大（中国 2000 万+ 网文作者）
+
+**用户特征**：
+- 日更 3000-6000 字，单部作品 100-500 万字
+- 核心痛点：灵感枯竭、情节重复、前后矛盾、日更效率压力
+- 创作模式：边写边想，每卷（30-50 章）滚动规划，根据读者反馈调整走向
+- 付费意愿：$15-30/月
+
+**功能需求优先级**：
+1. 续写效率（基于已有内容续写下一章）★★★★★
+2. 一致性检查（跨百章的角色/地名/时间线）★★★★★
+3. 伏笔追踪（埋设和回收提醒）★★★★
+4. 卷级大纲规划★★★★
+5. 去 AI 化（输出贴近个人文风）★★★★
+
+### 3.2 差异化定位
+
+**独特卖点**（[DR-017](../v2/dr/dr-017-competitors.md)）：
+1. 卷制滚动工作流（适配网文"边写边想"模式）
+2. 自动一致性保证（状态管理 + NER 检查 + 伏笔追踪）
+3. 多 agent 专业化分工 + 去 AI 化输出
+4. 中文原生支持
+
+**竞品空白**：Sudowrite/NovelAI 未进入中文市场，国内无长篇结构化创作工具。
+
+| 功能 | 本产品 | Sudowrite | NovelAI | ChatGPT |
+|------|--------|-----------|---------|---------|
+| 续写模式 | ✅ 卷制滚动 | ⚠️ Story Engine | ⚠️ 基础续写 | ⚠️ 对话续写 |
+| 多 agent 协作 | ✅ | ❌ | ❌ | ❌ |
+| 一致性检查 | ✅ 自动 | ❌ | ❌ | ❌ |
+| 伏笔追踪 | ✅ | ❌ | ❌ | ❌ |
+| 去 AI 化 | ✅ 4 层策略 | ❌ | ❌ | ❌ |
+| 中文支持 | ✅ | ❌ | ⚠️ | ✅ |
+
+## 4. 系统架构
+
+### 4.1 Agent 团队结构
+
+```
+Team Lead (Orchestrator)         # 调度核心 + 状态机
+├── WorldBuilder Agent           # 世界观构建（增量式）
+├── CharacterWeaver Agent        # 角色网络（动态增删）
+├── PlotArchitect Agent          # 卷级大纲规划
+├── ChapterWriter Agent          # 章节写作（含续写模式）
+├── Summarizer                   # 章节摘要 + 状态更新（后处理）
+├── StyleRefiner Agent           # 去 AI 化润色（后处理）
+└── QualityJudge Agent           # 7 维度质量评估
+```
+
+**关键组件说明**：
+- **Orchestrator**：无状态设计，从文件冷启动，管理卷制循环状态机（详见 Section 8）
+- **Summarizer**：每章写完后自动生成摘要 + 更新状态，是 context 管理的核心
+- **StyleRefiner**：ChapterWriter 后处理，替换 AI 用语、调整句式（详见 Section 7）
+
+### 4.2 协作模式
+
+**引导式**（默认，适合新卷开头）：Orchestrator 按流程调度
+**续写式**（日常，最常用）：用户请求续写 → ChapterWriter → Summarizer → StyleRefiner → QualityJudge
+**工具式**（按需）：用户直接调用 WorldBuilder / CharacterWeaver 更新设定或新增角色
+
+### 4.3 技术实现
+
+**基础设施**：
+- `TeamCreate` 创建 novel-project 团队
+- `TaskCreate` 分解创作任务
+- `SendMessage` 实现 agent 间状态同步
+
+**模型策略**（[DR-013](../v2/dr/dr-013-api-cost.md)）：
+
+| 组件 | 模型 | 原因 |
+|------|------|------|
+| WorldBuilder / CharacterWeaver / PlotArchitect | Opus 4.6 | 创意质量关键 |
+| ChapterWriter | Sonnet 4.6 | 批量生成，成本敏感 |
+| StyleRefiner | Opus 4.6 | 需要高质量语言感知 |
+| QualityJudge | Sonnet 4.6 | 结构化评估，不需要创意 |
+| Summarizer | Sonnet 4.6 | 信息保留关键，成本增量可忽略（+$0.02/章）[DR-019](dr/dr-019-haiku-summarizer.md) |
+| 问题章节重写 | Opus 4.6 | 需要高质量推理 |
+
+## 5. Agent Prompt 设计
+
+各 agent 采用**角色-目标-约束-格式**四层结构 [DR-014](../v2/dr/dr-014-prompt-design.md)。
+
+### 5.1 WorldBuilder Agent
+
+```markdown
+# Role
+你是一位资深的世界观设计师。你擅长构建内部一致的虚构世界。
+
+# Goal
+{mode} 世界观设定。
+模式：
+- 初始化：基于创作纲领生成核心设定
+- 增量更新：基于剧情需要扩展已有设定
+
+创作纲领：{project_brief}
+已有设定：{existing_world_docs}  （增量模式时提供）
+新增需求：{update_request}       （增量模式时提供）
+
+# Constraints
+- 新增设定必须与已有设定一致
+- 规则系统边界和代价明确
+- 每个设定服务于故事，避免无用细节
+
+# Format
+输出变更文件 + changelog 条目
+```
+
+### 5.2 CharacterWeaver Agent
+
+```markdown
+# Role
+你是一位角色设计专家。
+
+# Goal
+{mode} 角色。
+模式：
+- 新增角色：创建完整档案
+- 更新角色：修改已有角色属性
+- 退场角色：标记退场，移至 retired/
+
+世界观：{world_docs}
+已有角色：{existing_characters}
+
+# Constraints
+- 每个角色有目标、动机和内在矛盾
+- 角色行为符合世界观规则
+- 关系图实时更新
+
+# Format
+角色 .md 文件 + relationships.json 更新
+```
+
+### 5.3 PlotArchitect Agent
+
+```markdown
+# Role
+你是一位情节架构师。
+
+# Goal
+规划第 {volume_num} 卷大纲（{chapter_start}-{chapter_end} 章）。
+
+上卷回顾：{prev_volume_review}
+全局伏笔状态：{global_foreshadowing}
+世界观：{world_docs}
+角色档案：{active_characters}
+
+# Constraints
+- 每章至少一个核心冲突
+- 伏笔在 3-10 章内回收
+- 承接上卷未完结线索
+- 预留卷末钩子（吸引读者追更）
+
+# Format
+1. outline.md（每章含 POV/Location/Conflict/Arc/Foreshadowing/StateChanges）
+2. foreshadowing.json（本卷新增 + 上卷延续）
+```
+
+### 5.4 ChapterWriter Agent
+
+```markdown
+# Role
+你是一位小说写作大师。擅长生动的场景描写、自然的对话和心理刻画。
+
+# Goal
+续写第 {chapter_num} 章。
+
+# Context（增量式）
+本卷大纲：{current_volume_outline}
+本章大纲：{chapter_outline}
+近 3 章摘要：{recent_3_summaries}
+角色当前状态：{current_state}
+本章伏笔任务：{foreshadowing_tasks}
+风格参考：{style_profile}
+
+# Constraints
+- 字数：2500-3500 字
+- 推进大纲指定的核心冲突
+- 角色言行符合档案设定和说话风格
+- 自然衔接前一章结尾
+- 保持叙事视角和文风一致
+- 禁止使用以下 AI 高频用语：{ai_blacklist}
+- 对话带角色语癖（每角色至少 1 个口头禅）
+- 每章至少 1 处"反直觉"细节
+- 场景描写 ≤2 句，优先动作推进
+- 禁止连续 3 句相同句式
+
+# Format
+1. 章节正文（markdown）
+2. 状态更新 JSON（位置、情绪、关系变化、物品变化）
+```
+
+### 5.5 Summarizer
+
+```markdown
+# Role
+你是一位精准的文本摘要专家。
+
+# Goal
+为第 {chapter_num} 章生成摘要和状态更新。
+
+章节全文：{chapter_content}
+当前状态：{current_state}
+
+# Format
+1. 300 字章节摘要（保留关键情节、对话、转折）
+2. 状态增量 JSON（仅包含本章变更的字段）
+3. 伏笔变更（新埋设/推进/回收）
+```
+
+### 5.6 StyleAnalyzer Agent
+
+```markdown
+# Role
+你是一位文本风格分析专家，擅长识别作者的独特写作指纹。
+
+# Goal
+分析风格样本，提取可量化的风格特征。
+
+输入模式：
+- 用户自有样本：分析用户提供的 1-3 章原创文本
+- 仿写模式：分析指定网文作者的公开章节，提取其风格特征
+
+风格样本：{style_samples}
+参考作者（仿写模式）：{reference_author}
+
+# Constraints
+- 提取可量化的指标（句长、比例、频率），非主观评价
+- 禁忌词表只收录作者明显不使用的词，不过度泛化
+- 角色语癖需有具体示例支撑
+- 仿写模式下，标注"参考风格"而非"用户原创风格"
+
+# Format
+输出 style-profile.json，包含：
+1. avg_sentence_length（平均句长，字数）
+2. dialogue_ratio（对话/叙述比例）
+3. rhetoric_preferences（修辞偏好列表）
+4. forbidden_words（禁忌词表）
+5. character_speech_patterns（角色语癖，如有）
+6. source_type（"original" | "reference"）
+```
+
+### 5.7 StyleRefiner Agent
+
+```markdown
+# Role
+你是一位文风润色专家。你的唯一任务是消除 AI 痕迹，使文本贴近目标风格。
+
+# Goal
+对 ChapterWriter 初稿进行去 AI 化润色。
+
+初稿：{chapter_draft}
+风格指纹：{style_profile}
+AI 黑名单：{ai_blacklist}
+
+# Constraints
+- 替换所有命中黑名单的用语，用风格相符的表达替代
+- 调整句式匹配 style-profile 的平均句长和修辞偏好
+- 严禁改变情节、对话内容、角色行为等语义要素
+- 保留所有伏笔暗示和状态变更细节
+- 修改量控制在原文 15% 以内（避免过度润色）
+
+# Format
+1. 润色后全文（markdown）
+2. 修改日志 JSON：[{"original": "...", "refined": "...", "reason": "黑名单/句式/风格"}]
+```
+
+### 5.8 QualityJudge Agent
+
+```markdown
+# Role
+你是一位严格的小说质量评审员。你按 7 个维度独立评分，不受其他 agent 影响。
+
+# Goal
+评估第 {chapter_num} 章的质量。
+
+章节全文：{chapter_content}
+本章大纲：{chapter_outline}
+角色档案：{character_profiles}
+前一章摘要：{prev_summary}
+风格指纹：{style_profile}
+AI 黑名单：{ai_blacklist}
+
+# Constraints
+- 每个维度独立评分（1-5），附具体理由和引用原文
+- 不给"面子分"：明确指出问题而非回避
+- 风格自然度评分基于可量化指标（黑名单命中率、句式重复率）
+- 综合分 = 7 维度加权均值
+
+# Format
+输出 JSON：
+{
+  "chapter": N,
+  "scores": {
+    "plot_coherence": {"score": N, "weight": 0.20, "reason": "..."},
+    "character_consistency": {"score": N, "weight": 0.20, "reason": "..."},
+    "foreshadowing": {"score": N, "weight": 0.10, "reason": "..."},
+    "language_quality": {"score": N, "weight": 0.15, "reason": "..."},
+    "scene_description": {"score": N, "weight": 0.10, "reason": "..."},
+    "emotional_tension": {"score": N, "weight": 0.10, "reason": "..."},
+    "style_naturalness": {"score": N, "weight": 0.15, "reason": "..."}
+  },
+  "overall": 加权均值,
+  "recommendation": "pass|revise|rewrite",
+  "issues": ["具体问题描述"]
+}
+```
+
+### 5.9 Prompt 管理
+
+- Prompt 模板存储在 `prompts/` 目录，使用 `{variable}` 占位符
+- 共享上下文按需注入（详见 Section 8 context 组装规则）
+- Few-shot 控制在 2K tokens 以内
+
+## 6. 工作流设计
+
+### Layer 1: 快速起步（首次使用，30 分钟内产出）
+
+```
+用户提供：题材 + 主角概念 + 核心冲突
+  ↓
+1a. WorldBuilder（轻量模式）→ 核心规则 ≤3 条
+1b. CharacterWeaver → 主角 + 1-2 配角
+1c. 用户提供 1-3 章风格样本 → StyleAnalyzer 提取 style-profile
+  ↓
+1d. ChapterWriter 试写 3 章 → StyleRefiner 润色 → QualityJudge 评分
+  ↓
+1e. 用户确认：继续 / 调整风格 / 换题材
+```
+
+**验收标准**：30 分钟内输出 3 章（含设定），用户确认后进入卷制循环。
+
+### Layer 2: 卷制循环（每卷 30-50 章）
+
+```
+2a. 卷规划
+    PlotArchitect → 本卷大纲 + 伏笔计划
+    用户审核大纲（可调整）
+
+2b. 日更续写（核心循环，每次 1-3 章）
+    用户请求 → Orchestrator 组装 context
+    → ChapterWriter 生成初稿
+    → Summarizer 生成摘要 + 更新状态
+    → StyleRefiner 去 AI 化润色
+    → QualityJudge 评分
+    → 通过 → 保存 + 更新 checkpoint
+    → 未通过 → 质量门控处理
+
+2c. 定期检查（每 10 章）
+    一致性检查（NER）
+    伏笔状态盘点
+    风格漂移监控
+
+2d. 卷末回顾
+    全卷一致性报告
+    伏笔完成度统计
+    下卷铺垫建议
+    用户审核 + 决定下卷方向
+```
+
+### Layer 3: 全局维护（跨卷、按需调用）
+
+- **世界观扩展**：随剧情需要，调用 WorldBuilder 增量更新
+- **角色管理**：新增角色 / 退场角色 / 更新关系
+- **全局伏笔**：跨卷伏笔状态追踪
+- **风格校准**：每 5 章提取风格特征，检测漂移并注入校正
+
+### 质量门控
+
+| QualityJudge 评分 | 行动 |
+|-------------------|------|
+| 4.0-5.0 | 直接通过 |
+| 3.5-3.9 | StyleRefiner 二次润色后通过 |
+| 3.0-3.4 | 标记问题，ChapterWriter（Opus）自动修订 |
+| 2.0-2.9 | 通知用户，人工审核决定重写范围 |
+| < 2.0 | 强制全章重写 |
+
+### 用户审核点
+
+| 触发条件 | 展示内容 | 用户选项 |
+|---------|---------|---------|
+| 快速起步完成 | 3 章试写 + 设定 + 风格分析 | 继续 / 调整 / 重来 |
+| 卷规划完成 | 本卷大纲 | 确认 / 修改 / 调整章数 |
+| 每 5 章 | 质量简报（均分+问题章节） | 继续 / 回看 / 调整方向 |
+| 低分章节 | 章节 + 评分详情 | 自动修订 / 手动改 / 接受 |
+| 卷末 | 一致性报告 + 伏笔 + 铺垫 | 确认 / 修改 / 加角色 |
+
+## 7. 去 AI 化策略
+
+### Layer 1: 风格锚定（输入层）
+
+快速起步时，用户提供 1-3 章自己写的风格样本。StyleAnalyzer 提取：
+- 平均句长、对话/叙述比例、常用词频
+- 修辞偏好（比喻频率、排比、短句切换）
+- 禁忌词表（用户不会用的词）
+
+输出 `style-profile.json`，注入所有 ChapterWriter 和 StyleRefiner 调用。
+
+**风格样本降级方案**（无自有样本时）：
+1. **仿写模式**（推荐）：用户指定喜欢的网文作者，StyleAnalyzer 分析其公开章节提取风格指纹，标记为 `source_type: "reference"`
+2. **先写后提**：用户在工具辅助下先写 1 章，再提取风格
+3. **预置模板**：提供 3-5 种常见网文风格模板（如"轻松幽默"、"热血少年"、"细腻言情"），用户选择后微调
+
+### Layer 2: 约束注入（生成层）
+
+ChapterWriter prompt 增加反 AI 约束：
+- 禁用 AI 高频用语黑名单（`ai-blacklist.json`）
+- 对话带角色语癖
+- 每章 ≥1 处反直觉细节
+- 场景描写 ≤2 句
+- 禁止连续 3 句相同句式
+
+### Layer 3: 后处理（StyleRefiner）
+
+ChapterWriter 初稿 → StyleRefiner（Opus）：
+1. 替换命中黑名单的用语
+2. 调整句式匹配 style-profile
+3. 保留语义不变
+
+单章额外成本 ~$0.08-0.12。
+
+### Layer 4: 检测度量
+
+QualityJudge 新增第 7 维度"风格自然度"：
+- AI 黑名单词命中率 < 3 次/千字
+- 句式重复率（相邻 5 句中重复句式 < 2）
+- 与 style-profile 的匹配度
+
+### 黑名单维护
+
+- 初始化：收集 LLM 高频用语
+- 持续更新：QualityJudge 检测到新高频 AI 用语时追加
+- 用户自定义：允许添加/删除
+
+## 8. Orchestrator 设计
+
+### 8.1 核心原则：无状态冷启动
+
+Orchestrator 不依赖会话历史。每次启动（新 session 或 context 压缩后）：
+1. 读 `.checkpoint.json` → 当前位置（Vol N, Chapter M, 状态 X）
+2. 读 `state/current-state.json` → 世界/角色/伏笔当前状态
+3. 读近 3 章 `summaries/` → 近期剧情
+4. 读 `volumes/vol-N/outline.md` → 当前卷计划
+5. 无需读任何章节全文
+
+### 8.2 状态机
+
+```
+INIT → QUICK_START → VOL_PLANNING → WRITING ⟲
+                                      ↕
+                              QUALITY_GATE / CHAPTER_REWRITE
+                                      ↓ (卷末)
+                                  VOL_REVIEW → VOL_PLANNING (下一卷)
+```
+
+**状态转移规则**：
+
+| 当前状态 | 触发条件 | 目标状态 | 动作 |
+|---------|---------|---------|------|
+| INIT | `/novel create` | QUICK_START | 创建项目目录 |
+| QUICK_START | 用户提供设定 | QUICK_START | WorldBuilder(轻量) + CharacterWeaver(主角) |
+| QUICK_START | 风格样本提交 | QUICK_START | StyleAnalyzer 提取 profile |
+| QUICK_START | 试写确认 | VOL_PLANNING | 标记试写为 Vol 1 前 3 章 |
+| VOL_PLANNING | 大纲确认 | WRITING | 保存大纲，准备续写 |
+| WRITING | 续写请求 | WRITING | ChapterWriter → Summarizer → StyleRefiner |
+| WRITING | 每 5 章 | QUALITY_GATE | QualityJudge 评估 |
+| QUALITY_GATE | ≥ 3.5 | WRITING | 通过 |
+| QUALITY_GATE | 3.0-3.4 | CHAPTER_REWRITE | Opus 修订 |
+| QUALITY_GATE | < 3.0 | WRITING(暂停) | 通知用户 |
+| CHAPTER_REWRITE | 完成 | WRITING | 更新章节和状态 |
+| WRITING | 本卷最后一章 | VOL_REVIEW | 全卷检查 |
+| VOL_REVIEW | 完成 | VOL_PLANNING | 下卷规划 |
+| 任意 | 错误 | ERROR_RETRY | 重试 1 次，失败则保存 checkpoint 暂停 |
+
+**Command → 状态映射**：
+
+| Command | 负责状态 | 说明 |
+|---------|---------|------|
+| `/novel` | INIT → QUICK_START, VOL_PLANNING, VOL_REVIEW | 状态感知交互入口：通过 AskUserQuestion 识别用户意图后派发对应 agent |
+| `/novel-continue` | WRITING ⟲ QUALITY_GATE ⟲ CHAPTER_REWRITE | 核心续写循环 + 自动质量门控（高频快捷命令） |
+| `/novel-status` | 任意（只读） | 读取 checkpoint 展示状态，不触发转移 |
+
+### 8.3 Context 组装规则
+
+```python
+def assemble_context(agent_type, chapter_num, volume):
+    base = {
+        "project_brief": read("brief.md"),
+        "style_profile": read("style-profile.json"),
+        "ai_blacklist": read("ai-blacklist.json"),
+    }
+
+    if agent_type == "ChapterWriter":
+        return base | {
+            "volume_outline": read(f"volumes/vol-{volume}/outline.md"),
+            "chapter_outline": extract_chapter(volume, chapter_num),
+            "recent_summaries": read_last_n("summaries/", n=3),
+            "current_state": read("state/current-state.json"),
+            "foreshadowing_tasks": get_chapter_foreshadowing(chapter_num),
+        }
+
+    elif agent_type == "QualityJudge":
+        return base | {
+            "chapter_content": read(f"chapters/chapter-{chapter_num}.md"),
+            "chapter_outline": extract_chapter(volume, chapter_num),
+            "character_profiles": read("characters/active/*.md"),
+            "prev_summary": read_last_n("summaries/", n=1),
+        }
+
+    elif agent_type == "PlotArchitect":
+        return base | {
+            "world_docs": read("world/*.md"),
+            "characters": read("characters/active/*.md"),
+            "prev_volume_review": read(f"volumes/vol-{volume-1}/review.md"),
+            "global_foreshadowing": read("foreshadowing/global.json"),
+        }
+    # WorldBuilder/CharacterWeaver: base + existing docs + update request
+```
+
+### 8.4 Context 预算（每次 agent 调用）
+
+| 组件 | Token 估算 | 说明 |
+|------|-----------|------|
+| System prompt | ~5K | 固定 |
+| style-profile + blacklist | ~2K | 固定 |
+| 当前卷大纲 | ~3K | 每卷固定 |
+| 近 3 章摘要 | ~3K | 滑动窗口 |
+| current-state.json | ~3-5K | 需定期裁剪 |
+| 角色档案（活跃） | ~5K | 只加载相关角色 |
+| 本章大纲 + 伏笔 | ~1K | 每章固定 |
+| **合计** | **~22-25K** | 即使第 500 章也稳定 |
+
+### 8.5 State 裁剪策略
+
+- 超过 N 章未出现的角色：状态归档至 `characters/retired/`
+- current-state.json 仅保留活跃角色 + 近期相关物品/位置
+- 每卷结束时执行一次全局 state 清理
+
+## 9. 数据结构
+
+### 9.1 项目目录结构
+
+```
+novel-project/
+├── .checkpoint.json                # Orchestrator 恢复点
+├── brief.md                        # 创作纲领（精简，≤1000 字）
+├── style-profile.json              # 用户风格指纹
+├── ai-blacklist.json               # AI 用语黑名单
+├── prompts/                        # Prompt 模板
+│   ├── world-builder.md
+│   ├── character-weaver.md
+│   ├── plot-architect.md
+│   ├── chapter-writer.md
+│   ├── summarizer.md
+│   ├── style-refiner.md
+│   └── quality-judge.md
+├── world/                          # 世界观（活文档）
+│   ├── geography.md
+│   ├── history.md
+│   ├── rules.md
+│   └── changelog.md
+├── characters/
+│   ├── active/                     # 当前活跃角色
+│   ├── retired/                    # 已退场角色
+│   ├── relationships.json
+│   └── changelog.md
+├── volumes/                        # 卷制结构
+│   ├── vol-01/
+│   │   ├── outline.md
+│   │   ├── foreshadowing.json
+│   │   └── review.md
+│   └── vol-02/ ...
+├── chapters/
+│   ├── chapter-001.md
+│   └── ...
+├── summaries/                      # 章节摘要（context 压缩核心）
+│   ├── chapter-001-summary.md
+│   └── ...
+├── state/
+│   ├── current-state.json          # 当前全局状态
+│   └── history/                    # 每卷存档
+│       └── vol-01-final-state.json
+├── foreshadowing/
+│   └── global.json                 # 跨卷伏笔
+└── evaluations/
+    ├── chapter-001-eval.json
+    └── ...
+```
+
+### 9.2 关键数据格式
+
+**Checkpoint** (`.checkpoint.json`):
+```json
+{
+  "last_completed_chapter": 47,
+  "current_volume": 2,
+  "orchestrator_state": "WRITING",
+  "pending_actions": [],
+  "last_checkpoint_time": "2026-02-21T15:30:00"
+}
+```
+
+**角色状态** (`state/current-state.json`):
+```json
+{
+  "last_updated_chapter": 47,
+  "characters": {
+    "protagonist": {
+      "location": "魔都",
+      "emotional_state": "决意",
+      "relationships": {"mentor": "信任+50", "rival": "敌对-30"},
+      "inventory": ["破碎魔杖", "密信"]
+    }
+  },
+  "world_state": {
+    "ongoing_events": ["王国内战"],
+    "time_marker": "第三年冬"
+  },
+  "active_foreshadowing": ["ancient_prophecy", "betrayal_hint"]
+}
+```
+
+**风格指纹** (`style-profile.json`):
+```json
+{
+  "avg_sentence_length": 18,
+  "dialogue_ratio": 0.4,
+  "rhetoric_preferences": ["短句切换", "少用比喻"],
+  "forbidden_words": ["莫名的", "不禁", "嘴角微微上扬"],
+  "character_speech_patterns": {
+    "protagonist": "喜欢用反问句，口头禅'有意思'",
+    "mentor": "文言腔，爱说'善'"
+  }
+}
+```
+
+**质量评估** (`evaluations/chapter-N-eval.json`):
+```json
+{
+  "chapter": 47,
+  "scores": {
+    "plot_coherence": {"score": 4, "reason": "..."},
+    "character_consistency": {"score": 4, "reason": "..."},
+    "foreshadowing": {"score": 3, "reason": "..."},
+    "language_quality": {"score": 4, "reason": "..."},
+    "scene_description": {"score": 3, "reason": "..."},
+    "emotional_tension": {"score": 3, "reason": "..."},
+    "style_naturalness": {"score": 4, "reason": "AI 黑名单命中 1 次/千字"}
+  },
+  "overall": 3.57,
+  "recommendation": "pass"
+}
+```
+
+## 10. Agent 协作协议
+
+### 10.1 消息传递规范
+
+**续写完成通知**：
+```json
+{
+  "type": "message",
+  "recipient": "team-lead",
+  "content": "Chapter 48 完成，状态已更新，QualityJudge 评分 3.8/5.0",
+  "summary": "第48章完成"
+}
+```
+
+**情节冲突检测**：
+```json
+{
+  "type": "message",
+  "recipient": "team-lead",
+  "content": "Chapter 48 中主角使用了 Chapter 35 已丢失的魔杖，需要修正",
+  "summary": "检测到物品状态冲突"
+}
+```
+
+### 10.2 任务依赖（卷制模式）
+
+```
+快速起步：
+  Task 1: 粗略设定 → Task 2: 风格提取 → Task 3-5: 试写 3 章
+
+卷内循环：
+  Task N: 本卷大纲 → Task N+1..N+50: 逐章续写
+  每 10 章触发：一致性检查
+  卷末：回顾 + 下卷规划
+```
+
+### 10.3 错误处理与重试
+
+| 错误类型 | 处理策略 | 最大重试 |
+|---------|---------|---------|
+| API 超时 | 等待 30s 后重试 | 2 次 |
+| 生成质量低（<3.0） | 标记问题，通知用户 | - |
+| 状态冲突 | 锁定文件 → 串行执行 → 释放 | - |
+| Agent 崩溃 | Team Lead 重启 agent | 2 次 |
+| 一致性检查失败 | 标记冲突，暂停后续章节，人工介入 | - |
+| Session 中断 | 保存 checkpoint，下次冷启动恢复 | - |
+
+### 10.4 原子性保证
+
+章节写入采用临时文件模式：
+1. 写入 `chapter-N.md.tmp` + `state.json.tmp` + `summary.md.tmp`
+2. 全部成功后 rename 为正式文件
+3. 更新 `.checkpoint.json`
+4. 中断时清理 `.tmp` 文件即可
+
+## 11. 技术可行性分析
+
+### 11.1 已验证技术
+
+- **多 agent 协作**：BookWorld 论文证明 agent 社会可模拟复杂角色关系
+- **分层写作**：Dramaturge 的 Global Review → Scene Review 模式可复用
+- **状态管理**：Constella 的 JOURNALS 证明可追踪多角色内心状态
+
+### 11.2 技术假设验证状态
+
+| 假设 | 状态 | 结论 | DR |
+|------|------|------|-----|
+| Context window | ✅ 已验证 | 200K tokens 满足，增量 context ~25K/次 | [DR-001](../v1/dr/dr-001-context-window.md) |
+| 生成速度 | ✅ 已验证 | 单章 1.2 分钟 | [DR-004](../v1/dr/dr-004-generation-speed.md) |
+| Agent 并发 | ⚠️ 有约束 | 推荐 3-5 分批执行 | [DR-002](../v1/dr/dr-002-agent-concurrency.md) |
+| 状态同步 | ⚠️ 需优化 | 推荐 SQLite + WAL | [DR-003](../v1/dr/dr-003-state-sync.md), [DR-006](../v1/dr/dr-006-state-concurrency.md) |
+| 风格分析 | ✅ 已验证 | BiberPlus/NeuroBiber 可用 | [DR-005](../v1/dr/dr-005-style-analysis.md) |
+| 伏笔检测 | ⚠️ 有上限 | 75-85% + 人工 | [DR-007](../v1/dr/dr-007-foreshadowing.md) |
+| NER 一致性 | ✅ 可用 | 分层策略 85-92% | [DR-011](../v1/dr/dr-011-ner-consistency.md) |
+| API 成本 | ✅ 已验证 | 混合策略 ~$0.80/章 | [DR-013](../v2/dr/dr-013-api-cost.md) |
+| Prompt 设计 | ✅ 已定义 | 四层结构 + 增量 context | [DR-014](../v2/dr/dr-014-prompt-design.md) |
+| 质量评估 | ✅ 可行 | LLM-as-Judge 7 维度 | [DR-015](../v2/dr/dr-015-quality-eval.md) |
+
+**状态存储决策**：MVP 阶段采用纯文件方案（JSON + Markdown），原因：
+1. Claude Code Plugin 环境为单用户单进程，无并发写入场景
+2. 章节写入采用原子写入（.tmp → rename），已避免数据损坏
+3. DR-003/006 推荐的 SQLite + WAL 适用于多进程并发场景，MVP 暂不需要
+4. 如未来引入 Web UI 或多设备同步，在 Milestone 3 评估是否升级
+
+## 12. 成本分析
+
+### 12.1 单章成本（混合策略）
+
+| 组件 | 模型 | 输入 tokens | 输出 tokens | 成本 |
+|------|------|-----------|-----------|------|
+| ChapterWriter | Sonnet | ~12K | ~4.5K | $0.10 |
+| Summarizer | Sonnet | ~5K | ~1K | $0.03 |
+| StyleRefiner | Opus | ~6K | ~4.5K | $0.43 |
+| QualityJudge | Sonnet | ~8K | ~1K | $0.04 |
+| **单章合计** | | | | **~$0.60** |
+
+（含重写预算 15% + 质量评估开销 ~5%）**实际均摊 ~$0.75/章**
+
+### 12.2 按规模估算
+
+| 规模 | 章数 | 字数 | 成本 |
+|------|------|------|------|
+| 试写 | 3 章 | 1 万字 | ~$3（含初始设定） |
+| 一卷 | 30 章 | 9 万字 | ~$27（含卷规划+回顾） |
+| 中篇 | 100 章 | 30 万字 | ~$85 |
+| 长篇 | 300 章 | 90 万字 | ~$250 |
+
+### 12.3 质量评估额外成本
+
+- 每 10 章一致性检查：~$0.30
+- 风格漂移监控（每 5 章）：~$0.10
+- 占总成本 < 5%
+
+## 13. 实施路线图
+
+### Milestone 1: 续写引擎原型（2 周）
+
+**目标**：验证核心续写能力 + 去 AI 化 + 质量评估
+
+**任务**：
+- 实现 ChapterWriter + Summarizer + StyleRefiner + QualityJudge
+- 实现 Prompt 模板系统
+- 实现 StyleAnalyzer（风格提取）
+- 实现 checkpoint 机制
+
+**验收标准**：
+- [ ] 输入风格样本 + 手写大纲 → 续写 3 章
+- [ ] QualityJudge 7 维度评分 ≥ 3.5/5.0
+- [ ] 风格自然度维度 ≥ 3.5（AI 黑名单命中 < 3 次/千字）
+- [ ] 每章生成摘要 + 状态更新
+- [ ] checkpoint 可正确恢复
+
+### Milestone 2: 卷制循环（3 周）
+
+**目标**：实现完整的卷规划 → 日更续写 → 卷末回顾循环
+
+**任务**：
+- 实现 Orchestrator 状态机
+- 实现 WorldBuilder + CharacterWeaver + PlotArchitect
+- 实现 context 组装和 state 裁剪
+- 实现卷规划和卷末回顾
+
+**验收标准**：
+- [ ] 完成一卷 30 章的完整循环（规划→续写→回顾）
+- [ ] 在第 30 章时 context 仍在 25K tokens 以内
+- [ ] Orchestrator 冷启动正确恢复状态
+- [ ] 状态文件跨章正确传递
+
+### Milestone 3: 质量保证系统（2 周）
+
+**目标**：自动化质量检测
+
+**任务**：
+- 实现 NER 一致性检查
+- 实现伏笔追踪系统（卷内 + 跨卷）
+- 实现状态管理（SQLite + WAL 可选）
+- 实现质量门控自动流程
+
+**验收标准**：
+- [ ] NER 检出率 > 80%
+- [ ] 伏笔追踪准确率 > 75%
+- [ ] 质量门控正确触发（低分→修订→通过）
+
+### Milestone 4: 完整体验（2 周）
+
+**目标**：用户可完成一部完整网文
+
+**任务**：
+- 实现快速起步流程
+- 实现用户审核点和交互
+- 实现按需工具调用（新增角色/世界观更新）
+- 端到端测试：完成 3 卷 / 100 章
+
+**验收标准**：
+- [ ] 快速起步 30 分钟内输出 3 章
+- [ ] 3 卷 100 章端到端完成，一致性错误 < 10 处
+- [ ] 人工审核时间占比 30-50%
+
+## 14. 成功指标
+
+**功能指标**：
+- 一致性错误 < 10 处（100 章尺度）
+- 伏笔回收率 > 75%（自动）
+- 角色行为符合人设 > 85%
+- QualityJudge 章节均分 ≥ 3.5/5.0
+- 风格自然度 ≥ 3.5/5.0
+
+**效率指标**：
+- 单章续写耗时 < 3 分钟（含摘要+润色+评估）
+- 人工审核占比 30-50%（可调）
+- 冷启动恢复 < 30 秒
+
+**成本指标**：
+- 单章均摊成本 ≤ $0.75
+
+## 15. 风险与缓解
+
+| 风险 | 影响 | 缓解措施 | 相关 DR |
+|------|------|---------|---------|
+| AI 味明显 | 高 | 4 层去 AI 化策略（风格锚定+约束+润色+检测） | DR-015 |
+| 跨百章一致性崩塌 | 高 | 增量 state + 摘要滑动窗口 + 每 10 章 NER 检查 | DR-003, DR-011 |
+| Agent 生成质量不稳定 | 高 | 7 维度评估 + 质量门控 + 自动修订 | DR-015 |
+| API 成本过高 | 中 | 混合模型 + Haiku 摘要 + 按需调用 | DR-013 |
+| Context 超限 | 高 | 增量 context ~25K/次，摘要替代全文 | DR-001 |
+| Session 中断 | 中 | 文件即状态 + checkpoint + 冷启动 | - |
+| 需要 Claude Code 环境 | 高 | MVP 面向技术型用户，长期考虑 Web UI | DR-017 |
+| 大厂快速跟进 | 中 | 聚焦中文网文垂直场景 | DR-017 |
+
+## 16. 附录
+
+### 16.1 深度调研报告索引
+
+#### v1 调研（技术可行性）
+
+| ID | 主题 | 核心结论 | 文档 |
+|----|------|---------|------|
+| DR-001 | Context Window | 200K tokens 满足，增量 context ~25K | [查看](../v1/dr/dr-001-context-window.md) |
+| DR-002 | Agent 并发 | 推荐 3-5 分批 | [查看](../v1/dr/dr-002-agent-concurrency.md) |
+| DR-003 | 状态同步 | 竞态风险，推荐 SQLite + WAL | [查看](../v1/dr/dr-003-state-sync.md) |
+| DR-004 | 生成速度 | 单章 1.2 分钟 | [查看](../v1/dr/dr-004-generation-speed.md) |
+| DR-005 | 风格分析 | BiberPlus/NeuroBiber 可用 | [查看](../v1/dr/dr-005-style-analysis.md) |
+| DR-006 | 状态并发 | JSON 高危，推荐 SQLite | [查看](../v1/dr/dr-006-state-concurrency.md) |
+| DR-007 | 伏笔检测 | 75-85% + 人工 | [查看](../v1/dr/dr-007-foreshadowing.md) |
+| DR-008 | 用户接受度 | 30-40% 人工可调 | [查看](../v1/dr/dr-008-user-acceptance.md) |
+| DR-009 | Backend 选型 | Claude Opus 4.6 | [查看](../v1/dr/dr-009-codeagent-backend.md) |
+| DR-010 | 关系图 Schema | 有向图 + JSON | [查看](../v1/dr/dr-010-relationship-schema.md) |
+| DR-011 | NER 一致性 | 分层 85-92% | [查看](../v1/dr/dr-011-ner-consistency.md) |
+| DR-012 | 工作流灵活性 | 推荐双模式 | [查看](../v1/dr/dr-012-workflow-flexibility.md) |
+
+#### v2 调研（产品与市场）
+
+| ID | 主题 | 核心结论 | 文档 |
+|----|------|---------|------|
+| DR-013 | API 成本 | 混合策略 ~$0.80/章 | [查看](../v2/dr/dr-013-api-cost.md) |
+| DR-014 | Prompt 设计 | 四层结构 + 增量 context | [查看](../v2/dr/dr-014-prompt-design.md) |
+| DR-015 | 质量评估 | LLM-as-Judge 7 维度 | [查看](../v2/dr/dr-015-quality-eval.md) |
+| DR-016 | 用户细分 | MVP 聚焦网文作者 | [查看](../v2/dr/dr-016-user-segments.md) |
+| DR-017 | 竞品分析 | 差异化：卷制循环+去AI化 | [查看](../v2/dr/dr-017-competitors.md) |
+
+#### v4 调研（Plugin 与质量）
+
+| ID | 主题 | 核心结论 | 文档 |
+|----|------|---------|------|
+| DR-018 | Plugin API 格式 | commands/ vs skills/ 区分，agent 需 frontmatter | [查看](dr/dr-018-plugin-api.md) |
+| DR-019 | Haiku Summarizer | 升级为 Sonnet，成本 +$0.02/章，避免误差累积 | [查看](dr/dr-019-haiku-summarizer.md) |
+| DR-020 | 单主命令 UX | 三命令混合模式：/novel + /novel-continue + /novel-status | [查看](dr/dr-020-single-command-ux.md) |
+
+### 16.2 参考文献
+
+- BookWorld: agent 社会模拟（arXiv 2504.14538）
+- Constella: 多 agent 角色创作（arXiv 2507.05820）
+- Dramaturge: 分层叙事优化（arXiv 2510.05188）
+- MT-Bench: LLM-as-Judge（Zheng et al., 2023）
+- Chatbot Arena: LLM 评估（Chiang et al., 2024）

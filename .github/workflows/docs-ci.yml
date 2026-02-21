@@ -1,0 +1,75 @@
+name: Docs CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: "docs/**/*.md"
+
+  links:
+    name: Link Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --exclude-path node_modules
+            --exclude 'https?://(localhost|127\.0\.0\.1)'
+            --suggest
+            "docs/**/*.md"
+          fail: true
+
+  structure:
+    name: Manifest Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate manifest.json
+        run: |
+          python3 -c "
+          import json, sys
+          with open('docs/dr-workflow/novel-writer-tool/manifest.json') as f:
+              m = json.load(f)
+          required = ['project', 'current_phase', 'current_version', 'iterations']
+          missing = [k for k in required if k not in m]
+          if missing:
+              print(f'Missing keys: {missing}')
+              sys.exit(1)
+          print(f'Manifest OK: {m[\"project\"]} v{m[\"current_version\"]} ({m[\"current_phase\"]})')
+          "
+
+      - name: Check DR reports exist
+        run: |
+          python3 -c "
+          import json, os, sys
+          with open('docs/dr-workflow/novel-writer-tool/manifest.json') as f:
+              m = json.load(f)
+          errors = []
+          for it in m['iterations']:
+              v = it['version']
+              for dr in it.get('dr_reports', []):
+                  path = f'docs/dr-workflow/novel-writer-tool/v{v}/{dr}'
+                  if not os.path.exists(path):
+                      errors.append(path)
+          if errors:
+              print('Missing DR files:')
+              for e in errors:
+                  print(f'  - {e}')
+              sys.exit(1)
+          print(f'All DR files present across {len(m[\"iterations\"])} iterations')
+          "
