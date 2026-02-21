@@ -3,5 +3,8 @@
   "no-duplicate-heading": false,
   "no-inline-html": false,
   "first-line-heading": false,
-  "no-bare-urls": false
+  "no-bare-urls": false,
+  "blanks-around-lists": false,
+  "blanks-around-fences": false,
+  "fenced-code-language": false
 }

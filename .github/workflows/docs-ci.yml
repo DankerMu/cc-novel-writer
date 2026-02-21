@@ -28,7 +28,6 @@ jobs:
           args: >-
             --no-progress
             --exclude-path node_modules
-            --exclude 'https?://(localhost|127\.0\.0\.1)'
             --suggest
             "docs/**/*.md"
           fail: true

@@ -16,7 +16,7 @@
 
 ### 2.1 交付格式
 
-本产品以 **Claude Code Plugin** 形式交付，包含 3 个斜杠命令（Commands）、8 个专业 Agent 和 1 个共享知识技能（Skill）。[DR-018](dr/dr-018-plugin-api.md) [DR-020](dr/dr-020-single-command-ux.md)
+本产品以 **Claude Code Plugin** 形式交付，包含 3 个斜杠命令（Commands）、8 个专业 Agent 和 1 个共享知识技能（Skill）。[DR-018](../v4/dr/dr-018-plugin-api.md) [DR-020](../v4/dr/dr-020-single-command-ux.md)
 
 ```
 cc-novel-writer/
@@ -49,7 +49,7 @@ cc-novel-writer/
 
 ### 2.2 斜杠命令（三命令混合模式）
 
-采用"引导式入口 + 快捷命令"模式，认知负载 < Miller 下限（4 项），新老用户均可高效使用。[DR-020](dr/dr-020-single-command-ux.md)
+采用"引导式入口 + 快捷命令"模式，认知负载 < Miller 下限（4 项），新老用户均可高效使用。[DR-020](../v4/dr/dr-020-single-command-ux.md)
 
 | 命令 | 用途 | 核心流程 |
 |------|------|---------|
@@ -69,7 +69,7 @@ cc-novel-writer/
 4. 根据选择 → Task tool 派发对应 agent
 ```
 
-**AskUserQuestion 约束**（[DR-020](dr/dr-020-single-command-ux.md)）：
+**AskUserQuestion 约束**（[DR-020](../v4/dr/dr-020-single-command-ux.md)）：
 - 每次 2-4 选项（主菜单恰好 ≤4 项，刚好在限制内）
 - 60 秒超时 → 选项标记 "(Recommended)" 辅助快速决策
 - 子代理不可用 → `/novel` 必须在主 command 中调用 AskUserQuestion
@@ -210,7 +210,7 @@ Team Lead (Orchestrator)         # 调度核心 + 状态机
 | ChapterWriter | Sonnet 4.6 | 批量生成，成本敏感 |
 | StyleRefiner | Opus 4.6 | 需要高质量语言感知 |
 | QualityJudge | Sonnet 4.6 | 结构化评估，不需要创意 |
-| Summarizer | Sonnet 4.6 | 信息保留关键，成本增量可忽略（+$0.02/章）[DR-019](dr/dr-019-haiku-summarizer.md) |
+| Summarizer | Sonnet 4.6 | 信息保留关键，成本增量可忽略（+$0.02/章）[DR-019](../v4/dr/dr-019-haiku-summarizer.md) |
 | 问题章节重写 | Opus 4.6 | 需要高质量推理 |
 
 ## 5. Agent Prompt 设计
@@ -1031,9 +1031,9 @@ novel-project/
 
 | ID | 主题 | 核心结论 | 文档 |
 |----|------|---------|------|
-| DR-018 | Plugin API 格式 | commands/ vs skills/ 区分，agent 需 frontmatter | [查看](dr/dr-018-plugin-api.md) |
-| DR-019 | Haiku Summarizer | 升级为 Sonnet，成本 +$0.02/章，避免误差累积 | [查看](dr/dr-019-haiku-summarizer.md) |
-| DR-020 | 单主命令 UX | 三命令混合模式：/novel + /novel-continue + /novel-status | [查看](dr/dr-020-single-command-ux.md) |
+| DR-018 | Plugin API 格式 | commands/ vs skills/ 区分，agent 需 frontmatter | [查看](../v4/dr/dr-018-plugin-api.md) |
+| DR-019 | Haiku Summarizer | 升级为 Sonnet，成本 +$0.02/章，避免误差累积 | [查看](../v4/dr/dr-019-haiku-summarizer.md) |
+| DR-020 | 单主命令 UX | 三命令混合模式：/novel + /novel-continue + /novel-status | [查看](../v4/dr/dr-020-single-command-ux.md) |
 
 ### 16.2 参考文献
 
