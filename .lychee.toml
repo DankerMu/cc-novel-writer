@@ -1,6 +1,4 @@
 exclude = [
-  "https://www.reddit.com/",
-  "https://github.com/neurobiber/"
+  "reddit\\.com",
+  "neurobiber"
 ]
-
-[exclude_path]

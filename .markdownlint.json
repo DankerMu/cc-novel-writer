@@ -6,5 +6,6 @@
   "no-bare-urls": false,
   "blanks-around-lists": false,
   "blanks-around-fences": false,
-  "fenced-code-language": false
+  "fenced-code-language": false,
+  "blanks-around-headings": false
 }
