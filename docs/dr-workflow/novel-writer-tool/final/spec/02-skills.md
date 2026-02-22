@@ -70,7 +70,7 @@ argument-hint: ""
    - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "pending_actions": [], "last_checkpoint_time": "<now>"}`
    - `state/current-state.json`：`{"schema_version": 1, "state_version": 0, "last_updated_chapter": 0, "characters": {}, "world_state": {}, "active_foreshadowing": []}`
    - `foreshadowing/global.json`：`{"foreshadowing": []}`
-   - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~004）
+   - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~005）
    - `ai-blacklist.json`：从 `${CLAUDE_PLUGIN_ROOT}/templates/ai-blacklist.json` 复制
    - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
 5. 使用 Task 派发 WorldBuilder Agent 生成核心设定
@@ -78,9 +78,8 @@ argument-hint: ""
 7. WorldBuilder 协助初始化 `storylines.json`（从设定派生初始故事线，默认 1 条 main_arc 主线，活跃线建议 ≤4）
 8. 使用 AskUserQuestion 请求用户提供 1-3 章风格样本
 9. 使用 Task 派发 StyleAnalyzer Agent 提取风格指纹
-10. 使用 Task 派发 ChapterWriter Agent 试写 3 章（**简化 context 模式**：无 volume_outline/chapter_outline/chapter_contract，仅使用 brief + world + characters + style_profile；ChapterWriter 根据 brief 自由发挥前 3 章情节）
-11. 对每章依次派发 StyleRefiner → QualityJudge（试写阶段 QualityJudge 跳过 L3 章节契约检查和 LS 故事线检查）
-12. 展示试写结果和评分，写入 `.checkpoint.json`（状态 = VOL_PLANNING）
+10. 使用 Task 逐章派发试写流水线（共 3 章），每章按完整流水线执行：ChapterWriter → Summarizer → StyleRefiner → QualityJudge（**简化 context 模式**：无 volume_outline/chapter_outline/chapter_contract，仅使用 brief + world + characters + style_profile；ChapterWriter 根据 brief 自由发挥前 3 章情节。Summarizer 正常生成摘要 + state delta + memory，确保后续写作有 context 基础。QualityJudge 跳过 L3 章节契约检查和 LS 故事线检查）
+11. 展示试写结果和评分，写入 `.checkpoint.json`（`current_volume = 1, last_completed_chapter = 3, orchestrator_state = "VOL_PLANNING"`）
 
 **继续写作**：
 - 等同执行 `/novel:continue 1` 的逻辑
@@ -160,7 +159,7 @@ context = {
   project_brief:       Read("brief.md"),
   style_profile:       Read("style-profile.json"),
   ai_blacklist:        Read("ai-blacklist.json"),
-  current_volume_outline: Read("volumes/vol-{V}/outline.md"),
+  current_volume_outline: Read("volumes/vol-{V:02d}/outline.md"),
   chapter_outline:     从 outline.md 中按正则 /^### 第 {C} 章/ 提取对应章节区块（至下一个 ### 或文件末尾）,
   storyline_context:   从 storyline-schedule.json + summaries 组装本章故事线上下文,
   concurrent_state:    从 storyline-schedule.json 获取其他活跃线一句话状态,
@@ -169,7 +168,8 @@ context = {
   foreshadowing_tasks: Read("foreshadowing/global.json") 中与本章相关的条目,
   chapter_contract:    Read("volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json")（如存在）,
   world_rules:         Read("world/rules.json")（如存在）,
-  character_contracts: 从 characters/active/*.json 中提取 contracts 字段
+  character_contracts: 从 characters/active/*.json 中提取 contracts 字段（裁剪：仅加载 chapter_contract.preconditions.character_states 中涉及的角色；无契约时加载全部活跃角色，上限 10 个，超出按最近出场排序截断）,
+  entity_id_map:      从 characters/active/*.json 构建 {slug_id → display_name} 映射表（如 {"lin-feng": "林枫", "chen-lao": "陈老"}），传给 Summarizer 用于正文中文名→slug ID 转换
 }
 ```
 
@@ -249,6 +249,7 @@ Ch {X}: {字数}字 {分数} {状态} | Ch {X+1}: {字数}字 {分数} {状态} 
 - 质量不达标时自动修订最多 2 次
 - 写入使用 staging → commit 事务模式（详见 Step 2-6）
 - **Agent 写入边界**：所有 Agent（ChapterWriter/Summarizer/StyleRefiner）仅写入 `staging/` 目录，正式目录（`chapters/`、`summaries/`、`state/`、`storylines/`、`evaluations/`）由入口 Skill 在 commit 阶段操作。QualityJudge 为只读，不写入任何文件
+  > **M2 路径审计**：M1 阶段写入边界为 prompt 软约束 + staging 事务模型保障。M2 计划增加 PostToolUse hook 对 Agent 的 Write/Edit 调用进行路径白名单校验（仅允许 `staging/**`），违规操作自动拦截并记录到 `logs/audit.jsonl`。
 - 所有输出使用中文
 ````
 

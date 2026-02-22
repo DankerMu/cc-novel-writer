@@ -170,6 +170,9 @@
   "narrative_voice": null,
   "_narrative_voice_comment": "第一人称 | 第三人称限制 | 全知",
 
+  "override_constraints": {},
+  "_override_constraints_comment": "可选：覆盖 ChapterWriter 默认写作约束。支持的 key：anti_intuitive_detail (bool, 默认 true), max_scene_sentences (int, 默认 2)。未设置的 key 使用默认值",
+
   "analysis_notes": null,
   "_analysis_notes_comment": "StyleAnalyzer 的分析备注"
 }

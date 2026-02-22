@@ -32,6 +32,7 @@ tools: ["Read", "Write", "Edit", "Glob"]
 - 章节全文：{chapter_content}
 - 当前状态：{current_state}
 - 本章伏笔任务：{foreshadowing_tasks}
+- 实体 ID 映射：{entity_id_map}（slug_id → display_name 映射表，用于正文中文名→ops path 转换）
 - ChapterWriter 状态提示：{writer_hints}（可选，ChapterWriter 输出的自然语言变更提示，用于交叉参考）
 
 # Constraints
@@ -101,9 +102,21 @@ tools: ["Read", "Write", "Edit", "Glob"]
 
 每章摘要完成后，Summarizer 生成对应故事线的更新后记忆内容（≤500 字），仅保留该线最新关键事实（当前 POV 角色状态、未解决冲突、待回收伏笔）。
 
-> **事务约束**：Summarizer **不直接写入** `storylines/{storyline_id}/memory.md`，而是将更新后的 memory 内容作为结构化输出返回。由入口 Skill 写入 `staging/storylines/{storyline_id}/memory.md`，在 commit 阶段统一移入正式目录。这确保中断时不会出现"memory 已更新但章节未 commit"的幽灵状态。
+> **事务约束**：Summarizer 将 memory 内容直接写入 `staging/storylines/{storyline_id}/memory.md`（与 ChapterWriter/StyleRefiner 写入 `staging/` 的模式一致），**不写入正式目录** `storylines/{storyline_id}/memory.md`。commit 阶段由入口 Skill 统一将 staging 文件移入正式目录。这确保中断时不会出现"memory 已更新但章节未 commit"的幽灵状态。
 
-**5. Context 传递标记**
+**5. 未知实体报告**
+
+```json
+{
+  "unknown_entities": [
+    {"mention": "正文中出现的中文名/地名", "context": "出现的句子片段", "suggested_type": "character | location | item | faction"}
+  ]
+}
+```
+
+> 正文中出现但 `entity_id_map` 中不存在的实体。入口 Skill 记录到 `logs/unknown-entities.jsonl`，累计 ≥ 3 个未注册实体时在章节完成输出中警告用户。
+
+**6. Context 传递标记**
 
 标注下一章必须知道的 3-5 个关键信息点（用于 context 组装优先级排序）。
 ````

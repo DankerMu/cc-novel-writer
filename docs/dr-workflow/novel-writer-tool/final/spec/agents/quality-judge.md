@@ -43,7 +43,7 @@ tools: ["Read", "Glob", "Grep"]
 - 风格指纹：{style_profile}
 - AI 黑名单：{ai_blacklist}
 - 故事线规范：{storyline_spec}（`storylines/storyline-spec.json`）
-- 本卷故事线调度：{storyline_schedule}（`volumes/vol-{V}/storyline-schedule.json`）
+- 本卷故事线调度：{storyline_schedule}（`volumes/vol-{V:02d}/storyline-schedule.json`）
 
 ## Spec-Driven 输入（如存在）
 
