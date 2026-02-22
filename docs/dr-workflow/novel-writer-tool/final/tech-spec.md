@@ -263,8 +263,8 @@ for chapter_num in range(start, start + N):
      - 移动 staging/chapters/chapter-{C}.md → chapters/chapter-{C}.md
      - 移动 staging/summaries/chapter-{C}-summary.md → summaries/
      - 移动 staging/evaluations/chapter-{C}-eval.json → evaluations/
-     - 合并 staging/state/ 到 state/current-state.json
-     - 更新 foreshadowing/global.json
+     - 合并 state patches: 校验 base_state_version 匹配 → 去重 ChapterWriter + Summarizer ops → 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
+     - 更新 foreshadowing/global.json（从 foreshadow ops 提取）
      - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null）
      - 清空 staging/ 本章文件
 
@@ -758,25 +758,20 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 （正文内容）
 ```
 
-**2. 状态更新 JSON**
+**2. 状态变更 Patch**（ops 格式，与 Summarizer 统一）
 
 ```json
 {
   "chapter": {chapter_num},
-  "state_delta": {
-    "character_changes": {
-      "角色名": {
-        "location": "新位置",
-        "emotional_state": "情绪变化",
-        "relationship_changes": {},
-        "inventory_changes": {}
-      }
-    },
-    "foreshadowing_updates": {
-      "伏笔ID": "planted | advanced | resolved"
-    },
-    "world_state_changes": {}
-  }
+  "base_state_version": {current_state_version},
+  "storyline_id": "{storyline_id}",
+  "ops": [
+    {"op": "set", "path": "characters.角色名.location", "value": "新位置"},
+    {"op": "set", "path": "characters.角色名.emotional_state", "value": "情绪变化"},
+    {"op": "inc", "path": "characters.角色名.relationships.目标角色", "value": 10},
+    {"op": "add", "path": "characters.角色名.inventory", "value": "新物品"},
+    {"op": "foreshadow", "path": "伏笔ID", "value": "planted | advanced | resolved", "detail": "..."}
+  ]
 }
 ```
 ````
@@ -849,21 +844,21 @@ tools: ["Read", "Write", "Edit", "Glob"]
 - storyline_id: {storyline_id}
 ```
 
-**2. 状态增量 JSON**（仅含本章变更字段）
+**2. 状态增量 Patch**（ops 格式，与 ChapterWriter 统一）
 
 ```json
 {
   "chapter": {chapter_num},
+  "base_state_version": {current_state_version},
   "storyline_id": "{storyline_id}",
-  "character_updates": {
-    "角色名": {"变更字段": "新值"}
-  },
-  "world_state_updates": {},
-  "foreshadowing_updates": {
-    "伏笔ID": {"status": "planted | advanced | resolved", "detail": "..."}
-  }
+  "ops": [
+    {"op": "set", "path": "characters.角色名.字段", "value": "新值"},
+    {"op": "foreshadow", "path": "伏笔ID", "value": "planted | advanced | resolved", "detail": "..."}
+  ]
 }
 ```
+
+> Summarizer 的 ops 是对 ChapterWriter ops 的 **校验和补充**：确认 ChapterWriter 的变更是否完整，补充遗漏的状态变更。两份 ops 由合并器去重后统一应用。
 
 **3. Context 传递标记**
 

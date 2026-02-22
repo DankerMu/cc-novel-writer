@@ -1146,7 +1146,8 @@ novel-project/
 │   ├── chapter-001-summary.md
 │   └── ...
 ├── state/
-│   ├── current-state.json          # 当前全局状态
+│   ├── current-state.json          # 当前全局状态（含 schema_version + state_version）
+│   ├── changelog.jsonl             # 状态变更审计日志（每行一条 ops 记录）
 │   └── history/                    # 每卷存档
 │       └── vol-01-final-state.json
 ├── foreshadowing/
@@ -1177,12 +1178,14 @@ novel-project/
 **角色状态** (`state/current-state.json`):
 ```json
 {
+  "schema_version": 1,
+  "state_version": 47,
   "last_updated_chapter": 47,
   "characters": {
     "protagonist": {
       "location": "魔都",
       "emotional_state": "决意",
-      "relationships": {"mentor": "信任+50", "rival": "敌对-30"},
+      "relationships": {"mentor": 50, "rival": -30},
       "inventory": ["破碎魔杖", "密信"]
     }
   },
@@ -1193,6 +1196,26 @@ novel-project/
   "active_foreshadowing": ["ancient_prophecy", "betrayal_hint"]
 }
 ```
+
+**状态变更 Patch**（ChapterWriter / Summarizer 统一输出格式）：
+```json
+{
+  "chapter": 48,
+  "base_state_version": 47,
+  "storyline_id": "main_arc",
+  "ops": [
+    {"op": "set", "path": "characters.protagonist.location", "value": "幽暗森林"},
+    {"op": "set", "path": "characters.protagonist.emotional_state", "value": "警觉"},
+    {"op": "inc", "path": "characters.protagonist.relationships.mentor", "value": 10},
+    {"op": "add", "path": "characters.protagonist.inventory", "value": "密信"},
+    {"op": "remove", "path": "characters.protagonist.inventory", "value": "破碎魔杖"},
+    {"op": "set", "path": "world_state.time_marker", "value": "第三年冬末"},
+    {"op": "foreshadow", "path": "ancient_prophecy", "value": "advanced", "detail": "主角梦见预言碎片"}
+  ]
+}
+```
+
+操作类型：`set`（覆盖字段）、`add`（追加到数组）、`remove`（从数组移除）、`inc`（数值增减）、`foreshadow`（伏笔状态变更：planted/advanced/resolved）。合并器在写入前校验 `base_state_version` 匹配当前 `state_version`，应用后 `state_version += 1`，变更记录追加到 `state/changelog.jsonl`。
 
 **风格指纹** (`style-profile.json`):
 ```json
