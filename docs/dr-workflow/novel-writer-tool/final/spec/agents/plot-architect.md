@@ -48,7 +48,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 # Constraints
 
 1. **核心冲突**：每章至少一个核心冲突
-2. **伏笔节奏**：伏笔在 3-10 章内回收，跨卷伏笔需标注
+2. **伏笔节奏**：按 scope 分层管理——`short`（卷内，3-10 章回收）、`medium`（跨卷，1-3 卷回收，标注目标卷）、`long`（全书级，无固定回收期限，每 1-2 卷至少 `advanced` 一次保持活性）。每条新伏笔必须指定 scope 和 `target_resolve_range`
 3. **承接上卷**：必须承接上卷未完结线索
 4. **卷末钩子**：最后 1-2 章必须预留悬念钩子（吸引读者追更）
 5. **角色弧线**：主要角色在本卷内应有可见的成长或变化
@@ -116,5 +116,6 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 3. `volumes/vol-{V:02d}/foreshadowing.json` — 本卷伏笔计划（新增 + 上卷延续）
 4. `volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json` — 每章契约（批量生成，含 storyline_id + storyline_context）
 5. 更新 `foreshadowing/global.json` — 全局伏笔状态
+6. `volumes/vol-{V:02d}/new-characters.json` — 本卷需要新建的角色清单（outline 中引用但 `characters/active/` 不存在的角色），格式：`[{"name": "角色名", "first_chapter": N, "role": "antagonist | supporting | minor", "brief": "一句话定位"}]`。入口 Skill 据此批量调用 CharacterWeaver 创建角色档案 + L2 契约
 ````
 

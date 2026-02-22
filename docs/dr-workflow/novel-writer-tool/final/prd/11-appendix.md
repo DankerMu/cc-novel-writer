@@ -10,7 +10,7 @@
 
 | 假设 | 状态 | 结论 | DR |
 |------|------|------|-----|
-| Context window | ✅ 已验证 | 200K tokens 满足，增量 context ~25K/次 | [DR-001](../../v1/dr/dr-001-context-window.md) |
+| Context window | ✅ 已验证 | 200K tokens 满足，单次调用最重 ~30K（ChapterWriter 交汇章） | [DR-001](../../v1/dr/dr-001-context-window.md) |
 | 生成速度 | ✅ 已验证 | 单章 1.2 分钟 | [DR-004](../../v1/dr/dr-004-generation-speed.md) |
 | Agent 并发 | ⚠️ 有约束 | 推荐 3-5 分批执行 | [DR-002](../../v1/dr/dr-002-agent-concurrency.md) |
 | 状态同步 | ⚠️ 需优化 | 推荐 SQLite + WAL | [DR-003](../../v1/dr/dr-003-state-sync.md), [DR-006](../../v1/dr/dr-006-state-concurrency.md) |
@@ -33,24 +33,24 @@
 
 | 组件 | 模型 | 输入 tokens | 输出 tokens | 成本 |
 |------|------|-----------|-----------|------|
-| ChapterWriter | Sonnet | ~12K | ~4.5K | $0.10 |
-| Summarizer | Sonnet | ~5K | ~1K | $0.03 |
-| StyleRefiner | Opus | ~6K | ~4.5K | $0.43 |
+| ChapterWriter | Sonnet | ~20-25K | ~4.5K | $0.15 |
+| Summarizer | Sonnet | ~10-12K | ~1K | $0.05 |
+| StyleRefiner | Opus | ~8K | ~4.5K | $0.43 |
 
 > **成本优化选项**：StyleRefiner 默认使用 Opus 以保证润色质量。对于成本敏感场景，可通过 plugin 设置降级为 Sonnet（预估 $0.05/章），或改为条件触发模式（仅当 ChapterWriter 初稿的 AI 黑名单命中率 > 3 次/千字 或风格自然度预估偏低时才调用 Opus，其余章节使用 Sonnet）。
-| QualityJudge | Sonnet | ~8K | ~1K | $0.04 |
-| **单章合计** | | | | **~$0.60** |
+| QualityJudge | Sonnet | ~14-16K | ~1K | $0.07 |
+| **单章合计** | | | | **~$0.70** |
 
-（含重写预算 15% + 质量评估开销 ~5%）**实际均摊 ~$0.75/章**
+（含重写预算 15% + 质量评估开销 ~5%）**实际均摊 ~$0.85/章**
 
 ### 12.2 按规模估算
 
 | 规模 | 章数 | 字数 | 成本 |
 |------|------|------|------|
-| 试写 | 3 章 | 1 万字 | ~$3（含初始设定） |
-| 一卷 | 30 章 | 9 万字 | ~$27（含卷规划+回顾） |
-| 中篇 | 100 章 | 30 万字 | ~$85 |
-| 长篇 | 300 章 | 90 万字 | ~$250 |
+| 试写 | 3 章 | 1 万字 | ~$4（含初始设定） |
+| 一卷 | 30 章 | 9 万字 | ~$30（含卷规划+回顾） |
+| 中篇 | 100 章 | 30 万字 | ~$95 |
+| 长篇 | 300 章 | 90 万字 | ~$280 |
 
 ### 12.3 质量评估额外成本
 
@@ -89,7 +89,7 @@
 
 **验收标准**：
 - [ ] 完成一卷 30 章的完整循环（规划→续写→回顾）
-- [ ] 在第 30 章时 context 仍在 25K tokens 以内
+- [ ] 在第 30 章时各 Agent context 用量与 §8.4 估算一致（非硬上限）
 - [ ] Orchestrator 冷启动正确恢复状态
 - [ ] 状态文件跨章正确传递
 
@@ -151,7 +151,7 @@
 | 跨百章一致性崩塌 | 高 | 增量 state + 摘要滑动窗口 + 每 10 章 NER 检查 | DR-003, DR-011 |
 | Agent 生成质量不稳定 | 高 | 8 维度评估 + Spec 双轨验收 + 质量门控 + 自动修订 | DR-015 |
 | API 成本过高 | 中 | 混合模型 + Haiku 摘要 + 按需调用 | DR-013 |
-| Context 超限 | 高 | 增量 context ~25K/次，摘要替代全文 | DR-001 |
+| Context 超限 | 高 | 单次最重 ~30K，200K window 余量充足，摘要替代全文 | DR-001 |
 | Session 中断 | 中 | 文件即状态 + checkpoint + 冷启动 | - |
 | 需要 Claude Code 环境 | 高 | MVP 面向技术型用户，长期考虑 Web UI | DR-017 |
 | 大厂快速跟进 | 中 | 聚焦中文网文垂直场景 | DR-017 |
@@ -164,7 +164,7 @@
 
 | ID | 主题 | 核心结论 | 文档 |
 |----|------|---------|------|
-| DR-001 | Context Window | 200K tokens 满足，增量 context ~25K | [查看](../../v1/dr/dr-001-context-window.md) |
+| DR-001 | Context Window | 200K tokens 满足，单次最重 ~30K | [查看](../../v1/dr/dr-001-context-window.md) |
 | DR-002 | Agent 并发 | 推荐 3-5 分批 | [查看](../../v1/dr/dr-002-agent-concurrency.md) |
 | DR-003 | 状态同步 | 竞态风险，推荐 SQLite + WAL | [查看](../../v1/dr/dr-003-state-sync.md) |
 | DR-004 | 生成速度 | 单章 1.2 分钟 | [查看](../../v1/dr/dr-004-generation-speed.md) |

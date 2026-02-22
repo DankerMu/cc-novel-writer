@@ -87,7 +87,8 @@ argument-hint: ""
 **规划新卷**：
 1. 使用 Task 派发 PlotArchitect Agent 生成下一卷大纲
 2. 展示大纲摘要，使用 AskUserQuestion 确认/修改
-3. 大纲确认后更新 `.checkpoint.json`（状态 = WRITING，new volume）
+3. 检查 PlotArchitect 输出的 `new-characters.json`：如有新角色，逐个调用 CharacterWeaver Agent 创建角色档案 + L2 契约（批量派发 Task）
+4. 大纲确认 + 角色创建完成后更新 `.checkpoint.json`（状态 = WRITING，new volume）
 
 **质量回顾**：
 1. 使用 Glob + Read 收集近 10 章 `evaluations/` 评分数据
@@ -109,7 +110,7 @@ argument-hint: ""
 ## 约束
 
 - AskUserQuestion 每次 2-4 选项
-- 单次 `/novel:start` 会话最多使用 2-3 个 AskUserQuestion
+- 单次 `/novel:start` 会话建议 ≤5 个 AskUserQuestion（尽量合并问题减少交互轮次）
 - 推荐项始终标记 `(Recommended)`
 - 所有用户交互使用中文
 ````
@@ -168,7 +169,7 @@ context = {
   foreshadowing_tasks: Read("foreshadowing/global.json") 中与本章相关的条目,
   chapter_contract:    Read("volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json")（如存在）,
   world_rules:         Read("world/rules.json")（如存在）,
-  character_contracts: 从 characters/active/*.json 中提取 contracts 字段（裁剪：仅加载 chapter_contract.preconditions.character_states 中涉及的角色；无契约时加载全部活跃角色，上限 10 个，超出按最近出场排序截断）,
+  character_contracts: 从 characters/active/*.json 中提取 contracts 字段（裁剪规则：有章节契约时仅加载 chapter_contract.preconditions.character_states 中涉及的角色，无硬上限；无章节契约时加载全部活跃角色，上限 15 个，超出按最近出场排序截断）,
   entity_id_map:      从 characters/active/*.json 构建 {slug_id → display_name} 映射表（如 {"lin-feng": "林枫", "chen-lao": "陈老"}），传给 Summarizer 用于正文中文名→slug ID 转换
 }
 ```
@@ -205,7 +206,8 @@ for chapter_num in range(start, start + N):
 
   5. 质量门控决策:
      - Contract violation（confidence=high）存在 → ChapterWriter(model=opus) 强制修订，回到步骤 1
-     - Contract violation（confidence=medium/low）存在 → 写入 eval JSON，输出警告，不阻断
+     - Contract violation（confidence=medium）存在 → 写入 eval JSON，输出警告，不阻断流水线
+     - Contract violation（confidence=low）存在 → 标记为 violation_suspected，写入 eval JSON，章节完成输出中警告用户（用户可通过 `/novel:start` 质量回顾集中审核处理）
      - 无 violation + overall ≥ 4.0 → 直接通过
      - 无 violation + 3.5-3.9 → StyleRefiner 二次润色后通过
      - 无 violation + 3.0-3.4 → ChapterWriter(model=opus) 自动修订

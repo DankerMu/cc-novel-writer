@@ -23,8 +23,9 @@
 
 ```
 2a. 卷规划
-    PlotArchitect → 本卷大纲 + 伏笔计划
+    PlotArchitect → 本卷大纲 + 伏笔计划 + 新角色清单
     用户审核大纲（可调整）
+    CharacterWeaver → 批量创建大纲引入的新角色（档案 + L2 契约）
 
 2b. 日更续写（核心循环，每次 1-3 章）
     用户请求 → Orchestrator 组装 context

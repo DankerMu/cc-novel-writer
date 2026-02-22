@@ -81,7 +81,7 @@
 - [ ] 交汇事件能在预规划的章节范围内正确触发
 - [ ] SessionStart hook 在新 session 自动注入 checkpoint + 最近摘要，非项目目录静默跳过
 - [ ] PostToolUse 路径审计 hook 可拦截 Agent 写入非 staging/ 目录的操作
-- [ ] entity_id_map 自动从 characters/active/ 构建，L2 契约裁剪仅加载章节涉及角色（上限 10）
+- [ ] entity_id_map 自动从 characters/active/ 构建，L2 契约裁剪：有契约时加载契约指定角色（无硬上限），无契约时上限 15
 
 ### 依赖
 - Milestone 1 完成

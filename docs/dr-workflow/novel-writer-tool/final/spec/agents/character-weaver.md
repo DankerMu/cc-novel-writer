@@ -88,5 +88,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 4. `characters/changelog.md` — 变更记录（追加一条）
 
 退场角色：将文件移动到 `characters/retired/`，更新 relationships.json。
+
+> **归档保护**：以下角色不可退场——被活跃伏笔（scope 为 medium/long）引用的角色、被任意故事线（含休眠线）关联的角色、出现在未来 storyline-schedule 交汇事件中的角色。入口 Skill 在调用退场模式前应检查保护条件，不满足则拒绝并向用户说明原因。
 ````
 

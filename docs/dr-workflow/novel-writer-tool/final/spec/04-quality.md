@@ -72,14 +72,13 @@
 
 ## Context 管理
 
-每次 Agent 调用的 context 预算控制在 ~25K tokens：
-- 系统 prompt + 风格 + 黑名单：~7K（固定）
-- 卷大纲 + 本章大纲 + 伏笔：~4K
-- 近 3 章摘要：~3K（滑动窗口）
-- 角色档案（活跃）：~5K（按需加载）
-- 当前状态：~3-5K（定期裁剪）
+各 Agent context 用量参考（非硬上限，详见 PRD §8.4 按 Agent 分列表）：
+- **ChapterWriter**：~19-24K（普通章）/ ~24-30K（交汇章）— 含大纲、摘要、状态、角色、故事线、契约
+- **Summarizer**：~10-12K — 章节全文 + 状态 + entity_id_map
+- **StyleRefiner**：~8K — 章节全文 + 风格 + 黑名单
+- **QualityJudge**：~14-16K — 章节全文 + 大纲 + 角色 + 契约 + 故事线 spec
 
-摘要替代全文，确保第 500 章时 context 仍稳定。
+摘要替代全文 + L2 角色裁剪，确保第 500 章时 context 仍稳定。模型 context window（200K）远大于实际用量。
 ````
 
 ---

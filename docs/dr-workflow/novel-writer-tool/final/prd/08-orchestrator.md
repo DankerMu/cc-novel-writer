@@ -87,22 +87,70 @@ def assemble_context(agent_type, chapter_num, volume):
     # WorldBuilder/CharacterWeaver: base + existing docs + update request
 ```
 
-### 8.4 Context 预算（每次 agent 调用）
+### 8.4 Context 用量参考（按 Agent 分列，非硬上限）
+
+> 以下为成本估算参考，不作为性能约束。各 Agent 应加载完成任务所需的全部 context，模型 context window（200K）远大于实际用量。
+
+**ChapterWriter**（最重，含完整创作上下文）
 
 | 组件 | Token 估算 | 说明 |
 |------|-----------|------|
-| System prompt | ~5K | 固定 |
-| style-profile + blacklist | ~2K | 固定 |
-| 当前卷大纲 | ~3K | 每卷固定 |
-| 近 3 章摘要 | ~3K | 滑动窗口 |
-| current-state.json | ~3-5K | 需定期裁剪 |
-| 角色档案（活跃） | ~5K | 只加载相关角色 |
-| 本章大纲 + 伏笔 | ~1K | 每章固定 |
-| **合计** | **~22-25K** | 即使第 500 章也稳定 |
+| Agent prompt | ~2K | 固定 |
+| style-profile + ai-blacklist top10 | ~1.5K | 固定 |
+| 卷大纲 + 本章大纲 | ~3.5K | 每章提取对应区块 |
+| 故事线 context（memory + concurrent_state + 相邻线 memory） | ~2.5K | 交汇章更多 |
+| 近 3 章摘要 | ~1.5K | 滑动窗口 |
+| current-state.json | ~3-5K | 全量活跃状态 |
+| 伏笔任务 | ~0.5K | 本章相关条目 |
+| L1 世界规则 + L3 章节契约 | ~1K | 如存在 |
+| L2 角色契约 + 角色档案 | ~3-6K | 交汇事件可达 15+ 角色 |
+| **合计** | **~19-24K**（普通章） / **~24-30K**（交汇章） | |
+
+**Summarizer**
+
+| 组件 | Token 估算 | 说明 |
+|------|-----------|------|
+| Agent prompt | ~1.5K | 固定 |
+| 章节全文 | ~4.5K | ~3000 字 |
+| current-state.json | ~3-5K | 用于提取状态增量 |
+| 伏笔任务 + entity_id_map | ~1K | |
+| Writer hints（可选） | ~0.3K | |
+| **合计** | **~10-12K** | |
+
+**StyleRefiner**（最轻）
+
+| 组件 | Token 估算 | 说明 |
+|------|-----------|------|
+| Agent prompt | ~1.5K | 固定 |
+| 章节全文（初稿） | ~4.5K | |
+| style-profile + ai-blacklist（完整） | ~2K | |
+| **合计** | **~8K** | |
+
+**QualityJudge**
+
+| 组件 | Token 估算 | 说明 |
+|------|-----------|------|
+| Agent prompt | ~2K | 固定 |
+| 章节全文（润色后） | ~4.5K | |
+| 本章大纲 + 章节契约 + 世界规则 | ~1.5K | |
+| 角色档案 + 契约 | ~3-5K | |
+| style-profile + 前章摘要 | ~1.5K | |
+| 故事线 spec + schedule + cross_references | ~1.5K | |
+| **合计** | **~14-16K** | |
 
 ### 8.5 State 裁剪策略
 
-- 超过 N 章未出现的角色：状态归档至 `characters/retired/`
-- current-state.json 仅保留活跃角色 + 近期相关物品/位置
-- 每卷结束时执行一次全局 state 清理
+**Context 裁剪**（每章执行，控制 prompt 大小）：
+- 角色档案：有章节契约时加载契约指定角色（无硬上限，交汇事件可超 10 个）；无契约时加载全部活跃角色（上限 15，按最近出场排序截断）
+- current-state.json：保留全部活跃角色状态（依赖 L2 裁剪控制注入量，不做数据删除）
+
+**数据归档**（显式触发，不自动执行）：
+- 角色退场 **仅由 CharacterWeaver 退场模式显式执行**，不按"N 章未出现"自动触发
+- **归档保护**：以下角色不可退场——被活跃伏笔（scope 为 medium/long）引用的角色、被任意故事线（含休眠线）关联的角色、出现在未来 storyline-schedule 交汇事件中的角色
+- 退场后：角色文件移至 `characters/retired/`，从 current-state.json 移除对应条目，更新 relationships.json
+
+**定期清理**（每卷结束时）：
+- 清理 current-state.json 中已退场角色的残留条目
+- 清理过期物品/位置状态（无活跃伏笔或故事线引用的临时条目）
+- 生成清理报告供用户确认
 

@@ -142,6 +142,7 @@ novel-project/
     {
       "id": "ancient_prophecy",
       "description": "远古预言暗示主角命运",
+      "scope": "long",
       "status": "advanced",
       "planted_chapter": 3,
       "planted_storyline": "main-arc",
@@ -157,7 +158,7 @@ novel-project/
 }
 ```
 
-> 伏笔状态：`planted`（埋设）→ `advanced`（推进，可多次）→ `resolved`（回收）。`target_resolve_range` 为建议回收章节范围，超过上限未回收的伏笔在 `/novel:status` 中标记为"超期"。commit 阶段从 foreshadow ops 提取更新：`planted` → 新增条目，`advanced` → 追加 history + 更新 status/last_updated_chapter，`resolved` → 更新 status。
+> 伏笔状态：`planted`（埋设）→ `advanced`（推进，可多次）→ `resolved`（回收）。`scope` 标记伏笔层级：`short`（卷内，3-10 章回收）、`medium`（跨 1-3 卷回收）、`long`（全书级，无固定回收期限，每 1-2 卷至少 advanced 一次保持活性）。`target_resolve_range` 为建议回收章节范围，`short` scope 超过上限未回收的伏笔在 `/novel:status` 中标记为"超期"，`long` scope 伏笔不触发超期警告。commit 阶段从 foreshadow ops 提取更新：`planted` → 新增条目，`advanced` → 追加 history + 更新 status/last_updated_chapter，`resolved` → 更新 status。
 
 **风格指纹** (`style-profile.json`):
 ```json

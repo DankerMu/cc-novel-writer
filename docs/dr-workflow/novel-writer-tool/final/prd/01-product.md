@@ -78,7 +78,7 @@ cc-novel-writer/
 - 每次 2-4 选项（主菜单恰好 ≤4 项，刚好在限制内）
 - 60 秒超时 → 选项标记 "(Recommended)" 辅助快速决策
 - 子代理不可用 → `/novel:start` 必须在主 command 中调用 AskUserQuestion
-- 每会话 ~4-6 个问题 → 单次 `/novel:start` 最多用 2-3 个
+- 单次 `/novel:start` 建议 ≤5 个（尽量合并问题减少交互轮次）
 
 **Command 文件格式**（YAML frontmatter，适用于 SKILL.md）：
 ```yaml
