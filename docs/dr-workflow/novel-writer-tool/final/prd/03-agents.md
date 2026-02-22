@@ -1,6 +1,6 @@
 ## 5. Agent Prompt 设计
 
-各 agent 采用**角色-目标-约束-格式**四层结构 [DR-014](../v2/dr/dr-014-prompt-design.md)。
+各 agent 采用**角色-目标-约束-格式**四层结构 [DR-014](../../v2/dr/dr-014-prompt-design.md)。
 
 ### 5.1 WorldBuilder Agent
 
@@ -249,7 +249,7 @@ AI 黑名单：{ai_blacklist}
 
 ### 5.9 Prompt 管理
 
-- Prompt 模板存储在 `prompts/` 目录，使用 `{variable}` 占位符
-- 共享上下文按需注入（详见 Section 8 context 组装规则）
+- **单一来源**：Agent prompt 定义在 plugin 的 `agents/*.md` 文件中（含 YAML frontmatter + 角色/目标/约束/格式），通过 Task 工具自动加载。**项目侧不维护 prompts/ 目录**。
+- 项目侧的动态内容（大纲、角色状态、风格指纹等）由入口 Skill 在 context 组装阶段注入 agent prompt 的 `{variable}` 占位符
 - Few-shot 控制在 2K tokens 以内
 

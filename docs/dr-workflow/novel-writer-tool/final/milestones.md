@@ -19,7 +19,7 @@
 | 1.4 | 实现 Summarizer（章节摘要 + 状态增量更新 + storyline_id 标记 + cross_references + storyline memory.md 更新） | P0 | 5h |
 | 1.5 | 实现 StyleAnalyzer（风格提取 → style-profile.json） | P0 | 6h |
 | 1.6 | 实现 StyleRefiner Agent（去 AI 化润色） | P0 | 6h |
-| 1.7 | 实现 QualityJudge Agent（双轨验收：合规检查 + 7 维度评分） | P0 | 8h |
+| 1.7 | 实现 QualityJudge Agent（双轨验收：合规检查 + 8 维度评分） | P0 | 8h |
 | 1.8 | 实现 checkpoint 机制（写入/读取/恢复） | P0 | 3h |
 | 1.9 | 实现 staging → commit 事务写入（staging/ 暂存 + pipeline_stage 幂等恢复） | P1 | 3h |
 | 1.10 | 实现 L1 世界规则 Spec（WorldBuilder 输出 rules.json） | P0 | 4h |

@@ -5,19 +5,12 @@
 ```
 novel-project/
 ├── .checkpoint.json                # Orchestrator 恢复点
+├── .novel.lock/                    # 并发锁目录（运行时创建/删除，见 §10.7）
 ├── brief.md                        # 创作纲领（精简，≤1000 字）
 ├── style-profile.json              # 用户风格指纹
 ├── ai-blacklist.json               # AI 用语黑名单
 ├── research/                       # 背景研究资料（doc-workflow 导入或手动放入）
 │   └── *.md                        # 每个主题一个文件，WorldBuilder/CharacterWeaver 自动读取
-├── prompts/                        # Prompt 模板
-│   ├── world-builder.md
-│   ├── character-weaver.md
-│   ├── plot-architect.md
-│   ├── chapter-writer.md
-│   ├── summarizer.md
-│   ├── style-refiner.md
-│   └── quality-judge.md
 ├── world/                          # 世界观（活文档）
 │   ├── geography.md
 │   ├── history.md
@@ -69,6 +62,8 @@ novel-project/
     ├── chapter-001-log.json
     └── ...
 ```
+
+> **chapter_id 命名规范**：全局统一使用 3 位零填充格式 `chapter-{C:03d}`（如 `chapter-001`、`chapter-048`、`chapter-150`）。适用于所有章节相关文件：`chapters/chapter-{C:03d}.md`、`summaries/chapter-{C:03d}-summary.md`、`evaluations/chapter-{C:03d}-eval.json`、`staging/` 下对应文件、`logs/chapter-{C:03d}-log.json`、`chapter-contracts/chapter-{C:03d}.json`。hook 脚本使用 `printf '%03d'` 格式化。
 
 ### 9.2 关键数据格式
 

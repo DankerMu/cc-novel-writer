@@ -27,8 +27,9 @@ INIT → QUICK_START → VOL_PLANNING → WRITING ⟲ (每章：写→摘要→�
 | QUICK_START | 试写确认 | VOL_PLANNING | 标记试写为 Vol 1 前 3 章 |
 | VOL_PLANNING | 大纲确认 | WRITING | 保存大纲，准备续写 |
 | WRITING | 续写请求 | WRITING | ChapterWriter → Summarizer → StyleRefiner → QualityJudge → 门控 |
-| WRITING | 门控通过（≥ 3.5 且无 violation） | WRITING | 提交章节，更新 checkpoint |
-| WRITING | 门控修订（3.0-3.4 或有 violation） | CHAPTER_REWRITE | Opus 修订（最多 2 次） |
+| WRITING | 门控通过（≥ 4.0 且无 violation） | WRITING | 提交章节，更新 checkpoint |
+| WRITING | 门控润色（3.5-3.9 且无 violation） | WRITING | StyleRefiner 二次润色后提交 |
+| WRITING | 门控修订（3.0-3.4 或有 high-confidence violation） | CHAPTER_REWRITE | ChapterWriter(Opus) 修订（最多 2 次） |
 | WRITING | 门控失败（< 3.0） | WRITING(暂停) | 通知用户 |
 | WRITING | 每 5 章（last_completed % 5 == 0） | WRITING | 输出质量简报（均分+问题章节），用户可选择继续/回看/调整 |
 | CHAPTER_REWRITE | 修订完成 | WRITING | 重新走门控（最多 2 次修订后强制通过并标记） |

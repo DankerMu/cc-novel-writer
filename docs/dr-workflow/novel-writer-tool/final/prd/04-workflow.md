@@ -15,7 +15,7 @@
 1f. 用户确认：继续 / 调整风格 / 换题材
 ```
 
-**说明**：步骤 1c 的 storylines 初始化默认最小化——仅创建一条 `main_arc` 主线。用户可在后续卷规划时通过 PlotArchitect 逐步增加副线/暗线，无需在快速起步阶段定义完整的故事线体系。同时活跃故事线建议 ≤ 4 条 [DR-021](../v5/dr/dr-021-llm-multi-thread-narrative.md)。
+**说明**：步骤 1c 的 storylines 初始化默认最小化——仅创建一条 `main_arc` 主线。用户可在后续卷规划时通过 PlotArchitect 逐步增加副线/暗线，无需在快速起步阶段定义完整的故事线体系。同时活跃故事线建议 ≤ 4 条 [DR-021](../../v5/dr/dr-021-llm-multi-thread-narrative.md)。
 
 **验收标准**：30 分钟内输出 3 章（含设定 + 初始 storylines.json），用户确认后进入卷制循环。
 

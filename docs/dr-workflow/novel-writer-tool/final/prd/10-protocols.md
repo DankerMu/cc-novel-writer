@@ -95,6 +95,7 @@ Summarizer 输出的 ops 在合并至 `state/current-state.json` 前，由入口
 **1. JSON 格式校验**
 - `JSON.parse()` 失败 → 重试一次（要求 Summarizer 重新输出 ops 部分）
 - 重试仍失败 → 跳过本章 ops，记录 warn 到 `pipeline.log`，不阻断流水线
+- **累积跳过 ≥ 3 次**时，在下一次质量简报中提示用户执行 state 重建（从 `state/changelog.jsonl` 回放或从最近 N 章正文重新提取）
 
 **2. op 枚举校验**
 - 合法值：`set`、`inc`、`add`、`remove`、`foreshadow`

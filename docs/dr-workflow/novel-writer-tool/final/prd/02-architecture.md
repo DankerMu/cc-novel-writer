@@ -35,7 +35,7 @@ Team Lead (Orchestrator)         # 调度核心 + 状态机
 > `TeamCreate` + `SendMessage` 可实现 agent 间直接通信，适用于大规模并行规划/批量修订场景。
 > 核心流程不依赖此特性，确保在 Teams 未启用时仍可完整运行。
 
-**模型策略**（[DR-013](../v2/dr/dr-013-api-cost.md)）：
+**模型策略**（[DR-013](../../v2/dr/dr-013-api-cost.md)）：
 
 | 组件 | 模型 | 原因 |
 |------|------|------|
@@ -43,6 +43,6 @@ Team Lead (Orchestrator)         # 调度核心 + 状态机
 | ChapterWriter | Sonnet 4.6 | 批量生成，成本敏感 |
 | StyleRefiner | Opus 4.6 | 需要高质量语言感知 |
 | QualityJudge | Sonnet 4.6（普通章）/ Opus 4.6（关键章双裁判） | 结构化评估；关键章取双裁判较低分 |
-| Summarizer | Sonnet 4.6 | 信息保留关键，成本增量可忽略（+$0.02/章）[DR-019](dr/dr-019-haiku-summarizer.md) |
+| Summarizer | Sonnet 4.6 | 信息保留关键，成本增量可忽略（+$0.02/章）[DR-019](../../v4/dr/dr-019-haiku-summarizer.md) |
 | 问题章节重写 | Opus 4.6 | 需要高质量推理 |
 

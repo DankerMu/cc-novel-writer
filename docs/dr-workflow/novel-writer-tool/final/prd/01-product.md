@@ -5,17 +5,17 @@
 **核心价值**：
 - **续写效率**：基于文件状态冷启动，随时续写下一章，无需重建上下文
 - **一致性保证**：自动追踪角色状态、伏笔、世界观，跨 100+ 章维持一致
-- **多线叙事**：支持多 POV 群像、势力博弈暗线、跨卷伏笔交汇等复杂叙事结构 [DR-021](../v5/dr/dr-021-llm-multi-thread-narrative.md)
+- **多线叙事**：支持多 POV 群像、势力博弈暗线、跨卷伏笔交汇等复杂叙事结构 [DR-021](../../v5/dr/dr-021-llm-multi-thread-narrative.md)
 - **去 AI 化**：4 层风格策略确保输出贴近用户个人文风，降低 AI 痕迹
 - **成本可控**：混合模型策略（Opus + Sonnet），每章 ~$0.75
 
-**目标用户**：中文网文作者（MVP）[DR-016](../v2/dr/dr-016-user-segments.md)
+**目标用户**：中文网文作者（MVP）[DR-016](../../v2/dr/dr-016-user-segments.md)
 
 ## 2. 产品形态：Claude Code Plugin
 
 ### 2.1 交付格式
 
-本产品以 **Claude Code Plugin** 形式交付（plugin name: `novel`），包含 4 个技能（Skills）和 8 个专业 Agent。其中 3 个技能为用户入口（`/novel:start`、`/novel:continue`、`/novel:status`），1 个为共享知识库。Plugin skills 遵循官方命名空间规则 `/{plugin-name}:{skill-name}`。[DR-018](dr/dr-018-plugin-api.md) [DR-020](dr/dr-020-single-command-ux.md)
+本产品以 **Claude Code Plugin** 形式交付（plugin name: `novel`），包含 4 个技能（Skills）和 8 个专业 Agent。其中 3 个技能为用户入口（`/novel:start`、`/novel:continue`、`/novel:status`），1 个为共享知识库。Plugin skills 遵循官方命名空间规则 `/{plugin-name}:{skill-name}`。[DR-018](../../v4/dr/dr-018-plugin-api.md) [DR-020](../../v4/dr/dr-020-single-command-ux.md)
 
 ```
 cc-novel-writer/
@@ -54,7 +54,7 @@ cc-novel-writer/
 
 ### 2.2 入口技能（三命令混合模式）
 
-采用"引导式入口 + 快捷命令"模式，以 Skills 形式实现（支持 supporting files 和 progressive disclosure），认知负载 < Miller 下限（4 项），新老用户均可高效使用。[DR-020](dr/dr-020-single-command-ux.md)
+采用"引导式入口 + 快捷命令"模式，以 Skills 形式实现（支持 supporting files 和 progressive disclosure），认知负载 < Miller 下限（4 项），新老用户均可高效使用。[DR-020](../../v4/dr/dr-020-single-command-ux.md)
 
 | 命令 | 用途 | 核心流程 |
 |------|------|---------|
@@ -74,7 +74,7 @@ cc-novel-writer/
 4. 根据选择 → Task tool 派发对应 agent
 ```
 
-**AskUserQuestion 约束**（[DR-020](dr/dr-020-single-command-ux.md)）：
+**AskUserQuestion 约束**（[DR-020](../../v4/dr/dr-020-single-command-ux.md)）：
 - 每次 2-4 选项（主菜单恰好 ≤4 项，刚好在限制内）
 - 60 秒超时 → 选项标记 "(Recommended)" 辅助快速决策
 - 子代理不可用 → `/novel:start` 必须在主 command 中调用 AskUserQuestion
@@ -143,7 +143,7 @@ Claude: Vol 2, Ch 51/50(超出), 总15万字, 均分3.7, 未回收伏笔3个
 
 ### 3.1 目标用户：网文作者
 
-**选择依据**（[DR-016](../v2/dr/dr-016-user-segments.md)）：AI 接受度高、产品匹配度高、市场规模大（中国 2000 万+ 网文作者）
+**选择依据**（[DR-016](../../v2/dr/dr-016-user-segments.md)）：AI 接受度高、产品匹配度高、市场规模大（中国 2000 万+ 网文作者）
 
 **用户特征**：
 - 日更 3000-6000 字，单部作品 100-500 万字
@@ -160,7 +160,7 @@ Claude: Vol 2, Ch 51/50(超出), 总15万字, 均分3.7, 未回收伏笔3个
 
 ### 3.2 差异化定位
 
-**独特卖点**（[DR-017](../v2/dr/dr-017-competitors.md)）：
+**独特卖点**（[DR-017](../../v2/dr/dr-017-competitors.md)）：
 1. 卷制滚动工作流（适配网文"边写边想"模式）
 2. 自动一致性保证（状态管理 + NER 检查 + 伏笔追踪）
 3. 多 agent 专业化分工 + 去 AI 化输出

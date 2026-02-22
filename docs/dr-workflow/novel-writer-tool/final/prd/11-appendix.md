@@ -10,16 +10,16 @@
 
 | 假设 | 状态 | 结论 | DR |
 |------|------|------|-----|
-| Context window | ✅ 已验证 | 200K tokens 满足，增量 context ~25K/次 | [DR-001](../v1/dr/dr-001-context-window.md) |
-| 生成速度 | ✅ 已验证 | 单章 1.2 分钟 | [DR-004](../v1/dr/dr-004-generation-speed.md) |
-| Agent 并发 | ⚠️ 有约束 | 推荐 3-5 分批执行 | [DR-002](../v1/dr/dr-002-agent-concurrency.md) |
-| 状态同步 | ⚠️ 需优化 | 推荐 SQLite + WAL | [DR-003](../v1/dr/dr-003-state-sync.md), [DR-006](../v1/dr/dr-006-state-concurrency.md) |
-| 风格分析 | ✅ 已验证 | BiberPlus/NeuroBiber 可用 | [DR-005](../v1/dr/dr-005-style-analysis.md) |
-| 伏笔检测 | ⚠️ 有上限 | 75-85% + 人工 | [DR-007](../v1/dr/dr-007-foreshadowing.md) |
-| NER 一致性 | ✅ 可用 | 分层策略 85-92% | [DR-011](../v1/dr/dr-011-ner-consistency.md) |
-| API 成本 | ✅ 已验证 | 混合策略 ~$0.80/章 | [DR-013](../v2/dr/dr-013-api-cost.md) |
-| Prompt 设计 | ✅ 已定义 | 四层结构 + 增量 context | [DR-014](../v2/dr/dr-014-prompt-design.md) |
-| 质量评估 | ✅ 可行 | LLM-as-Judge 8 维度 + 关键章双裁判 + 人工校准集 | [DR-015](../v2/dr/dr-015-quality-eval.md) |
+| Context window | ✅ 已验证 | 200K tokens 满足，增量 context ~25K/次 | [DR-001](../../v1/dr/dr-001-context-window.md) |
+| 生成速度 | ✅ 已验证 | 单章 1.2 分钟 | [DR-004](../../v1/dr/dr-004-generation-speed.md) |
+| Agent 并发 | ⚠️ 有约束 | 推荐 3-5 分批执行 | [DR-002](../../v1/dr/dr-002-agent-concurrency.md) |
+| 状态同步 | ⚠️ 需优化 | 推荐 SQLite + WAL | [DR-003](../../v1/dr/dr-003-state-sync.md), [DR-006](../../v1/dr/dr-006-state-concurrency.md) |
+| 风格分析 | ✅ 已验证 | BiberPlus/NeuroBiber 可用 | [DR-005](../../v1/dr/dr-005-style-analysis.md) |
+| 伏笔检测 | ⚠️ 有上限 | 75-85% + 人工 | [DR-007](../../v1/dr/dr-007-foreshadowing.md) |
+| NER 一致性 | ✅ 可用 | 分层策略 85-92% | [DR-011](../../v1/dr/dr-011-ner-consistency.md) |
+| API 成本 | ✅ 已验证 | 混合策略 ~$0.80/章 | [DR-013](../../v2/dr/dr-013-api-cost.md) |
+| Prompt 设计 | ✅ 已定义 | 四层结构 + 增量 context | [DR-014](../../v2/dr/dr-014-prompt-design.md) |
+| 质量评估 | ✅ 可行 | LLM-as-Judge 8 维度 + 关键章双裁判 + 人工校准集 | [DR-015](../../v2/dr/dr-015-quality-eval.md) |
 
 **状态存储决策**：MVP 阶段采用纯文件方案（JSON + Markdown），原因：
 1. Claude Code Plugin 环境为单用户单进程，无并发写入场景
@@ -162,42 +162,42 @@
 
 | ID | 主题 | 核心结论 | 文档 |
 |----|------|---------|------|
-| DR-001 | Context Window | 200K tokens 满足，增量 context ~25K | [查看](../v1/dr/dr-001-context-window.md) |
-| DR-002 | Agent 并发 | 推荐 3-5 分批 | [查看](../v1/dr/dr-002-agent-concurrency.md) |
-| DR-003 | 状态同步 | 竞态风险，推荐 SQLite + WAL | [查看](../v1/dr/dr-003-state-sync.md) |
-| DR-004 | 生成速度 | 单章 1.2 分钟 | [查看](../v1/dr/dr-004-generation-speed.md) |
-| DR-005 | 风格分析 | BiberPlus/NeuroBiber 可用 | [查看](../v1/dr/dr-005-style-analysis.md) |
-| DR-006 | 状态并发 | JSON 高危，推荐 SQLite | [查看](../v1/dr/dr-006-state-concurrency.md) |
-| DR-007 | 伏笔检测 | 75-85% + 人工 | [查看](../v1/dr/dr-007-foreshadowing.md) |
-| DR-008 | 用户接受度 | 30-40% 人工可调 | [查看](../v1/dr/dr-008-user-acceptance.md) |
-| DR-009 | Backend 选型 | Claude Opus 4.6 | [查看](../v1/dr/dr-009-codeagent-backend.md) |
-| DR-010 | 关系图 Schema | 有向图 + JSON | [查看](../v1/dr/dr-010-relationship-schema.md) |
-| DR-011 | NER 一致性 | 分层 85-92% | [查看](../v1/dr/dr-011-ner-consistency.md) |
-| DR-012 | 工作流灵活性 | 推荐双模式 | [查看](../v1/dr/dr-012-workflow-flexibility.md) |
+| DR-001 | Context Window | 200K tokens 满足，增量 context ~25K | [查看](../../v1/dr/dr-001-context-window.md) |
+| DR-002 | Agent 并发 | 推荐 3-5 分批 | [查看](../../v1/dr/dr-002-agent-concurrency.md) |
+| DR-003 | 状态同步 | 竞态风险，推荐 SQLite + WAL | [查看](../../v1/dr/dr-003-state-sync.md) |
+| DR-004 | 生成速度 | 单章 1.2 分钟 | [查看](../../v1/dr/dr-004-generation-speed.md) |
+| DR-005 | 风格分析 | BiberPlus/NeuroBiber 可用 | [查看](../../v1/dr/dr-005-style-analysis.md) |
+| DR-006 | 状态并发 | JSON 高危，推荐 SQLite | [查看](../../v1/dr/dr-006-state-concurrency.md) |
+| DR-007 | 伏笔检测 | 75-85% + 人工 | [查看](../../v1/dr/dr-007-foreshadowing.md) |
+| DR-008 | 用户接受度 | 30-40% 人工可调 | [查看](../../v1/dr/dr-008-user-acceptance.md) |
+| DR-009 | Backend 选型 | Claude Opus 4.6 | [查看](../../v1/dr/dr-009-codeagent-backend.md) |
+| DR-010 | 关系图 Schema | 有向图 + JSON | [查看](../../v1/dr/dr-010-relationship-schema.md) |
+| DR-011 | NER 一致性 | 分层 85-92% | [查看](../../v1/dr/dr-011-ner-consistency.md) |
+| DR-012 | 工作流灵活性 | 推荐双模式 | [查看](../../v1/dr/dr-012-workflow-flexibility.md) |
 
 #### v2 调研（产品与市场）
 
 | ID | 主题 | 核心结论 | 文档 |
 |----|------|---------|------|
-| DR-013 | API 成本 | 混合策略 ~$0.80/章 | [查看](../v2/dr/dr-013-api-cost.md) |
-| DR-014 | Prompt 设计 | 四层结构 + 增量 context | [查看](../v2/dr/dr-014-prompt-design.md) |
-| DR-015 | 质量评估 | LLM-as-Judge 8 维度 + 关键章双裁判 | [查看](../v2/dr/dr-015-quality-eval.md) |
-| DR-016 | 用户细分 | MVP 聚焦网文作者 | [查看](../v2/dr/dr-016-user-segments.md) |
-| DR-017 | 竞品分析 | 差异化：卷制循环+去AI化 | [查看](../v2/dr/dr-017-competitors.md) |
+| DR-013 | API 成本 | 混合策略 ~$0.80/章 | [查看](../../v2/dr/dr-013-api-cost.md) |
+| DR-014 | Prompt 设计 | 四层结构 + 增量 context | [查看](../../v2/dr/dr-014-prompt-design.md) |
+| DR-015 | 质量评估 | LLM-as-Judge 8 维度 + 关键章双裁判 | [查看](../../v2/dr/dr-015-quality-eval.md) |
+| DR-016 | 用户细分 | MVP 聚焦网文作者 | [查看](../../v2/dr/dr-016-user-segments.md) |
+| DR-017 | 竞品分析 | 差异化：卷制循环+去AI化 | [查看](../../v2/dr/dr-017-competitors.md) |
 
 #### v4 调研（Plugin 与质量）
 
 | ID | 主题 | 核心结论 | 文档 |
 |----|------|---------|------|
-| DR-018 | Plugin API 格式 | commands/ vs skills/ 区分，agent 需 frontmatter | [查看](dr/dr-018-plugin-api.md) |
-| DR-019 | Haiku Summarizer | 升级为 Sonnet，成本 +$0.02/章，避免误差累积 | [查看](dr/dr-019-haiku-summarizer.md) |
-| DR-020 | 单主命令 UX | 三命令混合模式：/novel:start + /novel:continue + /novel:status | [查看](dr/dr-020-single-command-ux.md) |
+| DR-018 | Plugin API 格式 | commands/ vs skills/ 区分，agent 需 frontmatter | [查看](../../v4/dr/dr-018-plugin-api.md) |
+| DR-019 | Haiku Summarizer | 升级为 Sonnet，成本 +$0.02/章，避免误差累积 | [查看](../../v4/dr/dr-019-haiku-summarizer.md) |
+| DR-020 | 单主命令 UX | 三命令混合模式：/novel:start + /novel:continue + /novel:status | [查看](../../v4/dr/dr-020-single-command-ux.md) |
 
 #### v5 调研（多线叙事）
 
 | ID | 主题 | 核心结论 | 文档 |
 |----|------|---------|------|
-| DR-021 | LLM 多线叙事一致性 | 有条件可行：裸调用串线率 8-20%，三层防护降至 ≤2-3%，≤4 条活跃线 | [查看](../v5/dr/dr-021-llm-multi-thread-narrative.md) |
+| DR-021 | LLM 多线叙事一致性 | 有条件可行：裸调用串线率 8-20%，三层防护降至 ≤2-3%，≤4 条活跃线 | [查看](../../v5/dr/dr-021-llm-multi-thread-narrative.md) |
 
 ### 16.2 参考文献
 
