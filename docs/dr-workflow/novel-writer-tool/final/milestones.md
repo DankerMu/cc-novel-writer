@@ -1,6 +1,6 @@
-# 实施里程碑分解 v4
+# 实施里程碑分解 v5
 
-基于 v4 PRD 的卷制滚动工作流 + 规范驱动写作体系 + 多线叙事体系（DR-021 验证），分解为 4 个 Milestone。
+基于 v5 PRD 的卷制滚动工作流 + 规范驱动写作体系 + 多线叙事体系（DR-021 验证）+ 实体映射 + 注入安全 + 路径审计，分解为 4 个 Milestone。
 
 ---
 
@@ -16,22 +16,23 @@
 | 1.1 | 搭建项目结构（目录、配置、checkpoint，含 storylines/ + logs/ + research/ 目录） | P0 | 2h |
 | 1.2 | 实现 Agent Prompt 管理（plugin `agents/*.md` + 入口 Skill 变量注入） | P0 | 4h |
 | 1.3 | 实现 ChapterWriter Agent（续写模式，增量 context，支持 L1/L2/L3 Spec + 故事线 context 注入） | P0 | 8h |
-| 1.4 | 实现 Summarizer（章节摘要 + 状态增量更新 + storyline_id 标记 + cross_references + storyline memory.md 更新） | P0 | 5h |
+| 1.4 | 实现 Summarizer（章节摘要 + 状态增量更新 + storyline_id 标记 + cross_references + storyline memory.md 更新 + entity_id_map 消费 + unknown_entities 输出） | P0 | 5h |
 | 1.5 | 实现 StyleAnalyzer（风格提取 → style-profile.json） | P0 | 6h |
 | 1.6 | 实现 StyleRefiner Agent（去 AI 化润色） | P0 | 6h |
 | 1.7 | 实现 QualityJudge Agent（双轨验收：合规检查 + 8 维度评分） | P0 | 8h |
 | 1.8 | 实现 checkpoint 机制（写入/读取/恢复） | P0 | 3h |
-| 1.9 | 实现 staging → commit 事务写入（staging/ 暂存 + pipeline_stage 幂等恢复） | P1 | 3h |
+| 1.9 | 实现 staging → commit 事务写入（staging/ 暂存 + pipeline_stage 幂等恢复 + §10.9 DATA delimiter 注入） | P1 | 4h |
 | 1.10 | 实现 L1 世界规则 Spec（WorldBuilder 输出 rules.json） | P0 | 4h |
 | 1.11 | 实现 storylines.json 基础结构（WorldBuilder 协助初始化） | P1 | 3h |
-| 1.12 | 集成测试：风格样本 + 大纲 → 续写 3 章 → Spec 验收 + 评估 | P0 | 4h |
+| 1.12 | 集成测试：风格样本 + 大纲 → 试写 3 章（完整流水线含 Summarizer）→ Spec 验收 + 评估 | P0 | 4h |
 
 ### 验收标准
 - [ ] Plugin 结构完整：plugin.json（name: `novel`）可被 Claude Code 识别，3 个 skill 可调用（/novel:start、/novel:continue、/novel:status），8 个 agent 可派生
 - [ ] 输入风格样本 + 手写大纲 → 续写 3 章（各 2500-3500 字）
 - [ ] QualityJudge 双轨验收：合规检查（L1 规则逐条通过/违反）+ 8 维度评分 ≥ 4.0/5.0（单线章节 storyline_coherence 默认 4 分）
 - [ ] 风格自然度 ≥ 3.5（AI 黑名单命中 < 3 次/千字）
-- [ ] 每章自动生成摘要（300 字）+ 状态 JSON + storyline_id + cross_references
+- [ ] 每章自动生成摘要（300 字）+ 状态 JSON + storyline_id + cross_references + unknown_entities
+- [ ] entity_id_map 正确构建并传入 Summarizer，ops path 使用 slug ID
 - [ ] checkpoint 写入/恢复正确
 - [ ] WorldBuilder 输出 rules.json，ChapterWriter 可消费
 - [ ] storylines.json 基础结构可创建，storyline_types 定义完整
@@ -53,7 +54,7 @@
 | # | 任务 | 优先级 | 预估工时 |
 |---|------|--------|---------|
 | 2.1 | 实现 Orchestrator 状态机（INIT→QUICK_START→VOL_PLANNING→WRITING→VOL_REVIEW） | P0 | 10h |
-| 2.2 | 实现 context 组装规则（按 agent 类型动态组装，含 Spec + 故事线 context 注入） | P0 | 10h |
+| 2.2 | 实现 context 组装规则（按 agent 类型动态组装，含 Spec + 故事线 context 注入 + entity_id_map 构建 + L2 角色契约裁剪） | P0 | 12h |
 | 2.3 | 实现 WorldBuilder Agent（初始化 + 增量更新 + L1 规则抽取 + 协助 storylines.json 初始化） | P0 | 10h |
 | 2.4 | 实现 CharacterWeaver Agent（新增/退场/更新 + L2 契约生成） | P0 | 8h |
 | 2.5 | 实现 PlotArchitect Agent（卷级大纲 + L3 章节契约 + storyline-schedule.json + 交汇事件规划） | P0 | 12h |
@@ -65,7 +66,8 @@
 | 2.11 | 实现故事线 context 组装（storyline_context + concurrent_state + transition_hint） | P0 | 6h |
 | 2.12 | 实现 SessionStart hook（inject-context.sh：自动注入 checkpoint + 最近摘要） | P1 | 2h |
 | 2.13 | 实现"导入研究资料"功能（扫描 doc-workflow 产出 → research/，WorldBuilder/CharacterWeaver 自动引用） | P1 | 3h |
-| 2.14 | 集成测试：完成 1 卷 30 章循环（含多线叙事 + Spec 全链路验证） | P0 | 14h |
+| 2.14 | 实现 PostToolUse 路径审计 hook（Agent Write/Edit 白名单校验 staging/**，违规拦截 + 记录 audit.jsonl） | P1 | 3h |
+| 2.15 | 集成测试：完成 1 卷 30 章循环（含多线叙事 + Spec 全链路验证） | P0 | 14h |
 
 ### 验收标准
 - [ ] 完成一卷 30 章的完整循环（含至少 2 条故事线交织）
@@ -78,6 +80,8 @@
 - [ ] 故事线切换章节能正确注入 storyline_context 和 concurrent_state
 - [ ] 交汇事件能在预规划的章节范围内正确触发
 - [ ] SessionStart hook 在新 session 自动注入 checkpoint + 最近摘要，非项目目录静默跳过
+- [ ] PostToolUse 路径审计 hook 可拦截 Agent 写入非 staging/ 目录的操作
+- [ ] entity_id_map 自动从 characters/active/ 构建，L2 契约裁剪仅加载章节涉及角色（上限 10）
 
 ### 依赖
 - Milestone 1 完成
@@ -162,7 +166,7 @@
 | 7. 去 AI 化策略 | M1+M3 | ✅ |
 | 8. Orchestrator | M2 | ✅ |
 | 9. 数据结构 | M1-M2 | ✅ |
-| 10. 协作协议 | M2 | ✅ |
+| 10. 协作协议 | M1（§10.9 DATA delimiter）+ M2（状态机 + 路径审计 hook） | ✅ |
 | 11. 技术可行性 | M1-M3 | ✅ |
 | 12. 成本分析 | M1（验证） | ✅ |
 | 13-15. 路线图/指标/风险 | M1-M4 | ✅ |
