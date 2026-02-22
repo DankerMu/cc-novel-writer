@@ -217,7 +217,7 @@ Team Lead (Orchestrator)         # 调度核心 + 状态机
 | WorldBuilder / CharacterWeaver / PlotArchitect | Opus 4.6 | 创意质量关键 |
 | ChapterWriter | Sonnet 4.6 | 批量生成，成本敏感 |
 | StyleRefiner | Opus 4.6 | 需要高质量语言感知 |
-| QualityJudge | Sonnet 4.6 | 结构化评估，不需要创意 |
+| QualityJudge | Sonnet 4.6（普通章）/ Opus 4.6（关键章双裁判） | 结构化评估；关键章取双裁判较低分 |
 | Summarizer | Sonnet 4.6 | 信息保留关键，成本增量可忽略（+$0.02/章）[DR-019](dr/dr-019-haiku-summarizer.md) |
 | 问题章节重写 | Opus 4.6 | 需要高质量推理 |
 
@@ -441,6 +441,9 @@ AI 黑名单：{ai_blacklist}
 - 风格自然度评分基于可量化指标（黑名单命中率、句式重复率）
 - 故事线连贯度评估切线流畅度、跟线难度、并发线暗示自然度
 - 综合分 = 8 维度加权均值（权重见 Section 6.6.5）
+- risk_flags：输出结构化风险标记（character_speech_missing、foreshadow_premature、storyline_contamination 等）
+- required_fixes：当建议修订时，必须给出定向修订指令（target 段落 + instruction）
+- 关键章双裁判：卷首章、卷尾章、故事线交汇事件章使用 Opus 复核，取两者较低分
 
 # Format
 输出 JSON：
@@ -448,18 +451,20 @@ AI 黑名单：{ai_blacklist}
   "chapter": N,
   "contract_verification": {"W-001": "pass", "C-XXX-001": "pass", "LS-001": "pass", ...},
   "scores": {
-    "plot_logic": {"score": N, "weight": 0.18, "reason": "..."},
-    "character": {"score": N, "weight": 0.18, "reason": "..."},
-    "immersion": {"score": N, "weight": 0.15, "reason": "..."},
-    "foreshadowing": {"score": N, "weight": 0.10, "reason": "..."},
-    "pacing": {"score": N, "weight": 0.08, "reason": "..."},
-    "style_naturalness": {"score": N, "weight": 0.15, "reason": "..."},
-    "emotional_impact": {"score": N, "weight": 0.08, "reason": "..."},
-    "storyline_coherence": {"score": N, "weight": 0.08, "reason": "..."}
+    "plot_logic": {"score": N, "weight": 0.18, "reason": "...", "evidence": "原文引用"},
+    "character": {"score": N, "weight": 0.18, "reason": "...", "evidence": "原文引用"},
+    "immersion": {"score": N, "weight": 0.15, "reason": "...", "evidence": "原文引用"},
+    "foreshadowing": {"score": N, "weight": 0.10, "reason": "...", "evidence": "原文引用"},
+    "pacing": {"score": N, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
+    "style_naturalness": {"score": N, "weight": 0.15, "reason": "...", "evidence": "原文引用"},
+    "emotional_impact": {"score": N, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
+    "storyline_coherence": {"score": N, "weight": 0.08, "reason": "...", "evidence": "原文引用"}
   },
   "overall": 加权均值,
-  "recommendation": "pass|revise|rewrite",
+  "recommendation": "pass|polish|revise|rewrite",
   "violations": [],
+  "risk_flags": ["character_speech_missing:角色名", "foreshadow_premature:伏笔ID"],
+  "required_fixes": [{"target": "段落位置", "instruction": "修订指令"}],
   "issues": ["具体问题描述"]
 }
 ```
@@ -1235,17 +1240,23 @@ novel-project/
 ```json
 {
   "chapter": 47,
+  "contract_verification": {"l1_checks": [], "l2_checks": [], "l3_checks": [], "ls_checks": [], "has_violations": false},
   "scores": {
-    "plot_coherence": {"score": 4, "reason": "..."},
-    "character_consistency": {"score": 4, "reason": "..."},
-    "foreshadowing": {"score": 3, "reason": "..."},
-    "language_quality": {"score": 4, "reason": "..."},
-    "scene_description": {"score": 3, "reason": "..."},
-    "emotional_tension": {"score": 3, "reason": "..."},
-    "style_naturalness": {"score": 4, "reason": "AI 黑名单命中 1 次/千字"}
+    "plot_logic": {"score": 4, "weight": 0.18, "reason": "...", "evidence": "原文引用"},
+    "character": {"score": 4, "weight": 0.18, "reason": "...", "evidence": "原文引用"},
+    "immersion": {"score": 4, "weight": 0.15, "reason": "...", "evidence": "原文引用"},
+    "foreshadowing": {"score": 3, "weight": 0.10, "reason": "...", "evidence": "原文引用"},
+    "pacing": {"score": 4, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
+    "style_naturalness": {"score": 4, "weight": 0.15, "reason": "AI 黑名单命中 1 次/千字", "evidence": "原文引用"},
+    "emotional_impact": {"score": 3, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
+    "storyline_coherence": {"score": 4, "weight": 0.08, "reason": "...", "evidence": "原文引用"}
   },
-  "overall": 3.57,
-  "recommendation": "pass"
+  "overall": 3.78,
+  "recommendation": "pass",
+  "risk_flags": [],
+  "required_fixes": [],
+  "issues": [],
+  "strengths": ["情节节奏张弛得当"]
 }
 ```
 
@@ -1356,7 +1367,7 @@ Agent 通过 Task 子代理执行，结果以结构化文本返回给入口 Skil
 | NER 一致性 | ✅ 可用 | 分层策略 85-92% | [DR-011](../v1/dr/dr-011-ner-consistency.md) |
 | API 成本 | ✅ 已验证 | 混合策略 ~$0.80/章 | [DR-013](../v2/dr/dr-013-api-cost.md) |
 | Prompt 设计 | ✅ 已定义 | 四层结构 + 增量 context | [DR-014](../v2/dr/dr-014-prompt-design.md) |
-| 质量评估 | ✅ 可行 | LLM-as-Judge 7 维度 | [DR-015](../v2/dr/dr-015-quality-eval.md) |
+| 质量评估 | ✅ 可行 | LLM-as-Judge 8 维度 + 关键章双裁判 + 人工校准集 | [DR-015](../v2/dr/dr-015-quality-eval.md) |
 
 **状态存储决策**：MVP 阶段采用纯文件方案（JSON + Markdown），原因：
 1. Claude Code Plugin 环境为单用户单进程，无并发写入场景
@@ -1518,7 +1529,7 @@ Agent 通过 Task 子代理执行，结果以结构化文本返回给入口 Skil
 |----|------|---------|------|
 | DR-013 | API 成本 | 混合策略 ~$0.80/章 | [查看](../v2/dr/dr-013-api-cost.md) |
 | DR-014 | Prompt 设计 | 四层结构 + 增量 context | [查看](../v2/dr/dr-014-prompt-design.md) |
-| DR-015 | 质量评估 | LLM-as-Judge 7 维度 | [查看](../v2/dr/dr-015-quality-eval.md) |
+| DR-015 | 质量评估 | LLM-as-Judge 8 维度 + 关键章双裁判 | [查看](../v2/dr/dr-015-quality-eval.md) |
 | DR-016 | 用户细分 | MVP 聚焦网文作者 | [查看](../v2/dr/dr-016-user-segments.md) |
 | DR-017 | 竞品分析 | 差异化：卷制循环+去AI化 | [查看](../v2/dr/dr-017-competitors.md) |
 

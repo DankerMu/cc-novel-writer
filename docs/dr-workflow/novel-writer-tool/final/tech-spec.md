@@ -1144,6 +1144,9 @@ tools: ["Read", "Glob", "Grep"]
 2. **不给面子分**：明确指出问题而非回避
 3. **可量化**：风格自然度基于可量化指标（黑名单命中率 < 3 次/千字，相邻 5 句重复句式 < 2）
 4. **综合分计算**：overall = 各维度 score × weight 的加权均值（8 维度权重见 Track 2 表）
+5. **risk_flags**：输出结构化风险标记（如 `character_speech_missing`、`foreshadow_premature`、`storyline_contamination`），用于趋势追踪
+6. **required_fixes**：当 recommendation 为 revise/rewrite 时，必须输出最小修订指令列表（target 段落 + 具体 instruction），供 ChapterWriter 定向修订
+7. **关键章双裁判**：卷首章、卷尾章、故事线交汇事件章使用 Opus 模型复核（普通章保持 Sonnet 单裁判控成本）。双裁判取两者较低分作为最终分
 
 # 门控决策逻辑
 
@@ -1187,6 +1190,11 @@ else:
   },
   "overall": 3.65,
   "recommendation": "pass | polish | revise | rewrite",
+  "risk_flags": ["character_speech_missing:protagonist", "foreshadow_premature:ancient_prophecy"],
+  "required_fixes": [
+    {"target": "paragraph_3", "instruction": "主角此处对白缺少语癖'老子'，需补充"},
+    {"target": "paragraph_7", "instruction": "预言伏笔揭示过早，改为暗示而非明示"}
+  ],
   "issues": ["具体问题描述"],
   "strengths": ["突出优点"]
 }
