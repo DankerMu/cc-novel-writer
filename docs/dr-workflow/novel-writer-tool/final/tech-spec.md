@@ -317,7 +317,8 @@ for chapter_num in range(start, start + N):
 
   4. QualityJudge Agent → 质量评估（双轨验收）
      输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule
-     输出: staging/evaluations/chapter-{C}-eval.json
+     返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
+     入口 Skill 写入: staging/evaluations/chapter-{C}-eval.json
      更新 checkpoint: pipeline_stage = "judged"
 
   5. 质量门控决策:
@@ -1273,7 +1274,7 @@ else:
 
 # Format
 
-输出 `evaluations/chapter-{C}-eval.json`：
+以结构化 JSON **返回**给入口 Skill（QualityJudge 为只读 agent，不直接写文件；由入口 Skill 写入 `staging/evaluations/chapter-{C}-eval.json`）：
 
 ```json
 {
