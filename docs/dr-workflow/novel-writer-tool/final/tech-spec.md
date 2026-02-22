@@ -266,6 +266,7 @@ for chapter_num in range(start, start + N):
      - 合并 state patches: 校验 base_state_version 匹配 → 去重 ChapterWriter + Summarizer ops → 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
      - 更新 foreshadowing/global.json（从 foreshadow ops 提取）
      - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null）
+     - 写入 logs/chapter-{C}-log.json（stages 耗时/token/模型、gate_decision、revisions、total_cost_usd）
      - 清空 staging/ 本章文件
 
   7. 输出本章结果:
@@ -322,6 +323,7 @@ argument-hint: ""
 4. foreshadowing/global.json → 伏笔状态
 5. Glob("evaluations/chapter-*-eval.json") → 所有评分
 6. Glob("chapters/chapter-*.md") → 章节文件列表（统计字数）
+7. Glob("logs/chapter-*-log.json") → 流水线日志（成本、耗时、修订次数）
 ```
 
 ### Step 2: 计算统计
@@ -334,6 +336,8 @@ argument-hint: ""
 - 各维度均值
 - 未回收伏笔数量和列表
 - 活跃角色数量
+- 累计成本（sum total_cost_usd）、平均每章成本、平均每章耗时
+- 修订率（revisions > 0 的章节占比）
 ```
 
 ### Step 3: 格式化输出
@@ -356,6 +360,12 @@ argument-hint: ""
   超期未回收（>10章）：{overdue}
 
 活跃角色：{character_count} 个
+
+成本统计：
+  累计：${total_cost}（{total_chapters} 章）
+  均章成本：${avg_cost}/章
+  均章耗时：{avg_duration}s
+  修订率：{revision_rate}%
 ```
 
 ## 约束

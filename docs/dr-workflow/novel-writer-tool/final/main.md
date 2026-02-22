@@ -1162,8 +1162,11 @@ novel-project/
 │       └── vol-01-final-state.json
 ├── foreshadowing/
 │   └── global.json                 # 跨卷伏笔
-└── evaluations/
-    ├── chapter-001-eval.json
+├── evaluations/
+│   ├── chapter-001-eval.json
+│   └── ...
+└── logs/                          # 流水线执行日志（调试 + 成本追踪）
+    ├── chapter-001-log.json
     └── ...
 ```
 
@@ -1264,6 +1267,27 @@ novel-project/
   "strengths": ["情节节奏张弛得当"]
 }
 ```
+
+**Pipeline Log** (`logs/chapter-N-log.json`):
+```json
+{
+  "chapter": 47,
+  "storyline_id": "main-quest",
+  "started_at": "2026-03-15T14:30:00+08:00",
+  "stages": [
+    {"name": "draft", "model": "sonnet", "input_tokens": 12000, "output_tokens": 3500, "duration_ms": 45000},
+    {"name": "summarize", "model": "haiku", "input_tokens": 4000, "output_tokens": 800, "duration_ms": 8000},
+    {"name": "refine", "model": "sonnet", "input_tokens": 8000, "output_tokens": 3500, "duration_ms": 42000},
+    {"name": "judge", "model": "sonnet", "input_tokens": 6000, "output_tokens": 1200, "duration_ms": 15000}
+  ],
+  "gate_decision": "pass",
+  "revisions": 0,
+  "total_duration_ms": 110000,
+  "total_cost_usd": 0.72
+}
+```
+
+> 每章流水线完成后由入口 Skill 写入 `logs/chapter-N-log.json`。用于调试（定位哪个阶段耗时/耗 token 异常）、成本追踪（累计 cost）、质量回顾（门控决策 + 修订次数统计）。`/novel:status` 可读取汇总展示。
 
 ## 10. Agent 协作协议
 

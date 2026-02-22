@@ -13,7 +13,7 @@
 | # | 任务 | 优先级 | 预估工时 |
 |---|------|--------|---------|
 | 1.0 | 搭建 Plugin 脚手架（plugin.json + 3 commands + 8 agents + skill + templates） | P0 | 6h |
-| 1.1 | 搭建项目结构（目录、配置、checkpoint，含 storylines/ 目录） | P0 | 2h |
+| 1.1 | 搭建项目结构（目录、配置、checkpoint，含 storylines/ + logs/ 目录） | P0 | 2h |
 | 1.2 | 实现 Prompt 模板系统（`prompts/` + 变量注入） | P0 | 4h |
 | 1.3 | 实现 ChapterWriter Agent（续写模式，增量 context，支持 L1/L2/L3 Spec + 故事线 context 注入） | P0 | 8h |
 | 1.4 | 实现 Summarizer（章节摘要 + 状态增量更新 + storyline_id 标记 + cross_references + storyline memory.md 更新） | P0 | 5h |
