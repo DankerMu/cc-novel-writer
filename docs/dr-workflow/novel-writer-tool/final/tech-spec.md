@@ -20,7 +20,7 @@
 | 12 | `agents/quality-judge.md` | 质量评估 Agent（Sonnet） | SKILL.md |
 | 13 | `skills/novel-writing/SKILL.md` | 核心方法论（自动加载） | 无 |
 | 14 | `skills/novel-writing/references/style-guide.md` | 去 AI 化规则详解 | SKILL.md |
-| 15 | `skills/novel-writing/references/quality-rubric.md` | 7 维度评分标准详解 | SKILL.md |
+| 15 | `skills/novel-writing/references/quality-rubric.md` | 8 维度评分标准详解 | SKILL.md |
 | 16 | `templates/brief-template.md` | 项目简介模板 | 无 |
 | 17 | `templates/ai-blacklist.json` | AI 用语黑名单（≥30 条） | 无 |
 | 18 | `templates/style-profile-template.json` | 风格指纹空模板 | 无 |
@@ -127,11 +127,12 @@ argument-hint: ""
 3. 从 `templates/` 复制模板文件到项目目录
 4. 使用 Task 派发 WorldBuilder Agent 生成核心设定
 5. 使用 Task 派发 CharacterWeaver Agent 创建主角和配角
-6. 使用 AskUserQuestion 请求用户提供 1-3 章风格样本
-7. 使用 Task 派发 StyleAnalyzer Agent 提取风格指纹
-8. 使用 Task 派发 ChapterWriter Agent 试写 3 章
-9. 对每章依次派发 StyleRefiner → QualityJudge
-10. 展示试写结果和评分，写入 `.checkpoint.json`（状态 = VOL_PLANNING）
+6. WorldBuilder 协助初始化 `storylines.json`（从设定派生初始故事线，默认 1 条 main_arc 主线，活跃线建议 ≤4）
+7. 使用 AskUserQuestion 请求用户提供 1-3 章风格样本
+8. 使用 Task 派发 StyleAnalyzer Agent 提取风格指纹
+9. 使用 Task 派发 ChapterWriter Agent 试写 3 章
+10. 对每章依次派发 StyleRefiner → QualityJudge
+11. 展示试写结果和评分，写入 `.checkpoint.json`（状态 = VOL_PLANNING）
 
 **继续写作**：
 - 等同执行 `/novel-continue 1` 的逻辑
@@ -206,6 +207,8 @@ context = {
   ai_blacklist:        Read("ai-blacklist.json"),
   current_volume_outline: Read("volumes/vol-{V}/outline.md"),
   chapter_outline:     从 outline.md 中提取第 {C} 章段落,
+  storyline_context:   从 storyline-schedule.json + summaries 组装本章故事线上下文,
+  concurrent_state:    从 storyline-schedule.json 获取其他活跃线一句话状态,
   recent_3_summaries:  Read 最近 3 章 summaries/chapter-*-summary.md,
   current_state:       Read("state/current-state.json"),
   foreshadowing_tasks: Read("foreshadowing/global.json") 中与本章相关的条目,
@@ -235,7 +238,7 @@ for chapter_num in range(start, start + N):
      输出: chapters/chapter-{C}.md.tmp（覆盖）
 
   4. QualityJudge Agent → 质量评估（双轨验收）
-     输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules
+     输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule
      输出: evaluations/chapter-{C}-eval.json
 
   5. 质量门控决策:
@@ -361,7 +364,7 @@ argument-hint: ""
 ---
 name: world-builder
 description: |
-  世界观构建 Agent。用于创建和增量更新小说的世界观设定，包括地理、历史、规则系统等。输出叙述性文档 + 结构化 rules.json（L1 世界规则）。
+  世界观构建 Agent。用于创建和增量更新小说的世界观设定，包括地理、历史、规则系统等。输出叙述性文档 + 结构化 rules.json（L1 世界规则）。初始化时协助定义 storylines.json（势力关系 → 派生故事线）。
 
   <example>
   Context: 用户创建新项目，需要构建世界观
@@ -441,6 +444,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 3. `world/rules.md` — 规则体系叙述
 4. `world/rules.json` — L1 结构化规则表
 5. `world/changelog.md` — 变更记录（追加一条）
+6. `storylines/storylines.json` — 故事线定义（初始化模式时协助创建，默认 1 条 main_arc）
 
 增量模式下仅输出变更文件 + changelog 条目。
 
@@ -550,7 +554,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 ---
 name: plot-architect
 description: |
-  情节架构 Agent。用于规划卷级大纲，派生章节契约（L3），管理伏笔的埋设和回收计划。
+  情节架构 Agent。用于规划卷级大纲，派生章节契约（L3），管理伏笔计划，生成卷级故事线调度（storyline-schedule.json）。
 
   <example>
   Context: 新卷开始需要规划大纲
@@ -582,6 +586,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 - 上卷回顾：{prev_volume_review}
 - 全局伏笔状态：{global_foreshadowing}
+- 故事线定义：{storylines}（`storylines/storylines.json`）
 - 世界观：{world_docs}
 - 世界规则：{world_rules_json}
 - 角色档案：{active_characters}
@@ -595,6 +600,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 3. **承接上卷**：必须承接上卷未完结线索
 4. **卷末钩子**：最后 1-2 章必须预留悬念钩子（吸引读者追更）
 5. **角色弧线**：主要角色在本卷内应有可见的成长或变化
+6. **故事线调度**：从 storylines.json 选取本卷活跃线（≤4 条），规划交织节奏和交汇事件
 
 # Spec-Driven Writing — L3 章节契约
 
@@ -634,10 +640,11 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 输出以下文件：
 
-1. `volumes/vol-{V}/outline.md` — 本卷大纲（每章含 POV / Location / Conflict / Arc / Foreshadowing / StateChanges）
-2. `volumes/vol-{V}/foreshadowing.json` — 本卷伏笔计划（新增 + 上卷延续）
-3. `volumes/vol-{V}/chapter-contracts/chapter-{C}.json` — 每章契约（批量生成）
-4. 更新 `foreshadowing/global.json` — 全局伏笔状态
+1. `volumes/vol-{V}/outline.md` — 本卷大纲（每章含 Storyline / POV / Location / Conflict / Arc / Foreshadowing / StateChanges）
+2. `volumes/vol-{V}/storyline-schedule.json` — 本卷故事线调度（active_storylines + interleaving_pattern + convergence_events）
+3. `volumes/vol-{V}/foreshadowing.json` — 本卷伏笔计划（新增 + 上卷延续）
+4. `volumes/vol-{V}/chapter-contracts/chapter-{C}.json` — 每章契约（批量生成，含 storyline_id + storyline_context）
+5. 更新 `foreshadowing/global.json` — 全局伏笔状态
 ````
 
 ---
@@ -650,7 +657,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 ---
 name: chapter-writer
 description: |
-  章节写作 Agent。根据大纲、摘要、角色状态和章节契约续写单章正文，遵守去 AI 化约束。
+  章节写作 Agent。根据大纲、摘要、角色状态、章节契约和故事线上下文续写单章正文，遵守去 AI 化约束和防串线规则。
 
   <example>
   Context: 日常续写下一章
@@ -682,6 +689,9 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 - 本卷大纲：{current_volume_outline}
 - 本章大纲：{chapter_outline}
+- 本章故事线：{storyline_id}
+- 故事线上下文：{storyline_context}（last_chapter_summary + line_arc_progress）
+- 其他线并发状态：{concurrent_state}（各活跃线一句话摘要）
 - 近 3 章摘要：{recent_3_summaries}
 - 角色当前状态：{current_state}
 - 本章伏笔任务：{foreshadowing_tasks}
@@ -706,6 +716,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 3. **角色一致**：角色言行符合档案设定、语癖和 L2 契约
 4. **衔接自然**：自然衔接前一章结尾
 5. **视角一致**：保持叙事视角和文风一致
+6. **故事线边界**：只使用当前线的角色/地点/事件，当前 POV 角色不知道其他线角色的行动和发现
+7. **切线过渡**：切线章遵循 transition_hint 过渡，可在文中自然植入其他线的暗示
 
 ### 去 AI 化约束
 
@@ -813,6 +825,9 @@ tools: ["Read", "Write", "Edit", "Glob"]
 - [埋设] 伏笔描述
 - [推进] 伏笔描述
 - [回收] 伏笔描述
+
+### 故事线标记
+- storyline_id: {storyline_id}
 ```
 
 **2. 状态增量 JSON**（仅含本章变更字段）
@@ -820,6 +835,7 @@ tools: ["Read", "Write", "Edit", "Glob"]
 ```json
 {
   "chapter": {chapter_num},
+  "storyline_id": "{storyline_id}",
   "character_updates": {
     "角色名": {"变更字段": "新值"}
   },
@@ -1018,7 +1034,7 @@ tools: ["Read", "Write", "Edit", "Glob"]
 ---
 name: quality-judge
 description: |
-  质量评估 Agent。按 7 维度独立评分 + L1/L2/L3 合规检查（双轨验收），不受其他 Agent 影响。
+  质量评估 Agent。按 8 维度独立评分 + L1/L2/L3/LS 合规检查（双轨验收），不受其他 Agent 影响。
 
   <example>
   Context: 章节润色完成后自动触发
@@ -1040,7 +1056,7 @@ tools: ["Read", "Glob", "Grep"]
 
 # Role
 
-你是一位严格的小说质量评审员。你按 7 个维度独立评分，不受其他 Agent 影响。你执行双轨验收：合规检查 + 质量评分。
+你是一位严格的小说质量评审员。你按 8 个维度独立评分，不受其他 Agent 影响。你执行双轨验收：合规检查（L1/L2/L3/LS）+ 质量评分。
 
 # Goal
 
@@ -1054,6 +1070,8 @@ tools: ["Read", "Glob", "Grep"]
 - 前一章摘要：{prev_summary}
 - 风格指纹：{style_profile}
 - AI 黑名单：{ai_blacklist}
+- 故事线规范：{storyline_spec}（`storylines/storyline-spec.json`）
+- 本卷故事线调度：{storyline_schedule}（`volumes/vol-{V}/storyline-schedule.json`）
 
 ## Spec-Driven 输入（如存在）
 
@@ -1065,7 +1083,7 @@ tools: ["Read", "Glob", "Grep"]
 
 ## Track 1: Contract Verification（硬门槛）
 
-逐条检查 L1/L2/L3 规范：
+逐条检查 L1/L2/L3/LS 规范：
 
 1. **L1 世界规则检查**：遍历 `world_rules` 中所有 `constraint_type: "hard"` 的规则，检查正文是否违反
 2. **L2 角色契约检查**：检查角色行为是否超出 contracts 定义的能力边界和行为模式
@@ -1074,6 +1092,9 @@ tools: ["Read", "Glob", "Grep"]
    - 所有 `required: true` 的 objectives 是否达成
    - postconditions 中的状态变更是否有因果支撑
    - acceptance_criteria 逐条验证
+4. **LS 故事线规范检查**：
+   - LS-001（hard）：本章事件时间是否与并发线矛盾
+   - LS-002~004（soft）：报告但不阻断（切线锚点、交汇铺垫、休眠线记忆重建）
 
 输出：
 ```json
@@ -1082,6 +1103,7 @@ tools: ["Read", "Glob", "Grep"]
     "l1_checks": [{"rule_id": "W-001", "status": "pass | violation", "detail": "..."}],
     "l2_checks": [{"contract_id": "C-NAME-001", "status": "pass | violation", "detail": "..."}],
     "l3_checks": [{"objective_id": "OBJ-48-1", "status": "pass | violation", "detail": "..."}],
+    "ls_checks": [{"rule_id": "LS-001", "status": "pass | violation", "constraint_type": "hard", "detail": "..."}],
     "has_violations": false
   }
 }
@@ -1089,24 +1111,25 @@ tools: ["Read", "Glob", "Grep"]
 
 ## Track 2: Quality Scoring（软评估）
 
-7 维度独立评分（1-5 分），每个维度附具体理由和原文引用：
+8 维度独立评分（1-5 分），每个维度附具体理由和原文引用：
 
 | 维度 | 权重 | 评估要点 |
 |------|------|---------|
-| plot_coherence（情节连贯） | 0.20 | 与大纲一致度、逻辑性、因果链 |
-| character_consistency（角色一致） | 0.20 | 言行符合人设、性格连续性 |
+| plot_logic（情节逻辑） | 0.18 | 与大纲一致度、逻辑性、因果链 |
+| character（角色塑造） | 0.18 | 言行符合人设、性格连续性 |
+| immersion（沉浸感） | 0.15 | 画面感、氛围营造、详略得当 |
 | foreshadowing（伏笔处理） | 0.10 | 埋设自然度、推进合理性、回收满足感 |
-| language_quality（语言质量） | 0.15 | 遣词造句、修辞水平、表达精准度 |
-| scene_description（场景描写） | 0.10 | 画面感、氛围营造、详略得当 |
-| emotional_tension（情感张力） | 0.10 | 冲突强度、情感起伏、读者代入感 |
+| pacing（节奏） | 0.08 | 冲突强度、张弛有度 |
 | style_naturalness（风格自然度） | 0.15 | AI 黑名单命中率、句式重复率、与 style-profile 匹配度 |
+| emotional_impact（情感冲击） | 0.08 | 情感起伏、读者代入感 |
+| storyline_coherence（故事线连贯） | 0.08 | 切线流畅度、跟线难度、并发线暗示自然度 |
 
 # Constraints
 
 1. **独立评分**：每个维度独立评分，附具体理由和引用原文
 2. **不给面子分**：明确指出问题而非回避
 3. **可量化**：风格自然度基于可量化指标（黑名单命中率 < 3 次/千字，相邻 5 句重复句式 < 2）
-4. **综合分计算**：overall = 各维度 score × weight 的加权均值
+4. **综合分计算**：overall = 各维度 score × weight 的加权均值（8 维度权重见 Track 2 表）
 
 # 门控决策逻辑
 
@@ -1134,17 +1157,19 @@ else:
     "l1_checks": [],
     "l2_checks": [],
     "l3_checks": [],
+    "ls_checks": [],
     "has_violations": false,
     "violation_details": []
   },
   "scores": {
-    "plot_coherence": {"score": 4, "weight": 0.20, "reason": "...", "evidence": "原文引用"},
-    "character_consistency": {"score": 4, "weight": 0.20, "reason": "...", "evidence": "原文引用"},
+    "plot_logic": {"score": 4, "weight": 0.18, "reason": "...", "evidence": "原文引用"},
+    "character": {"score": 4, "weight": 0.18, "reason": "...", "evidence": "原文引用"},
+    "immersion": {"score": 4, "weight": 0.15, "reason": "...", "evidence": "原文引用"},
     "foreshadowing": {"score": 3, "weight": 0.10, "reason": "...", "evidence": "原文引用"},
-    "language_quality": {"score": 4, "weight": 0.15, "reason": "...", "evidence": "原文引用"},
-    "scene_description": {"score": 3, "weight": 0.10, "reason": "...", "evidence": "原文引用"},
-    "emotional_tension": {"score": 3, "weight": 0.10, "reason": "...", "evidence": "原文引用"},
-    "style_naturalness": {"score": 4, "weight": 0.15, "reason": "...", "evidence": "原文引用"}
+    "pacing": {"score": 4, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
+    "style_naturalness": {"score": 4, "weight": 0.15, "reason": "...", "evidence": "原文引用"},
+    "emotional_impact": {"score": 3, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
+    "storyline_coherence": {"score": 4, "weight": 0.08, "reason": "...", "evidence": "原文引用"}
   },
   "overall": 3.65,
   "recommendation": "pass | polish | revise | rewrite",
@@ -1188,7 +1213,17 @@ else:
 | L2 角色契约 | 能力边界/行为模式 | CharacterWeaver → `contracts` | 可变更需走协议 |
 | L3 章节契约 | 前置/后置条件/验收标准 | PlotArchitect → `chapter-contracts/` | 可协商须留痕 |
 
-验收采用双轨制：Contract Verification（合规检查，硬门槛）+ Quality Scoring（7 维度评分，软评估）。合规是编译通过，质量是 code review。
+验收采用双轨制：Contract Verification（合规检查 L1/L2/L3/LS，硬门槛）+ Quality Scoring（8 维度评分，软评估）。合规是编译通过，质量是 code review。
+
+## 多线叙事体系
+
+支持多 POV 群像、势力博弈暗线、跨卷伏笔交汇等复杂叙事结构：
+
+- **小说级定义**：`storylines/storylines.json` 管理全部故事线（类型 + 范围 + 势力 + 桥梁关系）
+- **卷级调度**：PlotArchitect 在卷规划时生成 `storyline-schedule.json`（volume_role: primary/secondary/seasoning + 交汇事件）
+- **章级注入**：ChapterWriter 接收 storyline_context + concurrent_state + transition_hint
+- **防串线**：三层策略（结构化 Context + 反串线指令 + QualityJudge 后验校验），每次续写为独立 LLM 调用
+- **活跃线限制**：同时活跃 ≤ 4 条（DR-021 验证）
 
 ## 去 AI 化四层策略
 
@@ -1203,19 +1238,20 @@ else:
 
 ## 质量评分标准
 
-7 维度加权评分（详见 `references/quality-rubric.md`）：
+8 维度加权评分（详见 `references/quality-rubric.md`）：
 
 | 维度 | 权重 |
 |------|------|
-| 情节连贯 | 20% |
-| 角色一致 | 20% |
-| 语言质量 | 15% |
+| 情节逻辑 | 18% |
+| 角色塑造 | 18% |
+| 沉浸感 | 15% |
 | 风格自然度 | 15% |
 | 伏笔处理 | 10% |
-| 场景描写 | 10% |
-| 情感张力 | 10% |
+| 节奏 | 8% |
+| 情感冲击 | 8% |
+| 故事线连贯 | 8% |
 
-门控：≥4.0 通过，3.5-3.9 二次润色，3.0-3.4 自动修订，<3.0 通知用户。有 contract violation 时无条件强制修订。
+门控：≥4.0 通过，3.5-3.9 二次润色，3.0-3.4 自动修订，<3.0 通知用户。有 contract violation（含 LS hard）时无条件强制修订。
 
 ## Context 管理
 
@@ -1348,16 +1384,16 @@ StyleRefiner 对初稿逐项执行：
 
 ---
 
-### 5.3 7 维度评分标准详解
+### 5.3 8 维度评分标准详解
 
 ## 文件路径：`skills/novel-writing/references/quality-rubric.md`
 
 ````markdown
-# 7 维度质量评分标准
+# 8 维度质量评分标准
 
 本文档定义 QualityJudge 的完整评分标准。每维度 1-5 分，综合分 = 加权均值。
 
-## 1. 情节连贯（plot_coherence）— 权重 0.20
+## 1. 情节逻辑（plot_logic）— 权重 0.18
 
 评估章节与大纲的一致性、内部逻辑、因果链完整性。
 
@@ -1369,7 +1405,7 @@ StyleRefiner 对初稿逐项执行：
 | 2 | 偏离大纲方向，有明显逻辑断裂或矛盾 |
 | 1 | 严重偏离大纲，情节混乱无逻辑 |
 
-## 2. 角色一致（character_consistency）— 权重 0.20
+## 2. 角色塑造（character）— 权重 0.18
 
 评估角色言行是否符合档案设定、性格连续性、L2 契约合规。
 
@@ -1393,9 +1429,9 @@ StyleRefiner 对初稿逐项执行：
 | 2 | 遗漏应处理的伏笔，或伏笔处理生硬 |
 | 1 | 完全忽视伏笔任务，或伏笔处理导致情节矛盾 |
 
-## 4. 语言质量（language_quality）— 权重 0.15
+## 4. 沉浸感（immersion）— 权重 0.15
 
-评估遣词造句、修辞水平、表达精准度。
+评估画面感、氛围营造、详略得当。
 
 | 分数 | 标准 |
 |------|------|
@@ -1405,31 +1441,19 @@ StyleRefiner 对初稿逐项执行：
 | 2 | 文笔平庸，用词单一，有明显语病 |
 | 1 | 语句不通，病句频出，严重影响阅读 |
 
-## 5. 场景描写（scene_description）— 权重 0.10
+## 5. 节奏（pacing）— 权重 0.08
 
-评估画面感、氛围营造、详略得当。
-
-| 分数 | 标准 |
-|------|------|
-| 5 | 画面感强烈，氛围与情节匹配，描写精炼有力 |
-| 4 | 有画面感，氛围基本匹配，描写较精炼 |
-| 3 | 场景可辨识，但描写平淡或略显冗长 |
-| 2 | 场景模糊，描写过度或不足，氛围不匹配 |
-| 1 | 无场景感，或大段无意义白描 |
-
-## 6. 情感张力（emotional_tension）— 权重 0.10
-
-评估冲突强度、情感起伏、读者代入感。
+评估冲突强度、情节张弛、阅读节奏。
 
 | 分数 | 标准 |
 |------|------|
-| 5 | 冲突扣人心弦，情感张弛有度，强代入感 |
-| 4 | 冲突有吸引力，情感有起伏，读者能投入 |
-| 3 | 冲突存在但不够紧张，情感起伏不明显 |
-| 2 | 冲突平淡，情感平板，难以产生代入感 |
-| 1 | 无冲突感，情感缺失，读者无法投入 |
+| 5 | 节奏精准，张弛有度，推进与留白恰到好处 |
+| 4 | 节奏流畅，冲突有吸引力，偶有拖沓 |
+| 3 | 节奏尚可，但部分段落拖沓或过于急促 |
+| 2 | 节奏失衡，明显拖沓或跳跃 |
+| 1 | 节奏混乱，无法正常推进 |
 
-## 7. 风格自然度（style_naturalness）— 权重 0.15
+## 6. 风格自然度（style_naturalness）— 权重 0.15
 
 评估去 AI 化效果，基于可量化指标。
 
@@ -1441,16 +1465,43 @@ StyleRefiner 对初稿逐项执行：
 | 2 | 5-7 次/千字 | ≥ 3 个重复句式 | 明显不匹配 |
 | 1 | > 7 次/千字 | 频繁重复 | 完全不匹配 |
 
+## 7. 情感冲击（emotional_impact）— 权重 0.08
+
+评估情感起伏、读者代入感、情绪共鸣。
+
+| 分数 | 标准 |
+|------|------|
+| 5 | 情感冲击强烈，读者强代入感，情绪共鸣持久 |
+| 4 | 情感有起伏，读者能投入，共鸣感良好 |
+| 3 | 情感起伏不明显，代入感一般 |
+| 2 | 情感平板，难以产生代入感 |
+| 1 | 情感缺失，读者无法投入 |
+
+## 8. 故事线连贯（storyline_coherence）— 权重 0.08
+
+评估多线叙事的切线流畅度、读者跟线难度、并发线暗示自然度。
+
+| 分数 | 标准 |
+|------|------|
+| 5 | 切线无缝，读者无跟线困难，并发线暗示自然巧妙 |
+| 4 | 切线流畅，偶有跟线小困惑，暗示基本自然 |
+| 3 | 切线可辨识但略显突兀，或暗示过于明显/缺失 |
+| 2 | 切线生硬，读者可能迷失，暗示不当 |
+| 1 | 切线混乱，线索混淆，严重影响阅读 |
+
+**注意**：单线章节（非切线章）此维度默认 4 分，仅评估与上下文的衔接自然度。
+
 ## 综合分计算
 
 ```
-overall = plot_coherence × 0.20
-        + character_consistency × 0.20
+overall = plot_logic × 0.18
+        + character × 0.18
+        + immersion × 0.15
         + foreshadowing × 0.10
-        + language_quality × 0.15
-        + scene_description × 0.10
-        + emotional_tension × 0.10
+        + pacing × 0.08
         + style_naturalness × 0.15
+        + emotional_impact × 0.08
+        + storyline_coherence × 0.08
 ```
 
 ## 门控决策
