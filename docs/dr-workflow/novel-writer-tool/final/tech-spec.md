@@ -7,9 +7,9 @@
 | # | 路径 | 用途 | 依赖 |
 |---|------|------|------|
 | 1 | `.claude-plugin/plugin.json` | 插件元数据 | 无 |
-| 2 | `commands/novel.md` | `/novel` 状态感知交互入口 | plugin.json |
-| 3 | `commands/novel-continue.md` | `/novel-continue [N]` 续写 N 章 | plugin.json |
-| 4 | `commands/novel-status.md` | `/novel-status` 只读状态展示 | plugin.json |
+| 2 | `skills/novel/SKILL.md` | `/novel` 状态感知交互入口 | plugin.json |
+| 3 | `skills/novel-continue/SKILL.md` | `/novel-continue [N]` 续写 N 章 | plugin.json |
+| 4 | `skills/novel-status/SKILL.md` | `/novel-status` 只读状态展示 | plugin.json |
 | 5 | `agents/world-builder.md` | 世界观构建 Agent（Opus） | SKILL.md |
 | 6 | `agents/character-weaver.md` | 角色网络 Agent（Opus） | SKILL.md, world-builder |
 | 7 | `agents/plot-architect.md` | 情节架构 Agent（Opus） | SKILL.md, world-builder, character-weaver |
@@ -29,14 +29,14 @@
 
 ```
 Phase 1: 基础设施
-  plugin.json → SKILL.md → references/ → templates/
+  plugin.json → SKILL.md（novel-writing）→ references/ → templates/
 
 Phase 2: Agent 层（按依赖序）
   world-builder → character-weaver → plot-architect
   → style-analyzer → chapter-writer → summarizer
   → style-refiner → quality-judge
 
-Phase 3: Command 层
+Phase 3: 入口 Skill 层
   novel-status → novel-continue → novel
 ```
 
@@ -52,18 +52,19 @@ Phase 3: Command 层
   "name": "cc-novel-writer",
   "version": "0.1.0",
   "description": "中文网文多 Agent 协作创作系统 — 卷制滚动工作流 + 去 AI 化输出",
-  "author": "cc-novel-writer"
+  "author": "cc-novel-writer",
+  "skills": "./skills/"
 }
 ```
 ````
 
 ---
 
-## 3. Commands
+## 3. 入口 Skills
 
 ### 3.1 `/novel` — 状态感知交互入口
 
-## 文件路径：`commands/novel.md`
+## 文件路径：`skills/novel/SKILL.md`
 
 ````markdown
 ---
@@ -164,7 +165,7 @@ argument-hint: ""
 
 ### 3.2 `/novel-continue` — 续写 N 章
 
-## 文件路径：`commands/novel-continue.md`
+## 文件路径：`skills/novel-continue/SKILL.md`
 
 ````markdown
 ---
@@ -284,7 +285,7 @@ Ch {X}: {字数}字 {分数} {状态} | Ch {X+1}: {字数}字 {分数} {状态} 
 
 ### 3.3 `/novel-status` — 只读状态展示
 
-## 文件路径：`commands/novel-status.md`
+## 文件路径：`skills/novel-status/SKILL.md`
 
 ````markdown
 ---

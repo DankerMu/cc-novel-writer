@@ -17,16 +17,24 @@
 
 ### 2.1 交付格式
 
-本产品以 **Claude Code Plugin** 形式交付，包含 3 个斜杠命令（Commands）、8 个专业 Agent 和 1 个共享知识技能（Skill）。[DR-018](dr/dr-018-plugin-api.md) [DR-020](dr/dr-020-single-command-ux.md)
+本产品以 **Claude Code Plugin** 形式交付，包含 4 个技能（Skills）和 8 个专业 Agent。其中 3 个技能为用户入口（`/novel`、`/novel-continue`、`/novel-status`），1 个为共享知识库。[DR-018](dr/dr-018-plugin-api.md) [DR-020](dr/dr-020-single-command-ux.md)
 
 ```
 cc-novel-writer/
 ├── .claude-plugin/
-│   └── plugin.json                    # 插件元数据（仅需 name 字段）
-├── commands/                          # 3 个斜杠命令（用户入口）
-│   ├── novel.md                       # /novel         状态感知交互入口（合并 create/plan/review）
-│   ├── novel-continue.md              # /novel-continue 续写下一章（高频快捷）
-│   └── novel-status.md                # /novel-status   只读状态查看
+│   └── plugin.json                    # 插件元数据
+├── skills/                            # 4 个技能（3 入口 + 1 知识库）
+│   ├── novel/
+│   │   └── SKILL.md                   # /novel         状态感知交互入口
+│   ├── novel-continue/
+│   │   └── SKILL.md                   # /novel-continue 续写下一章（高频快捷）
+│   ├── novel-status/
+│   │   └── SKILL.md                   # /novel-status   只读状态查看
+│   └── novel-writing/                 # 共享知识库（Claude 按需自动加载）
+│       ├── SKILL.md                   # 核心方法论 + 风格指南
+│       └── references/
+│           ├── style-guide.md         # 去 AI 化规则详解
+│           └── quality-rubric.md      # 8 维度评分标准
 ├── agents/                            # 8 个专业 Agent（自动派生）
 │   ├── world-builder.md               # 世界观构建
 │   ├── character-weaver.md            # 角色网络
@@ -36,21 +44,15 @@ cc-novel-writer/
 │   ├── style-analyzer.md              # 风格提取
 │   ├── style-refiner.md               # 去 AI 化润色
 │   └── quality-judge.md               # 质量评估
-├── skills/                            # 共享知识库
-│   └── novel-writing/
-│       ├── SKILL.md                   # 核心方法论 + 风格指南
-│       └── references/
-│           ├── style-guide.md         # 去 AI 化规则详解
-│           └── quality-rubric.md      # 7 维度评分标准
 └── templates/                         # 项目初始化模板
     ├── brief-template.md
     ├── ai-blacklist.json
     └── style-profile-template.json
 ```
 
-### 2.2 斜杠命令（三命令混合模式）
+### 2.2 入口技能（三命令混合模式）
 
-采用"引导式入口 + 快捷命令"模式，认知负载 < Miller 下限（4 项），新老用户均可高效使用。[DR-020](dr/dr-020-single-command-ux.md)
+采用"引导式入口 + 快捷命令"模式，以 Skills 形式实现（支持 supporting files 和 progressive disclosure），认知负载 < Miller 下限（4 项），新老用户均可高效使用。[DR-020](dr/dr-020-single-command-ux.md)
 
 | 命令 | 用途 | 核心流程 |
 |------|------|---------|
@@ -76,7 +78,7 @@ cc-novel-writer/
 - 子代理不可用 → `/novel` 必须在主 command 中调用 AskUserQuestion
 - 每会话 ~4-6 个问题 → 单次 `/novel` 最多用 2-3 个
 
-**Command 文件格式**（YAML frontmatter）：
+**Command 文件格式**（YAML frontmatter，适用于 SKILL.md）：
 ```yaml
 ---
 description: 小说创作主入口 — 状态感知交互引导
@@ -87,11 +89,11 @@ model: sonnet
 
 ### 2.3 架构原则
 
-- **Commands = 入口 + 调度**：`/novel` 做状态感知路由，`/novel-continue` 和 `/novel-status` 为高频快捷命令
+- **Skills = 入口 + 调度**：`/novel` 做状态感知路由，`/novel-continue` 和 `/novel-status` 为高频快捷命令，均以 Skills 实现（支持 supporting files + progressive disclosure）
 - **Agents = 专业化执行**：每个 agent 有独立的 prompt 模板和 tools 权限，需包含 name/description/model/color/tools frontmatter
-- **Skill = 共享知识**：`novel-writing` skill 提供去 AI 化规则、质量评分标准等共享上下文
-- **Checkpoint 是衔接点**：commands 之间通过 `.checkpoint.json` 传递状态，支持冷启动
-- **Orchestrator 是逻辑抽象**：Section 8 定义的状态机是逻辑设计，实际由 3 个 command 分布实现（`/novel` 覆盖 INIT/QUICK_START/VOL_PLANNING/VOL_REVIEW，`/novel-continue` 覆盖 WRITING 循环，`/novel-status` 只读），见 Section 8.2 映射表
+- **Skill = 共享知识**：`novel-writing` skill 提供去 AI 化规则、质量评分标准等共享上下文，Claude 按需自动加载
+- **Checkpoint 是衔接点**：skills 之间通过 `.checkpoint.json` 传递状态，支持冷启动
+- **Orchestrator 是逻辑抽象**：Section 8 定义的状态机是逻辑设计，实际由 3 个入口 skill 分布实现（`/novel` 覆盖 INIT/QUICK_START/VOL_PLANNING/VOL_REVIEW，`/novel-continue` 覆盖 WRITING 循环，`/novel-status` 只读），见 Section 8.2 映射表
 
 ### 2.4 用户体验示例
 
@@ -1021,10 +1023,10 @@ INIT → QUICK_START → VOL_PLANNING → WRITING ⟲
 | VOL_REVIEW | 完成 | VOL_PLANNING | 下卷规划 |
 | 任意 | 错误 | ERROR_RETRY | 重试 1 次，失败则保存 checkpoint 暂停 |
 
-**Command → 状态映射**：
+**Skill → 状态映射**：
 
-| Command | 负责状态 | 说明 |
-|---------|---------|------|
+| Skill | 负责状态 | 说明 |
+|-------|---------|------|
 | `/novel` | INIT → QUICK_START, VOL_PLANNING, VOL_REVIEW | 状态感知交互入口：通过 AskUserQuestion 识别用户意图后派发对应 agent |
 | `/novel-continue` | WRITING ⟲ QUALITY_GATE ⟲ CHAPTER_REWRITE | 核心续写循环 + 自动质量门控（高频快捷命令） |
 | `/novel-status` | 任意（只读） | 读取 checkpoint 展示状态，不触发转移 |
