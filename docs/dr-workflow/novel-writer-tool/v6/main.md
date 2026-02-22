@@ -1191,7 +1191,7 @@ novel-project/
 }
 ```
 
-`pipeline_stage` 取值：`null`（空闲）→ `drafted`（初稿已生成）→ `refined`（润色完成）→ `judged`（评估完成）→ `committed`（已提交到正式目录）。`inflight_chapter` 记录当前正在处理的章节号。冷启动恢复时：若 `pipeline_stage != committed && inflight_chapter != null`，检查 `staging/` 目录并从对应阶段恢复。
+`pipeline_stage` 取值：`null`（空闲）→ `drafting`（初稿生成中）→ `drafted`（初稿已生成）→ `refined`（润色完成）→ `judged`（评估完成）→ `committed`（已提交到正式目录）。`inflight_chapter` 记录当前正在处理的章节号。冷启动恢复时：若 `pipeline_stage != committed && inflight_chapter != null`，检查 `staging/` 目录并从对应阶段恢复（`drafting` 且无 staging 文件 → 重启整章；`drafted` → 跳过 ChapterWriter 从 Summarizer 恢复；以此类推）。
 ```
 
 **角色状态** (`state/current-state.json`):
