@@ -357,6 +357,12 @@ argument-hint: ""
 
 ## 4. Agents
 
+> **通用约束：交互边界**
+>
+> - AskUserQuestion **仅可在入口 Skill（Section 3）中调用**，所有 Agent 均不得直接向用户提问。
+> - 当 Agent 产出需要用户确认时，必须以结构化 JSON 返回（含 `type: "requires_user_decision"` + `recommendation` + `options` + `rationale`），由调用方（入口 Skill）解析后统一 AskUserQuestion。
+> - 8 个 Agent 的 `tools` 字段均不包含 AskUserQuestion，这是硬约束。
+
 ### 4.1 WorldBuilder Agent
 
 ## 文件路径：`agents/world-builder.md`

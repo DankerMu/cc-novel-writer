@@ -1267,6 +1267,24 @@ novel-project/
 3. 更新 `.checkpoint.json`
 4. 中断时清理 `.tmp` 文件即可
 
+### 10.5 交互边界规则
+
+**AskUserQuestion 仅限主技能层**：所有用户交互（确认、选择、审核）必须在 `/novel:start` 主技能中完成，subagent（Task 派生的子代理）不可调用 AskUserQuestion。
+
+**Agent 返回结构化建议**：当 agent 的产出需要用户确认时（如大纲、契约变更、冲突检测），agent 必须返回结构化 JSON，由主技能解析后通过 AskUserQuestion 呈现：
+
+```json
+{
+  "type": "requires_user_decision",
+  "recommendation": "推荐选项描述",
+  "options": ["选项A", "选项B", "选项C"],
+  "rationale": "推荐理由",
+  "data": { /* agent 产出的完整数据 */ }
+}
+```
+
+适用场景：PlotArchitect 大纲确认、CharacterWeaver 契约变更审核、QualityJudge 低分章节处置、故事线调度冲突。
+
 ## 11. 技术可行性分析
 
 ### 11.1 已验证技术
