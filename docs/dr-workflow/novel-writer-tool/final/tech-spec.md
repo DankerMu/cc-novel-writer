@@ -230,21 +230,26 @@ context = {
 ```
 for chapter_num in range(start, start + N):
 
+  0. 更新 checkpoint: pipeline_stage = "drafting", inflight_chapter = chapter_num
+
   1. ChapterWriter Agent → 生成初稿
      输入: context（含 chapter_contract, world_rules, character_contracts）
-     输出: chapters/chapter-{C}.md.tmp + state-delta.json.tmp
+     输出: staging/chapters/chapter-{C}.md + staging/state/chapter-{C}-delta.json
 
   2. Summarizer Agent → 生成摘要 + 状态增量
      输入: 初稿全文 + current_state
-     输出: summaries/chapter-{C}-summary.md.tmp + state-update.json.tmp
+     输出: staging/summaries/chapter-{C}-summary.md + staging/state/chapter-{C}-update.json
+     更新 checkpoint: pipeline_stage = "drafted"
 
   3. StyleRefiner Agent → 去 AI 化润色
      输入: 初稿 + style-profile.json + ai-blacklist.json
-     输出: chapters/chapter-{C}.md.tmp（覆盖）
+     输出: staging/chapters/chapter-{C}.md（覆盖）
+     更新 checkpoint: pipeline_stage = "refined"
 
   4. QualityJudge Agent → 质量评估（双轨验收）
      输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule
-     输出: evaluations/chapter-{C}-eval.json
+     输出: staging/evaluations/chapter-{C}-eval.json
+     更新 checkpoint: pipeline_stage = "judged"
 
   5. 质量门控决策:
      - Contract violation 存在 → ChapterWriter(Opus) 强制修订，回到步骤 1
@@ -254,11 +259,14 @@ for chapter_num in range(start, start + N):
      - 无 violation + < 3.0 → 通知用户，暂停
      最大修订次数: 2
 
-  6. 原子提交:
-     - rename *.tmp → 正式文件
-     - 合并 state-update 到 state/current-state.json
+  6. 事务提交（staging → 正式目录）:
+     - 移动 staging/chapters/chapter-{C}.md → chapters/chapter-{C}.md
+     - 移动 staging/summaries/chapter-{C}-summary.md → summaries/
+     - 移动 staging/evaluations/chapter-{C}-eval.json → evaluations/
+     - 合并 staging/state/ 到 state/current-state.json
      - 更新 foreshadowing/global.json
-     - 更新 .checkpoint.json（last_completed_chapter + 1）
+     - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null）
+     - 清空 staging/ 本章文件
 
   7. 输出本章结果:
      > 第 {C} 章已生成（{word_count} 字），评分 {overall}/5.0 {pass_icon}
@@ -281,7 +289,7 @@ Ch {X}: {字数}字 {分数} {状态} | Ch {X+1}: {字数}字 {分数} {状态} 
 
 - 每章严格按 ChapterWriter → Summarizer → StyleRefiner → QualityJudge 顺序
 - 质量不达标时自动修订最多 2 次
-- 写入使用 .tmp 原子模式
+- 写入使用 staging → commit 事务模式（详见 Step 2-6）
 - 所有输出使用中文
 ````
 

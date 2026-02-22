@@ -1138,6 +1138,10 @@ novel-project/
 ├── chapters/
 │   ├── chapter-001.md
 │   └── ...
+├── staging/                        # 写作流水线暂存区（事务语义）
+│   ├── chapters/                   # draft → refined 章节
+│   ├── state/                      # state delta
+│   └── evaluations/                # 评估结果
 ├── summaries/                      # 章节摘要（context 压缩核心）
 │   ├── chapter-001-summary.md
 │   └── ...
@@ -1160,9 +1164,14 @@ novel-project/
   "last_completed_chapter": 47,
   "current_volume": 2,
   "orchestrator_state": "WRITING",
+  "pipeline_stage": "committed",
+  "inflight_chapter": null,
   "pending_actions": [],
   "last_checkpoint_time": "2026-02-21T15:30:00"
 }
+```
+
+`pipeline_stage` 取值：`null`（空闲）→ `drafted`（初稿已生成）→ `refined`（润色完成）→ `judged`（评估完成）→ `committed`（已提交到正式目录）。`inflight_chapter` 记录当前正在处理的章节号。冷启动恢复时：若 `pipeline_stage != committed && inflight_chapter != null`，检查 `staging/` 目录并从对应阶段恢复。
 ```
 
 **角色状态** (`state/current-state.json`):
@@ -1270,11 +1279,20 @@ Agent 通过 Task 子代理执行，结果以结构化文本返回给入口 Skil
 
 ### 10.4 原子性保证
 
-章节写入采用临时文件模式：
-1. 写入 `chapter-N.md.tmp` + `state.json.tmp` + `summary.md.tmp`
-2. 全部成功后 rename 为正式文件
-3. 更新 `.checkpoint.json`
-4. 中断时清理 `.tmp` 文件即可
+章节写入采用 **staging → validate → commit** 事务模式：
+
+1. **Staging**：流水线各阶段输出写入 `staging/` 暂存目录
+   - `staging/chapters/chapter-N.md`（初稿 → 润色覆盖）
+   - `staging/state/chapter-N-delta.json`（状态增量）
+   - `staging/evaluations/chapter-N-eval.json`（评估结果）
+   - 每步完成更新 `.checkpoint.json` 的 `pipeline_stage`
+2. **Validate**：QualityJudge Track 1 合规 + Track 2 评分通过质量门控
+3. **Commit**（原子提交）：
+   - 将 staging 文件移入正式目录（`chapters/`、`summaries/`、`evaluations/`）
+   - 合并 state delta → `state/current-state.json`
+   - 更新 `foreshadowing/global.json`
+   - 更新 `.checkpoint.json`（`last_completed_chapter + 1`、`pipeline_stage = committed`、`inflight_chapter = null`）
+4. **中断恢复**：冷启动时检查 `pipeline_stage` + `inflight_chapter` + `staging/` 目录，从中断阶段幂等恢复；staging 文件可安全重试或清理
 
 ### 10.5 交互边界规则
 
@@ -1319,7 +1337,7 @@ Agent 通过 Task 子代理执行，结果以结构化文本返回给入口 Skil
 
 **状态存储决策**：MVP 阶段采用纯文件方案（JSON + Markdown），原因：
 1. Claude Code Plugin 环境为单用户单进程，无并发写入场景
-2. 章节写入采用原子写入（.tmp → rename），已避免数据损坏
+2. 章节写入采用 staging → validate → commit 事务模式，已避免数据损坏和中途 crash 不一致
 3. DR-003/006 推荐的 SQLite + WAL 适用于多进程并发场景，MVP 暂不需要
 4. 如未来引入 Web UI 或多设备同步，在 Milestone 3 评估是否升级
 

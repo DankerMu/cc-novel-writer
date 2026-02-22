@@ -21,7 +21,7 @@
 | 1.6 | 实现 StyleRefiner Agent（去 AI 化润色） | P0 | 6h |
 | 1.7 | 实现 QualityJudge Agent（双轨验收：合规检查 + 7 维度评分） | P0 | 8h |
 | 1.8 | 实现 checkpoint 机制（写入/读取/恢复） | P0 | 3h |
-| 1.9 | 实现原子写入（.tmp → rename） | P1 | 2h |
+| 1.9 | 实现 staging → commit 事务写入（staging/ 暂存 + pipeline_stage 幂等恢复） | P1 | 3h |
 | 1.10 | 实现 L1 世界规则 Spec（WorldBuilder 输出 rules.json） | P0 | 4h |
 | 1.11 | 实现 storylines.json 基础结构（WorldBuilder 协助初始化） | P1 | 3h |
 | 1.12 | 集成测试：风格样本 + 大纲 → 续写 3 章 → Spec 验收 + 评估 | P0 | 4h |
