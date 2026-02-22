@@ -28,6 +28,8 @@
 | 16 | `templates/brief-template.md` | 项目简介模板 | 无 |
 | 17 | `templates/ai-blacklist.json` | AI 用语黑名单（≥30 条） | 无 |
 | 18 | `templates/style-profile-template.json` | 风格指纹空模板 | 无 |
+| 19 | `hooks/hooks.json` | 事件钩子配置（SessionStart） | plugin.json |
+| 20 | `scripts/inject-context.sh` | SessionStart 注入项目状态摘要 | hooks.json |
 
 ### 1.2 开发顺序
 
@@ -57,10 +59,68 @@ Phase 3: 入口 Skill 层
   "version": "0.1.0",
   "description": "中文网文多 Agent 协作创作系统 — 卷制滚动工作流 + 去 AI 化输出",
   "author": "novel",
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
 }
 ```
 ````
+
+---
+
+## 2.1 Hooks 配置
+
+## 文件路径：`hooks/hooks.json`
+
+````markdown
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/inject-context.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+````
+
+## 文件路径：`scripts/inject-context.sh`
+
+````bash
+#!/usr/bin/env bash
+# SessionStart hook: 注入项目状态摘要到 context
+# 仅在小说项目目录内生效（检测 .checkpoint.json 存在）
+
+CHECKPOINT=".checkpoint.json"
+
+if [ ! -f "$CHECKPOINT" ]; then
+  exit 0
+fi
+
+echo "=== 小说项目状态（自动注入） ==="
+cat "$CHECKPOINT"
+
+# 注入最近一章摘要（如存在）
+LAST_CH=$(python3 -c "import json; print(json.load(open('$CHECKPOINT'))['last_completed_chapter'])" 2>/dev/null)
+if [ -n "$LAST_CH" ]; then
+  SUMMARY="summaries/chapter-$(printf '%03d' "$LAST_CH")-summary.md"
+  if [ -f "$SUMMARY" ]; then
+    echo "--- 最近章节摘要 (第 ${LAST_CH} 章) ---"
+    cat "$SUMMARY"
+  fi
+fi
+echo "=== 状态注入完毕 ==="
+````
+
+> SessionStart hook 在每次新 session 进入项目目录时自动执行。输出内容注入到 Claude 的 system context，使后续 `/novel:continue` 可跳过 checkpoint 读取步骤。hook 超时 5 秒，无 checkpoint 文件时静默退出（非小说项目不触发）。
 
 ---
 

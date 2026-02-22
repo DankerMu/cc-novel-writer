@@ -44,6 +44,10 @@ cc-novel-writer/
 │   ├── style-analyzer.md              # 风格提取
 │   ├── style-refiner.md               # 去 AI 化润色
 │   └── quality-judge.md               # 质量评估
+├── hooks/
+│   └── hooks.json                     # 事件钩子配置（SessionStart 等）
+├── scripts/
+│   └── inject-context.sh              # SessionStart 注入项目状态摘要
 └── templates/                         # 项目初始化模板
     ├── brief-template.md
     ├── ai-blacklist.json
@@ -95,6 +99,8 @@ model: sonnet
 - **Checkpoint 是衔接点**：skills 之间通过 `.checkpoint.json` 传递状态，支持冷启动
 - **Orchestrator 是逻辑抽象**：Section 8 定义的状态机是逻辑设计，实际由 3 个入口 skill 分布实现（`/novel:start` 覆盖 INIT/QUICK_START/VOL_PLANNING/VOL_REVIEW，`/novel:continue` 覆盖 WRITING 循环，`/novel:status` 只读），见 Section 8.2 映射表
 - **插件资源路径**：插件安装后会被复制到缓存目录（`~/.claude/plugins/cache`），所有对插件内部文件（templates/、references/）的引用必须通过 `${CLAUDE_PLUGIN_ROOT}` 环境变量解析，禁止写死相对路径。项目运行时数据写入用户项目目录（稳定位置），插件自身文件为只读源
+- **Hooks 增强可靠性**：Plugin 通过 `hooks/hooks.json` 注册事件钩子。M2 起启用 SessionStart hook，新 session 自动注入 `.checkpoint.json` + 最近摘要到 context，免除每次手动读取。后续可扩展 PostToolUse(Write/Edit) 做 schema 校验（需外部脚本，M3+ 视需求加入）
+- **确定性工具演进路线**：MVP 阶段所有操作通过 Claude 原生工具（Read/Write/Grep/Glob）+ Bash 完成。当 LLM 精度不足时（如 NER、黑名单统计），通过 Bash 调用 CLI 脚本补充确定性能力。MCP 是此路径的包装升级（结构化接口 + 自动发现），作为 M4+ 可选优化，不作为核心依赖
 
 ### 2.4 用户体验示例
 
