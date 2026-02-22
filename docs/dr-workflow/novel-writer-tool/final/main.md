@@ -184,7 +184,7 @@ Team Lead (Orchestrator)         # 调度核心 + 状态机
 ├── ChapterWriter Agent          # 章节写作（含续写模式）
 ├── Summarizer                   # 章节摘要 + 状态更新（后处理）
 ├── StyleRefiner Agent           # 去 AI 化润色（后处理）
-└── QualityJudge Agent           # 7 维度质量评估
+└── QualityJudge Agent           # 8 维度质量评估
 ```
 
 **关键组件说明**：
@@ -200,10 +200,14 @@ Team Lead (Orchestrator)         # 调度核心 + 状态机
 
 ### 4.3 技术实现
 
-**基础设施**：
-- `TeamCreate` 创建 novel-project 团队
-- `TaskCreate` 分解创作任务
-- `SendMessage` 实现 agent 间状态同步
+**基础设施**（默认模式 — Task 子代理）：
+- `Task` 工具派发专业 agent（稳定、默认可用）
+- `TaskCreate` / `TaskUpdate` 跟踪多步任务进度
+- Agent 通过 Task 返回值向调用方（入口 Skill）回传结果，所有协调由入口 Skill 完成
+
+> **高级模式 — Agent Teams**（可选，需用户启用 experimental 特性）：
+> `TeamCreate` + `SendMessage` 可实现 agent 间直接通信，适用于大规模并行规划/批量修订场景。
+> 核心流程不依赖此特性，确保在 Teams 未启用时仍可完整运行。
 
 **模型策略**（[DR-013](../v2/dr/dr-013-api-cost.md)）：
 
@@ -1214,26 +1218,30 @@ novel-project/
 
 ## 10. Agent 协作协议
 
-### 10.1 消息传递规范
+### 10.1 Agent 返回值规范
 
-**续写完成通知**：
+Agent 通过 Task 子代理执行，结果以结构化文本返回给入口 Skill，由入口 Skill 解析并推进流程。
+
+**续写完成返回**：
 ```json
 {
-  "type": "message",
-  "recipient": "team-lead",
-  "content": "Chapter 48 完成，状态已更新，QualityJudge 评分 3.8/5.0",
-  "summary": "第48章完成"
+  "status": "completed",
+  "chapter": 48,
+  "word_count": 3120,
+  "quality_score": 3.8,
+  "summary": "第48章完成，状态已更新"
 }
 ```
 
-**情节冲突检测**：
+**情节冲突检测返回**：
 ```json
 {
-  "type": "message",
-  "recipient": "team-lead",
-  "content": "Chapter 48 中主角使用了 Chapter 35 已丢失的魔杖，需要修正",
-  "summary": "检测到物品状态冲突"
+  "status": "conflict_detected",
+  "chapter": 48,
+  "detail": "主角使用了 Chapter 35 已丢失的魔杖，需要修正",
+  "severity": "high"
 }
+```
 ```
 
 ### 10.2 任务依赖（卷制模式）
@@ -1255,7 +1263,7 @@ novel-project/
 | API 超时 | 等待 30s 后重试 | 2 次 |
 | 生成质量低（<3.0） | 标记问题，通知用户 | - |
 | 状态冲突 | 锁定文件 → 串行执行 → 释放 | - |
-| Agent 崩溃 | Team Lead 重启 agent | 2 次 |
+| Agent 崩溃 | 入口 Skill 重派 Task | 2 次 |
 | 一致性检查失败 | 标记冲突，暂停后续章节，人工介入 | - |
 | Session 中断 | 保存 checkpoint，下次冷启动恢复 | - |
 
