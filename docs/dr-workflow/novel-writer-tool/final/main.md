@@ -71,7 +71,7 @@ cc-novel-writer/
    - 不存在 checkpoint → 推荐"创建新项目 (Recommended)"
    - 当前卷未完成 → 推荐"继续写作 (Recommended)"
    - 当前卷已完成 → 推荐"规划新卷 (Recommended)"
-3. AskUserQuestion(options=[推荐项, 质量回顾, 其余可用项])
+3. AskUserQuestion(options=[推荐项, 质量回顾, 导入研究资料, 其余可用项])
    约束：2-4 选项，单次最多 2-3 个问题（留余量给写作决策）
 4. 根据选择 → Task tool 派发对应 agent
 ```
@@ -1121,6 +1121,8 @@ novel-project/
 ├── brief.md                        # 创作纲领（精简，≤1000 字）
 ├── style-profile.json              # 用户风格指纹
 ├── ai-blacklist.json               # AI 用语黑名单
+├── research/                       # 背景研究资料（doc-workflow 导入或手动放入）
+│   └── *.md                        # 每个主题一个文件，WorldBuilder/CharacterWeaver 自动读取
 ├── prompts/                        # Prompt 模板
 │   ├── world-builder.md
 │   ├── character-weaver.md

@@ -13,7 +13,7 @@
 | # | 任务 | 优先级 | 预估工时 |
 |---|------|--------|---------|
 | 1.0 | 搭建 Plugin 脚手架（plugin.json + 3 commands + 8 agents + skill + templates + hooks） | P0 | 6h |
-| 1.1 | 搭建项目结构（目录、配置、checkpoint，含 storylines/ + logs/ 目录） | P0 | 2h |
+| 1.1 | 搭建项目结构（目录、配置、checkpoint，含 storylines/ + logs/ + research/ 目录） | P0 | 2h |
 | 1.2 | 实现 Prompt 模板系统（`prompts/` + 变量注入） | P0 | 4h |
 | 1.3 | 实现 ChapterWriter Agent（续写模式，增量 context，支持 L1/L2/L3 Spec + 故事线 context 注入） | P0 | 8h |
 | 1.4 | 实现 Summarizer（章节摘要 + 状态增量更新 + storyline_id 标记 + cross_references + storyline memory.md 更新） | P0 | 5h |
@@ -64,7 +64,8 @@
 | 2.10 | 实现 LS 故事线规范（storyline-spec.json + QualityJudge LS 检查） | P0 | 4h |
 | 2.11 | 实现故事线 context 组装（storyline_context + concurrent_state + transition_hint） | P0 | 6h |
 | 2.12 | 实现 SessionStart hook（inject-context.sh：自动注入 checkpoint + 最近摘要） | P1 | 2h |
-| 2.13 | 集成测试：完成 1 卷 30 章循环（含多线叙事 + Spec 全链路验证） | P0 | 14h |
+| 2.13 | 实现"导入研究资料"功能（扫描 doc-workflow 产出 → research/，WorldBuilder/CharacterWeaver 自动引用） | P1 | 3h |
+| 2.14 | 集成测试：完成 1 卷 30 章循环（含多线叙事 + Spec 全链路验证） | P0 | 14h |
 
 ### 验收标准
 - [ ] 完成一卷 30 章的完整循环（含至少 2 条故事线交织）

@@ -171,7 +171,8 @@ argument-hint: ""
 选项：
 1. 继续写作 (Recommended) — 等同 /novel:continue
 2. 质量回顾 — 查看近期章节评分和一致性
-3. 更新设定 — 修改世界观或角色
+3. 导入研究资料 — 从 docs/dr-workflow/ 导入背景研究
+4. 更新设定 — 修改世界观或角色
 ```
 
 **情况 C — 当前卷已完成**（`orchestrator_state == "VOL_REVIEW"`）：
@@ -181,7 +182,8 @@ argument-hint: ""
 选项：
 1. 规划新卷 (Recommended)
 2. 质量回顾
-3. 更新设定
+3. 导入研究资料
+4. 更新设定
 ```
 
 ### Step 3: 根据用户选择执行
@@ -216,6 +218,13 @@ argument-hint: ""
 **更新设定**：
 1. 使用 AskUserQuestion 确认更新类型（世界观/角色/关系）
 2. 使用 Task 派发 WorldBuilder 或 CharacterWeaver Agent
+
+**导入研究资料**：
+1. 使用 Glob 扫描 `docs/dr-workflow/*/final/main.md`（doc-workflow 标准输出路径）
+2. 如无结果，提示用户可手动将 .md 文件放入 `research/` 目录
+3. 如有结果，展示可导入列表（项目名 + 首行标题），使用 AskUserQuestion 让用户勾选
+4. 将选中的 `final/main.md` 复制到 `research/<project-name>.md`
+5. 展示导入结果，提示 WorldBuilder/CharacterWeaver 下次执行时将自动引用
 
 ## 约束
 
@@ -488,6 +497,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 ## 输入
 
 - 创作纲领：{project_brief}
+- 背景研究资料：{research_docs}（Glob("research/*.md")，如存在则作为事实性素材参考）
 - 已有设定：{existing_world_docs}（增量模式时提供）
 - 新增需求：{update_request}（增量模式时提供）
 - 已有规则表：{existing_rules_json}（增量模式时提供）
@@ -587,6 +597,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 - 世界观：{world_docs}
 - 世界规则：{world_rules_json}
+- 背景研究资料：{research_docs}（Glob("research/*.md")，如存在则用于角色文化/职业/心理背景参考）
 - 已有角色：{existing_characters}
 - 操作指令：{character_request}
 
