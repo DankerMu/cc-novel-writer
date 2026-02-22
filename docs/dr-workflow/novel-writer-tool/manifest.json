@@ -3,7 +3,7 @@
   "type": "prd",
   "created": "2026-02-21T10:30:00+08:00",
   "current_phase": "DONE",
-  "current_version": 4,
+  "current_version": 6,
   "termination": { "score_threshold": 90, "max_iterations": 5 },
   "iterations": [
     {
@@ -52,7 +52,7 @@
     },
     {
       "version": 4,
-      "phase_completed": "REVIEW",
+      "phase_completed": "FINALIZE",
       "score": 95,
       "new_dr_items": 0,
       "dr_reports": [
@@ -60,8 +60,28 @@
         "dr/dr-019-haiku-summarizer.md",
         "dr/dr-020-single-command-ux.md"
       ],
-      "notes": "v4 Review：7 项 checklist 全部修复 + DR-020 UX 重设计（5 命令→3 命令混合模式）。Score 95/100，FINALIZE。",
+      "notes": "v4 FINALIZE：Score 95/100。含 Spec-Driven Writing 体系（L1/L2/L3）+ Tech Spec（18 plugin files）。",
       "timestamp": "2026-02-21T23:00:00+08:00"
+    },
+    {
+      "version": 5,
+      "phase_completed": "REVIEW",
+      "score": 90,
+      "new_dr_items": 3,
+      "dr_reports": [],
+      "notes": "v5 新增 Section 6.6 多线叙事体系。Review 发现 3 项待验证：LLM 多线一致性、快速起步集成、权重分配。",
+      "timestamp": "2026-02-22T00:30:00+08:00"
+    },
+    {
+      "version": 6,
+      "phase_completed": "FINALIZE",
+      "score": 93,
+      "new_dr_items": 0,
+      "dr_reports": [
+        "dr/dr-021-llm-multi-thread-narrative.md"
+      ],
+      "notes": "v6 FINALIZE：集成 DR-021（32 来源），三层防串线策略，Layer 1 增加 storyline 初始化，QualityJudge 8 维度权重明确分配。Score 93/100。",
+      "timestamp": "2026-02-22T01:00:00+08:00"
     }
   ]
 }
