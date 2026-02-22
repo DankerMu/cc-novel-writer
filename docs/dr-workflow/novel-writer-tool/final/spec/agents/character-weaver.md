@@ -59,12 +59,13 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 在生成叙述性角色档案的同时，输出可验证的契约：
 
 ```json
-// characters/active/NAME.json 中的 contracts 字段
+// characters/active/{character_id}.json（文件名为 slug ID）中的结构化字段
 {
-  "name": "角色名",
+  "id": "lin-feng",
+  "display_name": "林枫",
   "contracts": [
     {
-      "id": "C-NAME-001",
+      "id": "C-LIN-FENG-001",
       "type": "capability | personality | relationship | speech",
       "rule": "契约的自然语言描述",
       "valid_from_chapter": null,
@@ -82,8 +83,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 输出以下文件：
 
-1. `characters/active/{name}.md` — 角色叙述性档案（背景、性格、外貌、语癖）
-2. `characters/active/{name}.json` — 角色结构化数据（含 contracts）
+1. `characters/active/{character_id}.md` — 角色叙述性档案（背景、性格、外貌、语癖；文件名为 slug ID）
+2. `characters/active/{character_id}.json` — 角色结构化数据（含 `id`/`display_name`/`contracts[]`；文件名为 slug ID）
 3. `characters/relationships.json` — 关系图更新
 4. `characters/changelog.md` — 变更记录（追加一条）
 
@@ -91,4 +92,3 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 > **归档保护**：以下角色不可退场——被活跃伏笔（scope 为 medium/long）引用的角色、被任意故事线（含休眠线）关联的角色、出现在未来 storyline-schedule 交汇事件中的角色。入口 Skill 在调用退场模式前应检查保护条件，不满足则拒绝并向用户说明原因。
 ````
-

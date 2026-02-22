@@ -9,6 +9,7 @@ Team Lead (Orchestrator)         # 调度核心 + 状态机
 ├── PlotArchitect Agent          # 卷级大纲规划
 ├── ChapterWriter Agent          # 章节写作（含续写模式）
 ├── Summarizer                   # 章节摘要 + 状态更新（后处理）
+├── StyleAnalyzer Agent          # 风格指纹提取（快速起步/漂移检测）
 ├── StyleRefiner Agent           # 去 AI 化润色（后处理）
 └── QualityJudge Agent           # 8 维度质量评估
 ```
@@ -44,5 +45,5 @@ Team Lead (Orchestrator)         # 调度核心 + 状态机
 | StyleRefiner | Opus 4.6 | 需要高质量语言感知 |
 | QualityJudge | Sonnet 4.6（普通章）/ Opus 4.6（关键章双裁判） | 结构化评估；关键章取双裁判较低分 |
 | Summarizer | Sonnet 4.6 | 信息保留关键，成本增量可忽略（+$0.02/章）[DR-019](../../v4/dr/dr-019-haiku-summarizer.md) |
+| StyleAnalyzer | Sonnet 4.6 | 风格指纹提取，成本敏感 |
 | 问题章节重写 | Opus 4.6 | 需要高质量推理 |
-

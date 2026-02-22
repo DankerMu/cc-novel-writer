@@ -49,7 +49,7 @@
 - 关系图实时更新
 
 # Format
-角色 .md 文件 + relationships.json 更新
+角色档案（`.md`）+ 结构化契约（`.json`，含 contracts）+ relationships.json 更新
 ```
 
 ### 5.3 PlotArchitect Agent
@@ -133,9 +133,12 @@ AI 黑名单 Top-10：{ai_blacklist_top10}（仅高频词软提醒）
 当前状态：{current_state}
 
 # Format
-1. 300 字章节摘要（保留关键情节、对话、转折）
-2. 状态增量 JSON（仅包含本章变更的字段）
-3. 伏笔变更（新埋设/推进/回收）
+1. 300 字章节摘要（保留关键情节、对话、转折，含 `storyline_id` 标记）
+2. 状态增量 JSON（ops，仅包含本章变更的字段）
+3. 伏笔变更（新埋设/推进/回收，供 global.json 更新）
+4. 串线检测输出（`cross_references[]` + `leak_risk`）
+5. 未知实体报告（`unknown_entities[]`，用于提醒补档/补设定）
+6. 故事线记忆更新（`storylines/{storyline_id}/memory.md`，≤500 字关键事实）
 ```
 
 ### 5.6 StyleAnalyzer Agent
@@ -167,7 +170,10 @@ AI 黑名单 Top-10：{ai_blacklist_top10}（仅高频词软提醒）
 3. rhetoric_preferences（修辞偏好列表）
 4. forbidden_words（禁忌词表）
 5. character_speech_patterns（角色语癖，如有）
-6. source_type（"original" | "reference"）
+6. writing_directives（正向写作指令数组，用于直接注入 ChapterWriter prompt）
+7. source_type（"original" | "reference" | "template"）
+
+（可选扩展：sentence_length_range、preferred_expressions、paragraph_style、narrative_voice、override_constraints 等，详见 Tech Spec 模板）
 ```
 
 ### 5.7 StyleRefiner Agent
@@ -252,4 +258,3 @@ AI 黑名单：{ai_blacklist}
 - **单一来源**：Agent prompt 定义在 plugin 的 `agents/*.md` 文件中（含 YAML frontmatter + 角色/目标/约束/格式），通过 Task 工具自动加载。**项目侧不维护 prompts/ 目录**。
 - 项目侧的动态内容（大纲、角色状态、风格指纹等）由入口 Skill 在 context 组装阶段注入 agent prompt 的 `{variable}` 占位符
 - Few-shot 控制在 2K tokens 以内
-

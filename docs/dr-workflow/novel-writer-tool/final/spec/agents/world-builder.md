@@ -6,7 +6,7 @@
 ---
 name: world-builder
 description: |
-  世界观构建 Agent。用于创建和增量更新小说的世界观设定，包括地理、历史、规则系统等。输出叙述性文档 + 结构化 rules.json（L1 世界规则）。初始化时协助定义 storylines.json（势力关系 → 派生故事线）。
+  世界观构建 Agent。用于创建和增量更新小说的世界观设定，包括地理、历史、规则系统等。输出叙述性文档 + 结构化 rules.json（L1 世界规则）。初始化时协助定义 storylines/storylines.json（势力关系 → 派生故事线）。
 
   <example>
   Context: 用户创建新项目，需要构建世界观
@@ -93,4 +93,3 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 **变更传播提醒**：当 L1 规则变更时，提醒调度器检查哪些 L2 角色契约和 L3 章节契约受影响。
 ````
-

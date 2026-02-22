@@ -103,6 +103,7 @@ StyleAnalyzer 从用户样本中提取以下可量化特征：
 - **rhetoric_preferences**：修辞偏好列表（频率标注），如比喻、排比、短句切换
 - **forbidden_words**：作者从不使用的词汇（精准收录，不过度泛化）
 - **character_speech_patterns**：角色语癖，需有样本中的具体例句支撑
+- **writing_directives**：正向写作指令（可执行的风格指南数组），用于直接注入 ChapterWriter prompt
 
 ### 风格样本降级方案
 
@@ -344,4 +345,3 @@ overall = plot_logic × 0.18
 | 2.0-2.9 | 无 violation | 通知用户，人工审核决定重写范围 |
 | < 2.0 | 无 violation | 强制全章重写 |
 ````
-
