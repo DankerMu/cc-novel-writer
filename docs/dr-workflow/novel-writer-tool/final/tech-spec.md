@@ -1,5 +1,9 @@
 # Implementation Tech Spec — novel Plugin
 
+> **路径约定**：本文档中所有 `templates/`、`skills/`、`agents/` 路径均相对于插件根目录。
+> 运行时必须通过 `${CLAUDE_PLUGIN_ROOT}` 解析为绝对路径（插件安装后被复制到缓存目录）。
+> 项目数据（章节、checkpoint、state）写入用户项目目录，插件内部文件为只读源。
+
 ## 1. 概述
 
 ### 1.1 文件清单
@@ -125,7 +129,7 @@ argument-hint: ""
 **创建新项目**：
 1. 使用 AskUserQuestion 收集基本信息（题材、主角概念、核心冲突）— 单次最多问 2-3 个问题
 2. 创建项目目录结构（参考 PRD Section 9.1）
-3. 从 `templates/` 复制模板文件到项目目录
+3. 从 `${CLAUDE_PLUGIN_ROOT}/templates/` 复制模板文件到项目目录
 4. 使用 Task 派发 WorldBuilder Agent 生成核心设定
 5. 使用 Task 派发 CharacterWeaver Agent 创建主角和配角
 6. WorldBuilder 协助初始化 `storylines.json`（从设定派生初始故事线，默认 1 条 main_arc 主线，活跃线建议 ≤4）
@@ -1319,7 +1323,7 @@ ChapterWriter prompt 中注入以下硬约束：
 - 情感描写类：不禁、莫名、油然而生、心中暗道、嘴角微微上扬
 - 过渡连接类：与此同时、值得一提的是、毫无疑问
 - 形容夸张类：宛如、恍若、仿佛置身于
-- 详见 `templates/ai-blacklist.json`
+- 详见 `${CLAUDE_PLUGIN_ROOT}/templates/ai-blacklist.json`
 
 ### 2.2 角色语癖
 
@@ -1383,7 +1387,7 @@ StyleRefiner 对初稿逐项执行：
 
 ### 黑名单维护机制
 
-- **初始化**：`templates/ai-blacklist.json` 提供 ≥ 30 个常见 AI 高频中文用语
+- **初始化**：`${CLAUDE_PLUGIN_ROOT}/templates/ai-blacklist.json` 提供 ≥ 30 个常见 AI 高频中文用语
 - **持续更新**：QualityJudge 检测到新高频 AI 用语时，建议追加到黑名单
 - **用户自定义**：用户可手动添加/删除
 - **误伤保护**：如果某个黑名单词是用户风格样本中的高频词，自动豁免

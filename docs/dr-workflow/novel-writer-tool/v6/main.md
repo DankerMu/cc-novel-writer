@@ -94,6 +94,7 @@ model: sonnet
 - **Skill = 共享知识**：`novel-writing` skill 提供去 AI 化规则、质量评分标准等共享上下文，Claude 按需自动加载
 - **Checkpoint 是衔接点**：skills 之间通过 `.checkpoint.json` 传递状态，支持冷启动
 - **Orchestrator 是逻辑抽象**：Section 8 定义的状态机是逻辑设计，实际由 3 个入口 skill 分布实现（`/novel:start` 覆盖 INIT/QUICK_START/VOL_PLANNING/VOL_REVIEW，`/novel:continue` 覆盖 WRITING 循环，`/novel:status` 只读），见 Section 8.2 映射表
+- **插件资源路径**：插件安装后会被复制到缓存目录（`~/.claude/plugins/cache`），所有对插件内部文件（templates/、references/）的引用必须通过 `${CLAUDE_PLUGIN_ROOT}` 环境变量解析，禁止写死相对路径。项目运行时数据写入用户项目目录（稳定位置），插件自身文件为只读源
 
 ### 2.4 用户体验示例
 
