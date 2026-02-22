@@ -16,7 +16,7 @@
 | 1.1 | 搭建项目结构（目录、配置、checkpoint，含 storylines/ 目录） | P0 | 2h |
 | 1.2 | 实现 Prompt 模板系统（`prompts/` + 变量注入） | P0 | 4h |
 | 1.3 | 实现 ChapterWriter Agent（续写模式，增量 context，支持 L1/L2/L3 Spec + 故事线 context 注入） | P0 | 8h |
-| 1.4 | 实现 Summarizer（章节摘要 + 状态增量更新 + storyline_id 标记） | P0 | 4h |
+| 1.4 | 实现 Summarizer（章节摘要 + 状态增量更新 + storyline_id 标记 + cross_references + storyline memory.md 更新） | P0 | 5h |
 | 1.5 | 实现 StyleAnalyzer（风格提取 → style-profile.json） | P0 | 6h |
 | 1.6 | 实现 StyleRefiner Agent（去 AI 化润色） | P0 | 6h |
 | 1.7 | 实现 QualityJudge Agent（双轨验收：合规检查 + 7 维度评分） | P0 | 8h |
@@ -31,10 +31,11 @@
 - [ ] 输入风格样本 + 手写大纲 → 续写 3 章（各 2500-3500 字）
 - [ ] QualityJudge 双轨验收：合规检查（L1 规则逐条通过/违反）+ 7 维度评分 ≥ 3.5/5.0
 - [ ] 风格自然度 ≥ 3.5（AI 黑名单命中 < 3 次/千字）
-- [ ] 每章自动生成摘要（300 字）+ 状态 JSON + storyline_id
+- [ ] 每章自动生成摘要（300 字）+ 状态 JSON + storyline_id + cross_references
 - [ ] checkpoint 写入/恢复正确
 - [ ] WorldBuilder 输出 rules.json，ChapterWriter 可消费
 - [ ] storylines.json 基础结构可创建，storyline_types 定义完整
+- [ ] Summarizer 输出 cross_references[]，storylines/{id}/memory.md 每章自动更新
 
 ### 关键风险
 - StyleRefiner 润色可能改变语义 → 增加语义一致性校验

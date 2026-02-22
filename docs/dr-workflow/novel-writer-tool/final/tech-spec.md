@@ -709,8 +709,10 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - 本卷大纲：{current_volume_outline}
 - 本章大纲：{chapter_outline}
 - 本章故事线：{storyline_id}
+- 当前线记忆：{storyline_memory}（`storylines/{storyline_id}/memory.md`，≤500 字关键事实）
 - 故事线上下文：{storyline_context}（last_chapter_summary + line_arc_progress）
 - 其他线并发状态：{concurrent_state}（各活跃线一句话摘要）
+- 相邻线记忆：{adjacent_storyline_memories}（仅 schedule 指定的相邻线 memory，交汇事件章包含交汇线 memory）
 - 近 3 章摘要：{recent_3_summaries}
 - 角色当前状态：{current_state}
 - 本章伏笔任务：{foreshadowing_tasks}
@@ -860,7 +862,26 @@ tools: ["Read", "Write", "Edit", "Glob"]
 
 > Summarizer 的 ops 是对 ChapterWriter ops 的 **校验和补充**：确认 ChapterWriter 的变更是否完整，补充遗漏的状态变更。两份 ops 由合并器去重后统一应用。
 
-**3. Context 传递标记**
+**3. 串线检测输出**
+
+```json
+{
+  "storyline_id": "{storyline_id}",
+  "cross_references": [
+    {"entity": "角色/地名/事件", "source_storyline": "其他线ID", "context": "原文引用片段"}
+  ],
+  "leak_risk": "none | low | high",
+  "leak_detail": "泄漏风险说明（high 时必填）"
+}
+```
+
+> `cross_references` 列出本章正文中出现的所有非本线实体。非交汇事件章中 `leak_risk: high` 将触发 QualityJudge LS-005 hard 检查。
+
+**4. 线级记忆更新**
+
+每章摘要完成后，Summarizer 同步更新对应故事线的局部记忆文件 `storylines/{storyline_id}/memory.md`（≤500 字），仅保留该线最新关键事实（当前 POV 角色状态、未解决冲突、待回收伏笔）。旧内容滚动覆盖。
+
+**5. Context 传递标记**
 
 标注下一章必须知道的 3-5 个关键信息点（用于 context 组装优先级排序）。
 ````
@@ -1114,6 +1135,7 @@ tools: ["Read", "Glob", "Grep"]
 4. **LS 故事线规范检查**：
    - LS-001（hard）：本章事件时间是否与并发线矛盾
    - LS-002~004（soft）：报告但不阻断（切线锚点、交汇铺垫、休眠线记忆重建）
+   - LS-005（hard）：非交汇事件章中，Summarizer 标记 `leak_risk: high` 的跨线实体泄漏必须修正
 
 输出：
 ```json

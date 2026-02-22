@@ -930,8 +930,9 @@ DR-021 调研表明，LLM 多线叙事的五类串线风险（实体属性泄漏
 
 **Layer 1: 结构化 Context 注入**
 - ChapterWriter 的故事线 context 采用结构化格式（XML/JSON），显式标记活跃线 vs 冻结线
-- 活跃线提供完整状态（POV 角色、时空坐标、情感状态、最近事件、语气风格）+ 最近正文
-- 冻结线仅提供 concurrent_state 一句话摘要
+- 每条线维护独立的 `storylines/{id}/memory.md`（≤500 字关键事实），Summarizer 每章自动更新
+- 写章时注入：当前线 memory + 相邻线 memory（schedule 指定）+ 交汇线 memory（交汇事件章）
+- 冻结线仅提供 concurrent_state 一句话摘要，不注入 memory（降低"全局信息涌入"风险）
 - Context 位置优化：活跃线状态放在 context 开头（利用 "Lost in the Middle" 研究，开头召回率最高）
 
 **Layer 2: 反串线指令**
@@ -940,8 +941,9 @@ DR-021 调研表明，LLM 多线叙事的五类串线风险（实体属性泄漏
 - 跨线信息传递必须有叙事合理的机制（信使、书信、偶遇等）
 
 **Layer 3: 后验校验（QualityJudge 扩展）**
-- 对每次续写结果提取实体（角色名、地名、事件引用）
-- 与活跃线的角色/地点白名单交叉比对
+- Summarizer 输出 `cross_references[]`（本章提及的非本线实体）和 `leak_risk` 标记
+- QualityJudge 对每次续写结果提取实体（角色名、地名、事件引用），与活跃线白名单交叉比对
+- LS-005（hard）：非交汇事件章中，`leak_risk: high` 的跨线实体泄漏强制修正
 - 检测到外线实体泄漏时标记为 LS violation
 
 **分治续写架构**：每条故事线的续写是独立的 LLM 调用，不在同一 conversation 中混合多条线的正文。与 Agents' Room（Huot et al., 2024）等多智能体叙事框架的设计理念一致。
@@ -1133,7 +1135,9 @@ novel-project/
 │   └── changelog.md
 ├── storylines/                     # 多线叙事管理
 │   ├── storylines.json             # 全局故事线定义
-│   └── storyline-spec.json         # LS 故事线规范
+│   ├── storyline-spec.json         # LS 故事线规范
+│   └── {storyline-id}/
+│       └── memory.md               # 故事线独立记忆（≤500 字关键事实，Summarizer 每章更新）
 ├── volumes/                        # 卷制结构
 │   ├── vol-01/
 │   │   ├── outline.md
