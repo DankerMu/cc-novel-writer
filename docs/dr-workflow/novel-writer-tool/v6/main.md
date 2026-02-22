@@ -529,7 +529,7 @@ AI 黑名单：{ai_blacklist}
 - **世界观扩展**：随剧情需要，调用 WorldBuilder 增量更新
 - **角色管理**：新增角色 / 退场角色 / 更新关系
 - **全局伏笔**：跨卷伏笔状态追踪
-- **风格校准**：每 5 章提取风格特征，检测漂移并注入校正
+- **风格校准**：每 5 章提取风格特征，检测漂移并自动纠偏——偏离项写入 `style-drift.json`，注入后续 ChapterWriter/StyleRefiner context，持续到回归基线
 
 ### 质量门控
 
@@ -954,6 +954,7 @@ DR-021 调研表明，LLM 多线叙事的五类串线风险（实体属性泄漏
 - 平均句长、对话/叙述比例、常用词频
 - 修辞偏好（比喻频率、排比、短句切换）
 - 禁忌词表（用户不会用的词）
+- **正向写作指令**（`writing_directives`）：从样本归纳出可执行的风格指南（如"偏短句、动作推进"、"对话中多插一句生活化吐槽"），直接注入 ChapterWriter prompt
 
 输出 `style-profile.json`，注入所有 ChapterWriter 和 StyleRefiner 调用。
 

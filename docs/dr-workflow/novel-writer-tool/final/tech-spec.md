@@ -945,6 +945,11 @@ tools: ["Read", "Write", "Glob", "Grep"]
     "dialogue_format": "引号式 | 无引号式"
   },
   "narrative_voice": "第一人称 | 第三人称限制 | 全知",
+  "writing_directives": [
+    "偏短句、动作推进叙事，比喻少但要锐利",
+    "对话中多插一句生活化吐槽，避免说教感",
+    "场景描写点到为止，留白给读者脑补"
+  ],
   "analysis_notes": "分析备注"
 }
 ```
@@ -1323,6 +1328,19 @@ StyleAnalyzer 从用户样本中提取以下可量化特征：
 - 句长偏移 > 20% → 警告
 - 对话比例偏移 > 15% → 警告
 - 新出现的高频 AI 用语 → 追加到黑名单
+
+**自动纠偏**：当漂移超阈值时，将偏离项写入 `style-drift.json`，自动注入后续 ChapterWriter 和 StyleRefiner 的 context：
+```json
+{
+  "detected_chapter": 25,
+  "drifts": [
+    {"metric": "avg_sentence_length", "baseline": 18, "current": 24, "directive": "句子过长，回归短句节奏"},
+    {"metric": "dialogue_ratio", "baseline": 0.4, "current": 0.28, "directive": "对话偏少，增加角色互动"}
+  ],
+  "injected_to": ["ChapterWriter", "StyleRefiner"]
+}
+```
+纠偏指令会持续注入直至下次检测确认回归基线（偏移 < 10%）。
 
 ## Layer 2: 约束注入（生成层）
 
