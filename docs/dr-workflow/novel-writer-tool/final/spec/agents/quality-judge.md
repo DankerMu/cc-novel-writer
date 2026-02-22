@@ -73,14 +73,16 @@ tools: ["Read", "Glob", "Grep"]
 ```json
 {
   "contract_verification": {
-    "l1_checks": [{"rule_id": "W-001", "status": "pass | violation", "detail": "..."}],
-    "l2_checks": [{"contract_id": "C-NAME-001", "status": "pass | violation", "detail": "..."}],
-    "l3_checks": [{"objective_id": "OBJ-48-1", "status": "pass | violation", "detail": "..."}],
-    "ls_checks": [{"rule_id": "LS-001", "status": "pass | violation", "constraint_type": "hard", "detail": "..."}],
+    "l1_checks": [{"rule_id": "W-001", "status": "pass | violation", "confidence": "high | medium | low", "detail": "..."}],
+    "l2_checks": [{"contract_id": "C-NAME-001", "status": "pass | violation", "confidence": "high | medium | low", "detail": "..."}],
+    "l3_checks": [{"objective_id": "OBJ-48-1", "status": "pass | violation", "confidence": "high | medium | low", "detail": "..."}],
+    "ls_checks": [{"rule_id": "LS-001", "status": "pass | violation", "constraint_type": "hard", "confidence": "high | medium | low", "detail": "..."}],
     "has_violations": false
   }
 }
 ```
+
+> **confidence 语义**：`high` = 明确违反/通过，可自动执行门控；`medium` = 可能违反，建议自动修订但不阻断；`low` = 不确定，标记为 `violation_suspected`，由入口 Skill 提交用户确认（AskUserQuestion）。门控逻辑中，仅 `confidence: "high"` 的 violation 触发强制修订。
 
 ## Track 2: Quality Scoring（软评估）
 

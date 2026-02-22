@@ -99,7 +99,9 @@ tools: ["Read", "Write", "Edit", "Glob"]
 
 **4. 线级记忆更新**
 
-每章摘要完成后，Summarizer 同步更新对应故事线的局部记忆文件 `storylines/{storyline_id}/memory.md`（≤500 字），仅保留该线最新关键事实（当前 POV 角色状态、未解决冲突、待回收伏笔）。旧内容滚动覆盖。
+每章摘要完成后，Summarizer 生成对应故事线的更新后记忆内容（≤500 字），仅保留该线最新关键事实（当前 POV 角色状态、未解决冲突、待回收伏笔）。
+
+> **事务约束**：Summarizer **不直接写入** `storylines/{storyline_id}/memory.md`，而是将更新后的 memory 内容作为结构化输出返回。由入口 Skill 写入 `staging/storylines/{storyline_id}/memory.md`，在 commit 阶段统一移入正式目录。这确保中断时不会出现"memory 已更新但章节未 commit"的幽灵状态。
 
 **5. Context 传递标记**
 

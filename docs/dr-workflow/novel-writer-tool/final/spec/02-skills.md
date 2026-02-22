@@ -173,7 +173,8 @@ context = {
 ```
 for chapter_num in range(start, start + N):
 
-  0. 更新 checkpoint: pipeline_stage = "drafting", inflight_chapter = chapter_num
+  0. 获取并发锁: mkdir .novel.lock + 写入 info.json（见 PRD §10.7）
+     更新 checkpoint: pipeline_stage = "drafting", inflight_chapter = chapter_num
 
   1. ChapterWriter Agent → 生成初稿
      输入: context（含 chapter_contract, world_rules, character_contracts）
@@ -181,7 +182,7 @@ for chapter_num in range(start, start + N):
 
   2. Summarizer Agent → 生成摘要 + 权威状态增量
      输入: 初稿全文 + current_state + writer_hints（如有）
-     输出: staging/summaries/chapter-{C}-summary.md + staging/state/chapter-{C}-delta.json
+     输出: staging/summaries/chapter-{C}-summary.md + staging/state/chapter-{C}-delta.json + staging/storylines/{storyline_id}/memory.md
      更新 checkpoint: pipeline_stage = "drafted"
 
   3. StyleRefiner Agent → 去 AI 化润色
@@ -196,22 +197,25 @@ for chapter_num in range(start, start + N):
      更新 checkpoint: pipeline_stage = "judged"
 
   5. 质量门控决策:
-     - Contract violation 存在 → ChapterWriter(Opus) 强制修订，回到步骤 1
+     - Contract violation 存在 → ChapterWriter(model=opus) 强制修订，回到步骤 1
      - 无 violation + overall ≥ 4.0 → 直接通过
      - 无 violation + 3.5-3.9 → StyleRefiner 二次润色后通过
-     - 无 violation + 3.0-3.4 → ChapterWriter(Opus) 自动修订
+     - 无 violation + 3.0-3.4 → ChapterWriter(model=opus) 自动修订
      - 无 violation + < 3.0 → 通知用户，暂停
      最大修订次数: 2
+     > 修订调用：Task(subagent_type="chapter-writer", model="opus")，利用 Task 工具的 model 参数覆盖 agent frontmatter 默认的 sonnet
 
   6. 事务提交（staging → 正式目录）:
      - 移动 staging/chapters/chapter-{C}.md → chapters/chapter-{C}.md
      - 移动 staging/summaries/chapter-{C}-summary.md → summaries/
      - 移动 staging/evaluations/chapter-{C}-eval.json → evaluations/
-     - 合并 state patches: 校验 base_state_version 匹配 → 去重 ChapterWriter + Summarizer ops → 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
+     - 移动 staging/storylines/{storyline_id}/memory.md → storylines/{storyline_id}/memory.md
+     - 合并 state delta: 校验 ops（§10.6）→ 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
      - 更新 foreshadowing/global.json（从 foreshadow ops 提取）
      - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null）
      - 写入 logs/chapter-{C}-log.json（stages 耗时/token/模型、gate_decision、revisions、total_cost_usd）
      - 清空 staging/ 本章文件
+     - 释放并发锁: rm -rf .novel.lock
 
   7. 输出本章结果:
      > 第 {C} 章已生成（{word_count} 字），评分 {overall}/5.0 {pass_icon}

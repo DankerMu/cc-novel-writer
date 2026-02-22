@@ -108,18 +108,18 @@ fi
 echo "=== 小说项目状态（自动注入） ==="
 cat "$CHECKPOINT"
 
-# 注入最近一章摘要（如存在）
-LAST_CH=$(python3 -c "import json; print(json.load(open('$CHECKPOINT'))['last_completed_chapter'])" 2>/dev/null)
+# 注入最近一章摘要（如存在，截断至 2000 字符防止 token 浪费）
+LAST_CH=$(python3 -c "import json; print(json.load(open('$CHECKPOINT'))['last_completed_chapter'])" 2>/dev/null || jq -r '.last_completed_chapter' "$CHECKPOINT" 2>/dev/null)
 if [ -n "$LAST_CH" ]; then
   SUMMARY="summaries/chapter-$(printf '%03d' "$LAST_CH")-summary.md"
   if [ -f "$SUMMARY" ]; then
     echo "--- 最近章节摘要 (第 ${LAST_CH} 章) ---"
-    cat "$SUMMARY"
+    head -c 2000 "$SUMMARY"
   fi
 fi
 echo "=== 状态注入完毕 ==="
 ````
 
-> SessionStart hook 在每次新 session 进入项目目录时自动执行。输出内容注入到 Claude 的 system context，使后续 `/novel:continue` 可跳过 checkpoint 读取步骤。hook 超时 5 秒，无 checkpoint 文件时静默退出（非小说项目不触发）。
+> SessionStart hook 在每次新 session 进入项目目录时自动执行。输出内容注入到 Claude 的 system context，使后续 `/novel:continue` 可跳过 checkpoint 读取步骤。hook 超时 5 秒，无 checkpoint 文件时静默退出（非小说项目不触发）。JSON 解析优先使用 python3，降级至 jq；摘要截断至 2000 字符避免大文件浪费 token。
 
 ---

@@ -205,18 +205,18 @@ Track 1（合规检查）新增 LS 层：
 Track 2（质量评分）新增维度：
 - `storyline_coherence`（权重 0.08）：切线流畅度、读者跟线难度、并发线暗示自然度
 
-**权重重分配方案**（8 维度总和 = 1.0）：
+**权重定版方案**（8 维度总和 = 1.0）：
 
-| 维度 | v4 权重 | v5 权重 | 调整说明 |
-|------|---------|---------|---------|
-| plot_logic（情节逻辑） | 0.20 | 0.18 | -0.02，部分逻辑检查转移到 storyline_coherence |
-| character（角色塑造） | 0.20 | 0.18 | -0.02，跨线角色一致性转移到 storyline_coherence |
-| immersion（沉浸感） | 0.15 | 0.15 | 不变 |
-| foreshadowing（伏笔） | 0.10 | 0.10 | 不变 |
-| pacing（节奏） | 0.10 | 0.08 | -0.02，多线节奏转移到 storyline_coherence |
-| style_naturalness（风格自然度） | 0.15 | 0.15 | 不变 |
-| emotional_impact（情感冲击） | 0.10 | 0.08 | -0.02，跨线情感衔接转移到 storyline_coherence |
-| **storyline_coherence（故事线连贯）** | — | **0.08** | 新增 |
+| 维度 | 权重 | 说明 |
+|------|------|------|
+| plot_logic（情节逻辑） | 0.18 | 与大纲一致度、因果链 |
+| character（角色塑造） | 0.18 | 言行符合人设、性格连续性 |
+| immersion（沉浸感） | 0.15 | 画面感、氛围营造 |
+| foreshadowing（伏笔） | 0.10 | 埋设/推进/回收 |
+| pacing（节奏） | 0.08 | 冲突强度、张弛有度 |
+| style_naturalness（风格自然度） | 0.15 | 黑名单命中率、句式重复率 |
+| emotional_impact（情感冲击） | 0.08 | 情感起伏、读者代入感 |
+| storyline_coherence（故事线连贯） | 0.08 | 切线流畅度、跟线难度、并发线暗示自然度 |
 
 #### 6.6.6 Agent 职责扩展
 

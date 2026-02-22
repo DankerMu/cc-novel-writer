@@ -38,6 +38,9 @@ novel-project/
 │   │   ├── outline.md
 │   │   ├── storyline-schedule.json # 本卷故事线调度
 │   │   ├── foreshadowing.json
+│   │   ├── chapter-contracts/      # L3 章节契约（PlotArchitect 生成）
+│   │   │   ├── chapter-001.json
+│   │   │   └── ...
 │   │   └── review.md
 │   └── vol-02/ ...
 ├── chapters/
@@ -47,6 +50,7 @@ novel-project/
 │   ├── chapters/                   # draft → refined 章节
 │   ├── summaries/                  # 章节摘要（Summarizer 产出，commit 时移入 summaries/）
 │   ├── state/                      # state delta（Summarizer 产出）
+│   ├── storylines/                 # 故事线记忆更新（Summarizer 产出，commit 时覆盖 storylines/*/memory.md）
 │   └── evaluations/                # 评估结果
 ├── summaries/                      # 章节摘要（context 压缩核心）
 │   ├── chapter-001-summary.md

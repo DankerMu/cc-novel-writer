@@ -74,8 +74,10 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 8. **正向风格引导**：模仿 `{style_profile}` 的用词习惯、修辞偏好和句式节奏，以此为写作基调
 9. **角色语癖**：对话带角色语癖（每角色至少 1 个口头禅）
-10. **反直觉细节**：每章至少 1 处"反直觉"的生活化细节
-11. **场景描写精简**：场景描写 ≤ 2 句，优先用动作推进
+10. **反直觉细节**：每章至少 1 处"反直觉"的生活化细节（默认值，可通过 style-profile 覆盖）
+11. **场景描写精简**：场景描写 ≤ 2 句，优先用动作推进（默认值，可通过 style-profile 覆盖）
+
+> **注意**：约束 10、11 为默认风格策略，适用于快节奏网文。如项目风格偏向悬疑铺陈/史诗感/抒情向，可在 `style-profile.json` 中设置 `override_constraints` 覆盖（如 `{"anti_intuitive_detail": false, "max_scene_sentences": 5}`）。
 
 > **注意**：完整去 AI 化（黑名单扫描、句式重复检测）由 StyleRefiner 在后处理阶段执行，ChapterWriter 专注创作质量。
 

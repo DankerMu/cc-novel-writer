@@ -128,8 +128,8 @@ QualityJudge 从"单一评分"升级为"合规检查 + 质量评分"双轨制：
 1. Contract Verification（硬门槛 — 逐条检查 L1/L2/L3）
    输出：{"OBJ-048-1": "pass", "W-001": "pass", ...} + violations 列表
 
-2. Quality Scoring（软评估 — 保留现有 7 维度评分）
-   输出：7 维度加权均值
+2. Quality Scoring（软评估 — 8 维度评分，含 storyline_coherence）
+   输出：8 维度加权均值
 
 门控决策：
 ├── 有 violation → 强制修订（不管印象分多高）

@@ -55,16 +55,20 @@ Agent 通过 Task 子代理执行，结果以结构化文本返回给入口 Skil
 
 1. **Staging**：流水线各阶段输出写入 `staging/` 暂存目录
    - `staging/chapters/chapter-N.md`（初稿 → 润色覆盖）
+   - `staging/summaries/chapter-N-summary.md`（摘要，由 Summarizer 产出）
    - `staging/state/chapter-N-delta.json`（状态增量，由 Summarizer 产出）
+   - `staging/storylines/{storyline_id}/memory.md`（故事线记忆更新，由 Summarizer 产出）
    - `staging/evaluations/chapter-N-eval.json`（评估结果）
    - 每步完成更新 `.checkpoint.json` 的 `pipeline_stage`
-2. **Validate**：QualityJudge Track 1 合规 + Track 2 评分通过质量门控
+2. **Validate**：QualityJudge Track 1 合规（仅 `confidence: "high"` 的 violation 触发强制修订）+ Track 2 评分通过质量门控
 3. **Commit**（原子提交）：
    - 将 staging 文件移入正式目录（`chapters/`、`summaries/`、`evaluations/`）
-   - 合并 state delta → `state/current-state.json`
+   - 移动 `staging/storylines/{storyline_id}/memory.md` → `storylines/{storyline_id}/memory.md`
+   - 合并 state delta → `state/current-state.json`（经 §10.6 校验）
    - 更新 `foreshadowing/global.json`
    - 更新 `.checkpoint.json`（`last_completed_chapter + 1`、`pipeline_stage = committed`、`inflight_chapter = null`）
-4. **中断恢复**：冷启动时检查 `pipeline_stage` + `inflight_chapter` + `staging/` 目录，从中断阶段幂等恢复；staging 文件可安全重试或清理
+   - 释放并发锁（`rm -rf .novel.lock`，见 §10.7）
+4. **中断恢复**：冷启动时检查 `pipeline_stage` + `inflight_chapter` + `staging/` 目录 + `.novel.lock` 状态，从中断阶段幂等恢复；staging 文件可安全重试或清理
 
 ### 10.5 交互边界规则
 
