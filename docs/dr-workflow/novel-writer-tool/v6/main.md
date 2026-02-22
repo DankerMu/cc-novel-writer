@@ -17,19 +17,19 @@
 
 ### 2.1 交付格式
 
-本产品以 **Claude Code Plugin** 形式交付，包含 4 个技能（Skills）和 8 个专业 Agent。其中 3 个技能为用户入口（`/novel`、`/novel-continue`、`/novel-status`），1 个为共享知识库。[DR-018](dr/dr-018-plugin-api.md) [DR-020](dr/dr-020-single-command-ux.md)
+本产品以 **Claude Code Plugin** 形式交付（plugin name: `novel`），包含 4 个技能（Skills）和 8 个专业 Agent。其中 3 个技能为用户入口（`/novel:start`、`/novel:continue`、`/novel:status`），1 个为共享知识库。Plugin skills 遵循官方命名空间规则 `/{plugin-name}:{skill-name}`。[DR-018](dr/dr-018-plugin-api.md) [DR-020](dr/dr-020-single-command-ux.md)
 
 ```
 cc-novel-writer/
 ├── .claude-plugin/
 │   └── plugin.json                    # 插件元数据
 ├── skills/                            # 4 个技能（3 入口 + 1 知识库）
-│   ├── novel/
-│   │   └── SKILL.md                   # /novel         状态感知交互入口
-│   ├── novel-continue/
-│   │   └── SKILL.md                   # /novel-continue 续写下一章（高频快捷）
-│   ├── novel-status/
-│   │   └── SKILL.md                   # /novel-status   只读状态查看
+│   ├── start/
+│   │   └── SKILL.md                   # /novel:start     状态感知交互入口
+│   ├── continue/
+│   │   └── SKILL.md                   # /novel:continue  续写下一章（高频快捷）
+│   ├── status/
+│   │   └── SKILL.md                   # /novel:status    只读状态查看
 │   └── novel-writing/                 # 共享知识库（Claude 按需自动加载）
 │       ├── SKILL.md                   # 核心方法论 + 风格指南
 │       └── references/
@@ -56,11 +56,11 @@ cc-novel-writer/
 
 | 命令 | 用途 | 核心流程 |
 |------|------|---------|
-| `/novel` | 状态感知交互入口 | 读 checkpoint → 推荐下一步 → AskUserQuestion → Task 派发 agent |
-| `/novel-continue [N]` | 续写 N 章（默认 1） | 读 checkpoint → ChapterWriter → Summarizer → StyleRefiner → QualityJudge → 更新 checkpoint |
-| `/novel-status` | 只读状态查看 | 展示进度、评分均值、伏笔状态 |
+| `/novel:start` | 状态感知交互入口 | 读 checkpoint → 推荐下一步 → AskUserQuestion → Task 派发 agent |
+| `/novel:continue [N]` | 续写 N 章（默认 1） | 读 checkpoint → ChapterWriter → Summarizer → StyleRefiner → QualityJudge → 更新 checkpoint |
+| `/novel:status` | 只读状态查看 | 展示进度、评分均值、伏笔状态 |
 
-**`/novel` 入口逻辑**：
+**`/novel:start` 入口逻辑**：
 ```
 1. 读取 .checkpoint.json
 2. 状态感知推荐：
@@ -75,8 +75,8 @@ cc-novel-writer/
 **AskUserQuestion 约束**（[DR-020](dr/dr-020-single-command-ux.md)）：
 - 每次 2-4 选项（主菜单恰好 ≤4 项，刚好在限制内）
 - 60 秒超时 → 选项标记 "(Recommended)" 辅助快速决策
-- 子代理不可用 → `/novel` 必须在主 command 中调用 AskUserQuestion
-- 每会话 ~4-6 个问题 → 单次 `/novel` 最多用 2-3 个
+- 子代理不可用 → `/novel:start` 必须在主 command 中调用 AskUserQuestion
+- 每会话 ~4-6 个问题 → 单次 `/novel:start` 最多用 2-3 个
 
 **Command 文件格式**（YAML frontmatter，适用于 SKILL.md）：
 ```yaml
@@ -89,17 +89,17 @@ model: sonnet
 
 ### 2.3 架构原则
 
-- **Skills = 入口 + 调度**：`/novel` 做状态感知路由，`/novel-continue` 和 `/novel-status` 为高频快捷命令，均以 Skills 实现（支持 supporting files + progressive disclosure）
+- **Skills = 入口 + 调度**：`/novel:start` 做状态感知路由，`/novel:continue` 和 `/novel:status` 为高频快捷命令，均以 Skills 实现（支持 supporting files + progressive disclosure）。Plugin name 采用短名 `novel`，遵循 `/{plugin}:{skill}` 命名空间规则
 - **Agents = 专业化执行**：每个 agent 有独立的 prompt 模板和 tools 权限，需包含 name/description/model/color/tools frontmatter
 - **Skill = 共享知识**：`novel-writing` skill 提供去 AI 化规则、质量评分标准等共享上下文，Claude 按需自动加载
 - **Checkpoint 是衔接点**：skills 之间通过 `.checkpoint.json` 传递状态，支持冷启动
-- **Orchestrator 是逻辑抽象**：Section 8 定义的状态机是逻辑设计，实际由 3 个入口 skill 分布实现（`/novel` 覆盖 INIT/QUICK_START/VOL_PLANNING/VOL_REVIEW，`/novel-continue` 覆盖 WRITING 循环，`/novel-status` 只读），见 Section 8.2 映射表
+- **Orchestrator 是逻辑抽象**：Section 8 定义的状态机是逻辑设计，实际由 3 个入口 skill 分布实现（`/novel:start` 覆盖 INIT/QUICK_START/VOL_PLANNING/VOL_REVIEW，`/novel:continue` 覆盖 WRITING 循环，`/novel:status` 只读），见 Section 8.2 映射表
 
 ### 2.4 用户体验示例
 
 ```
 首次使用：
-> /novel
+> /novel:start
 Claude: 检测到无项目。推荐：创建新项目。
        [AskUserQuestion: 创建新项目(Recommended) / 查看帮助]
        [用户选择"创建新项目"]
@@ -115,22 +115,22 @@ Claude: [StyleAnalyzer → 风格指纹提取]
        3 章已生成，评分均值 3.7/5.0。继续？
 
 日常续写：
-> /novel-continue
+> /novel:continue
 Claude: Vol 2 Ch 48 续写中...
        第 48 章已生成（3120 字），评分 3.9/5.0 ✅
 
-> /novel-continue 3
+> /novel:continue 3
 Claude: Ch 49: 3050字 4.1 ✅ | Ch 50: 2890字 3.2→修订→3.6 ✅ | Ch 51: 3200字 3.8 ✅
 
-卷末回顾（通过 /novel 进入）：
-> /novel
+卷末回顾（通过 /novel:start 进入）：
+> /novel:start
 Claude: Vol 2 已完成 51 章。推荐：规划新卷。
        [AskUserQuestion: 规划新卷(Recommended) / 质量回顾 / 继续写作]
        [用户选择"质量回顾"]
        [NER 一致性检查 + 伏笔盘点 + 风格漂移报告]
 
 查看状态：
-> /novel-status
+> /novel:status
 Claude: Vol 2, Ch 51/50(超出), 总15万字, 均分3.7, 未回收伏笔3个
 ```
 
@@ -1008,7 +1008,7 @@ INIT → QUICK_START → VOL_PLANNING → WRITING ⟲
 
 | 当前状态 | 触发条件 | 目标状态 | 动作 |
 |---------|---------|---------|------|
-| INIT | `/novel create` | QUICK_START | 创建项目目录 |
+| INIT | `/novel:start create` | QUICK_START | 创建项目目录 |
 | QUICK_START | 用户提供设定 | QUICK_START | WorldBuilder(轻量) + CharacterWeaver(主角) |
 | QUICK_START | 风格样本提交 | QUICK_START | StyleAnalyzer 提取 profile |
 | QUICK_START | 试写确认 | VOL_PLANNING | 标记试写为 Vol 1 前 3 章 |
@@ -1027,9 +1027,9 @@ INIT → QUICK_START → VOL_PLANNING → WRITING ⟲
 
 | Skill | 负责状态 | 说明 |
 |-------|---------|------|
-| `/novel` | INIT → QUICK_START, VOL_PLANNING, VOL_REVIEW | 状态感知交互入口：通过 AskUserQuestion 识别用户意图后派发对应 agent |
-| `/novel-continue` | WRITING ⟲ QUALITY_GATE ⟲ CHAPTER_REWRITE | 核心续写循环 + 自动质量门控（高频快捷命令） |
-| `/novel-status` | 任意（只读） | 读取 checkpoint 展示状态，不触发转移 |
+| `/novel:start` | INIT → QUICK_START, VOL_PLANNING, VOL_REVIEW | 状态感知交互入口：通过 AskUserQuestion 识别用户意图后派发对应 agent |
+| `/novel:continue` | WRITING ⟲ QUALITY_GATE ⟲ CHAPTER_REWRITE | 核心续写循环 + 自动质量门控（高频快捷命令） |
+| `/novel:status` | 任意（只读） | 读取 checkpoint 展示状态，不触发转移 |
 
 ### 8.3 Context 组装规则
 
@@ -1460,7 +1460,7 @@ novel-project/
 |----|------|---------|------|
 | DR-018 | Plugin API 格式 | commands/ vs skills/ 区分，agent 需 frontmatter | [查看](dr/dr-018-plugin-api.md) |
 | DR-019 | Haiku Summarizer | 升级为 Sonnet，成本 +$0.02/章，避免误差累积 | [查看](dr/dr-019-haiku-summarizer.md) |
-| DR-020 | 单主命令 UX | 三命令混合模式：/novel + /novel-continue + /novel-status | [查看](dr/dr-020-single-command-ux.md) |
+| DR-020 | 单主命令 UX | 三命令混合模式：/novel:start + /novel:continue + /novel:status | [查看](dr/dr-020-single-command-ux.md) |
 
 #### v5 调研（多线叙事）
 

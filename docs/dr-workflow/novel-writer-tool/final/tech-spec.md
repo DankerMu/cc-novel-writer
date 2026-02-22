@@ -1,4 +1,4 @@
-# Implementation Tech Spec — cc-novel-writer Plugin
+# Implementation Tech Spec — novel Plugin
 
 ## 1. 概述
 
@@ -7,9 +7,9 @@
 | # | 路径 | 用途 | 依赖 |
 |---|------|------|------|
 | 1 | `.claude-plugin/plugin.json` | 插件元数据 | 无 |
-| 2 | `skills/novel/SKILL.md` | `/novel` 状态感知交互入口 | plugin.json |
-| 3 | `skills/novel-continue/SKILL.md` | `/novel-continue [N]` 续写 N 章 | plugin.json |
-| 4 | `skills/novel-status/SKILL.md` | `/novel-status` 只读状态展示 | plugin.json |
+| 2 | `skills/start/SKILL.md` | `/novel:start` 状态感知交互入口 | plugin.json |
+| 3 | `skills/continue/SKILL.md` | `/novel:continue [N]` 续写 N 章 | plugin.json |
+| 4 | `skills/status/SKILL.md` | `/novel:status` 只读状态展示 | plugin.json |
 | 5 | `agents/world-builder.md` | 世界观构建 Agent（Opus） | SKILL.md |
 | 6 | `agents/character-weaver.md` | 角色网络 Agent（Opus） | SKILL.md, world-builder |
 | 7 | `agents/plot-architect.md` | 情节架构 Agent（Opus） | SKILL.md, world-builder, character-weaver |
@@ -37,7 +37,7 @@ Phase 2: Agent 层（按依赖序）
   → style-refiner → quality-judge
 
 Phase 3: 入口 Skill 层
-  novel-status → novel-continue → novel
+  status → continue → start
 ```
 
 ---
@@ -49,10 +49,10 @@ Phase 3: 入口 Skill 层
 ````markdown
 ```json
 {
-  "name": "cc-novel-writer",
+  "name": "novel",
   "version": "0.1.0",
   "description": "中文网文多 Agent 协作创作系统 — 卷制滚动工作流 + 去 AI 化输出",
-  "author": "cc-novel-writer",
+  "author": "novel",
   "skills": "./skills/"
 }
 ```
@@ -62,9 +62,9 @@ Phase 3: 入口 Skill 层
 
 ## 3. 入口 Skills
 
-### 3.1 `/novel` — 状态感知交互入口
+### 3.1 `/novel:start` — 状态感知交互入口
 
-## 文件路径：`skills/novel/SKILL.md`
+## 文件路径：`skills/start/SKILL.md`
 
 ````markdown
 ---
@@ -105,7 +105,7 @@ argument-hint: ""
 当前进度：第 {current_volume} 卷，已完成 {last_completed_chapter} 章。
 
 选项：
-1. 继续写作 (Recommended) — 等同 /novel-continue
+1. 继续写作 (Recommended) — 等同 /novel:continue
 2. 质量回顾 — 查看近期章节评分和一致性
 3. 更新设定 — 修改世界观或角色
 ```
@@ -136,7 +136,7 @@ argument-hint: ""
 11. 展示试写结果和评分，写入 `.checkpoint.json`（状态 = VOL_PLANNING）
 
 **继续写作**：
-- 等同执行 `/novel-continue 1` 的逻辑
+- 等同执行 `/novel:continue 1` 的逻辑
 
 **规划新卷**：
 1. 使用 Task 派发 PlotArchitect Agent 生成下一卷大纲
@@ -156,16 +156,16 @@ argument-hint: ""
 ## 约束
 
 - AskUserQuestion 每次 2-4 选项
-- 单次 `/novel` 会话最多使用 2-3 个 AskUserQuestion
+- 单次 `/novel:start` 会话最多使用 2-3 个 AskUserQuestion
 - 推荐项始终标记 `(Recommended)`
 - 所有用户交互使用中文
 ````
 
 ---
 
-### 3.2 `/novel-continue` — 续写 N 章
+### 3.2 `/novel:continue` — 续写 N 章
 
-## 文件路径：`skills/novel-continue/SKILL.md`
+## 文件路径：`skills/continue/SKILL.md`
 
 ````markdown
 ---
@@ -191,11 +191,11 @@ argument-hint: "[N] — 续写章数，默认 1"
 读取 .checkpoint.json：
 - current_volume: 当前卷号
 - last_completed_chapter: 上次完成的章节号
-- orchestrator_state: 当前状态（必须为 WRITING，否则提示用户先通过 /novel 完成规划）
+- orchestrator_state: 当前状态（必须为 WRITING，否则提示用户先通过 /novel:start 完成规划）
 ```
 
 如果 `orchestrator_state` 不是 `WRITING`，输出提示并终止：
-> 当前状态为 {state}，请先执行 `/novel` 完成项目初始化或卷规划。
+> 当前状态为 {state}，请先执行 `/novel:start` 完成项目初始化或卷规划。
 
 ### Step 2: 组装 Context
 
@@ -263,7 +263,7 @@ for chapter_num in range(start, start + N):
 ### Step 4: 定期检查触发
 
 - 每完成 10 章（last_completed_chapter % 10 == 0）：触发一致性检查提醒
-- 到达本卷末尾章节：提示用户执行 `/novel` 进行卷末回顾
+- 到达本卷末尾章节：提示用户执行 `/novel:start` 进行卷末回顾
 
 ### Step 5: 汇总输出
 
@@ -283,9 +283,9 @@ Ch {X}: {字数}字 {分数} {状态} | Ch {X+1}: {字数}字 {分数} {状态} 
 
 ---
 
-### 3.3 `/novel-status` — 只读状态展示
+### 3.3 `/novel:status` — 只读状态展示
 
-## 文件路径：`skills/novel-status/SKILL.md`
+## 文件路径：`skills/status/SKILL.md`
 
 ````markdown
 ---
@@ -1191,7 +1191,7 @@ else:
 ````markdown
 # 小说创作方法论
 
-本知识库为 cc-novel-writer 系统提供共享方法论。所有 Agent 在执行任务时自动参考本文档。
+本知识库为 novel 插件系统提供共享方法论。所有 Agent 在执行任务时自动参考本文档。
 
 ## 卷制滚动工作流
 
@@ -1275,7 +1275,7 @@ else:
 ````markdown
 # 去 AI 化规则详解
 
-本文档定义 cc-novel-writer 系统的完整去 AI 化策略，供 ChapterWriter、StyleRefiner、QualityJudge 参考。
+本文档定义 novel 插件系统的完整去 AI 化策略，供 ChapterWriter、StyleRefiner、QualityJudge 参考。
 
 ## Layer 1: 风格锚定（输入层）
 

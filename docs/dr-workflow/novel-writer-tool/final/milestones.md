@@ -27,7 +27,7 @@
 | 1.12 | 集成测试：风格样本 + 大纲 → 续写 3 章 → Spec 验收 + 评估 | P0 | 4h |
 
 ### 验收标准
-- [ ] Plugin 结构完整：plugin.json 可被 Claude Code 识别，3 个 command 可调用（/novel、/novel-continue、/novel-status），8 个 agent 可派生
+- [ ] Plugin 结构完整：plugin.json（name: `novel`）可被 Claude Code 识别，3 个 skill 可调用（/novel:start、/novel:continue、/novel:status），8 个 agent 可派生
 - [ ] 输入风格样本 + 手写大纲 → 续写 3 章（各 2500-3500 字）
 - [ ] QualityJudge 双轨验收：合规检查（L1 规则逐条通过/违反）+ 7 维度评分 ≥ 3.5/5.0
 - [ ] 风格自然度 ≥ 3.5（AI 黑名单命中 < 3 次/千字）
