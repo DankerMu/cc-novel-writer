@@ -1016,9 +1016,7 @@ Orchestrator 不依赖会话历史。每次启动（新 session 或 context 压�
 ### 8.2 状态机
 
 ```
-INIT → QUICK_START → VOL_PLANNING → WRITING ⟲
-                                      ↕
-                              QUALITY_GATE / CHAPTER_REWRITE
+INIT → QUICK_START → VOL_PLANNING → WRITING ⟲ (每章：写→摘要→润色→门控→[修订])
                                       ↓ (卷末)
                                   VOL_REVIEW → VOL_PLANNING (下一卷)
 ```
@@ -1032,12 +1030,12 @@ INIT → QUICK_START → VOL_PLANNING → WRITING ⟲
 | QUICK_START | 风格样本提交 | QUICK_START | StyleAnalyzer 提取 profile |
 | QUICK_START | 试写确认 | VOL_PLANNING | 标记试写为 Vol 1 前 3 章 |
 | VOL_PLANNING | 大纲确认 | WRITING | 保存大纲，准备续写 |
-| WRITING | 续写请求 | WRITING | ChapterWriter → Summarizer → StyleRefiner |
-| WRITING | 每 5 章 | QUALITY_GATE | QualityJudge 评估 |
-| QUALITY_GATE | ≥ 3.5 | WRITING | 通过 |
-| QUALITY_GATE | 3.0-3.4 | CHAPTER_REWRITE | Opus 修订 |
-| QUALITY_GATE | < 3.0 | WRITING(暂停) | 通知用户 |
-| CHAPTER_REWRITE | 完成 | WRITING | 更新章节和状态 |
+| WRITING | 续写请求 | WRITING | ChapterWriter → Summarizer → StyleRefiner → QualityJudge → 门控 |
+| WRITING | 门控通过（≥ 3.5 且无 violation） | WRITING | 提交章节，更新 checkpoint |
+| WRITING | 门控修订（3.0-3.4 或有 violation） | CHAPTER_REWRITE | Opus 修订（最多 2 次） |
+| WRITING | 门控失败（< 3.0） | WRITING(暂停) | 通知用户 |
+| WRITING | 每 5 章（last_completed % 5 == 0） | WRITING | 输出质量简报（均分+问题章节），用户可选择继续/回看/调整 |
+| CHAPTER_REWRITE | 修订完成 | WRITING | 重新走门控（最多 2 次修订后强制通过并标记） |
 | WRITING | 本卷最后一章 | VOL_REVIEW | 全卷检查 |
 | VOL_REVIEW | 完成 | VOL_PLANNING | 下卷规划 |
 | 任意 | 错误 | ERROR_RETRY | 重试 1 次，失败则保存 checkpoint 暂停 |
@@ -1047,7 +1045,7 @@ INIT → QUICK_START → VOL_PLANNING → WRITING ⟲
 | Skill | 负责状态 | 说明 |
 |-------|---------|------|
 | `/novel:start` | INIT → QUICK_START, VOL_PLANNING, VOL_REVIEW | 状态感知交互入口：通过 AskUserQuestion 识别用户意图后派发对应 agent |
-| `/novel:continue` | WRITING ⟲ QUALITY_GATE ⟲ CHAPTER_REWRITE | 核心续写循环 + 自动质量门控（高频快捷命令） |
+| `/novel:continue` | WRITING（含内嵌门控 + 修订循环） | 核心续写循环：每章流水线含 QualityJudge 门控，不通过则自动修订（高频快捷命令） |
 | `/novel:status` | 任意（只读） | 读取 checkpoint 展示状态，不触发转移 |
 
 ### 8.3 Context 组装规则

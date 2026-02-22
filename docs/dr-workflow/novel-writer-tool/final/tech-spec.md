@@ -1331,7 +1331,7 @@ else:
 3. **定期检查**：每 10 章执行一致性检查 + 伏笔盘点 + 风格漂移监控
 4. **卷末回顾**：全卷一致性报告 → 下卷铺垫建议 → 用户审核
 
-核心循环状态机：`VOL_PLANNING → WRITING ⟲ QUALITY_GATE → VOL_REVIEW → VOL_PLANNING`
+核心循环状态机：`VOL_PLANNING → WRITING ⟲ (每章含内嵌门控+修订) → VOL_REVIEW → VOL_PLANNING`
 
 ## Spec-Driven Writing 原则
 
