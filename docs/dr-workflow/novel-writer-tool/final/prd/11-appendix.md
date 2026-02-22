@@ -17,7 +17,7 @@
 | 风格分析 | ✅ 已验证 | BiberPlus/NeuroBiber 可用 | [DR-005](../../v1/dr/dr-005-style-analysis.md) |
 | 伏笔检测 | ⚠️ 有上限 | 75-85% + 人工 | [DR-007](../../v1/dr/dr-007-foreshadowing.md) |
 | NER 一致性 | ✅ 可用 | 分层策略 85-92% | [DR-011](../../v1/dr/dr-011-ner-consistency.md) |
-| API 成本 | ✅ 已验证 | 混合策略 ~$0.80/章 | [DR-013](../../v2/dr/dr-013-api-cost.md) |
+| API 成本 | ✅ 已验证 | 混合策略 ~$0.85/章 | [DR-013](../../v2/dr/dr-013-api-cost.md) |
 | Prompt 设计 | ✅ 已定义 | 四层结构 + 增量 context | [DR-014](../../v2/dr/dr-014-prompt-design.md) |
 | 质量评估 | ✅ 可行 | LLM-as-Judge 8 维度 + 关键章双裁判 + 人工校准集 | [DR-015](../../v2/dr/dr-015-quality-eval.md) |
 
@@ -141,7 +141,7 @@
 - 冷启动恢复 < 30 秒
 
 **成本指标**：
-- 单章均摊成本 ≤ $0.75
+- 单章均摊成本 ≤ $0.85
 
 ## 15. 风险与缓解
 

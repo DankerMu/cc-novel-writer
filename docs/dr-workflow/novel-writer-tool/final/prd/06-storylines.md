@@ -12,7 +12,7 @@
 {
   "storylines": [
     {
-      "id": "jiangwang_dao",
+      "id": "jiangwang-dao",
       "name": "主角证道之路",
       "type": "main_arc",
       "scope": "novel",
@@ -23,7 +23,7 @@
       "description": "核心成长线"
     },
     {
-      "id": "jinghai_plan",
+      "id": "jinghai-plan",
       "name": "靖海计划",
       "type": "conspiracy",
       "scope": "multi_volume",
@@ -35,7 +35,7 @@
       "description": "跨国海权博弈暗线，多势力交织"
     },
     {
-      "id": "zhonggu_secret",
+      "id": "zhonggu-secret",
       "name": "中古之秘",
       "type": "mystery",
       "scope": "novel",
@@ -48,8 +48,8 @@
   ],
   "relationships": [
     {
-      "from": "jiangwang_dao",
-      "to": "jinghai_plan",
+      "from": "jiangwang-dao",
+      "to": "jinghai-plan",
       "type": "entangled",
       "bridges": {
         "shared_characters": ["主角", "许象乾", "李龙川"],
@@ -89,19 +89,19 @@ PlotArchitect 在卷规划时，从 `storylines.json` 选取本卷活跃线，�
   "volume_theme": "豪杰举",
   "active_storylines": [
     {
-      "storyline_id": "jiangwang_dao",
+      "storyline_id": "jiangwang-dao",
       "volume_role": "primary",
       "target_chapters": 20,
       "arc_goal": "主角在本卷突破境界"
     },
     {
-      "storyline_id": "jinghai_plan",
+      "storyline_id": "jinghai-plan",
       "volume_role": "secondary",
       "target_chapters": 6,
       "arc_goal": "靖海计划第一次浮出水面"
     },
     {
-      "storyline_id": "zhonggu_secret",
+      "storyline_id": "zhonggu-secret",
       "volume_role": "seasoning",
       "target_chapters": 2,
       "arc_goal": "通过遗迹探索揭示一个中古碎片"
@@ -116,13 +116,13 @@ PlotArchitect 在卷规划时，从 `storylines.json` 选取本卷活跃线，�
   "convergence_events": [
     {
       "chapter_range": [25, 28],
-      "involved_storylines": ["jiangwang_dao", "jinghai_plan"],
+      "involved_storylines": ["jiangwang-dao", "jinghai-plan"],
       "trigger": "关键角色之死将主线与暗线强制交汇",
       "aftermath": "主线承受副线余波"
     }
   ],
-  "dormant_storylines": ["faction_internal"],
-  "newly_activated": ["jinghai_plan"]
+  "dormant_storylines": ["faction-internal"],
+  "newly_activated": ["jinghai-plan"]
 }
 ```
 
@@ -137,19 +137,19 @@ PlotArchitect 在卷规划时，从 `storylines.json` 选取本卷活跃线，�
 ```json
 {
   "chapter": 26,
-  "storyline_id": "jinghai_plan",
+  "storyline_id": "jinghai-plan",
   "storyline_context": {
     "last_chapter_on_this_line": 18,
     "last_chapter_summary": "许象乾秘密接触佑国使者，巨龟异动被主角察觉",
     "chapters_since_last": 8,
     "line_arc_progress": "40%",
     "concurrent_state": {
-      "jiangwang_dao": "主角正在闭关冲击新境界（ch25）",
-      "zhonggu_secret": "遗迹线索指向龙宫（ch22）"
+      "jiangwang-dao": "主角正在闭关冲击新境界（ch25）",
+      "zhonggu-secret": "遗迹线索指向龙宫（ch22）"
     }
   },
   "transition_hint": {
-    "next_storyline": "jiangwang_dao",
+    "next_storyline": "jiangwang-dao",
     "bridge": "主角闭关被海域震动打断，自然切回主线"
   }
 }

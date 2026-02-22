@@ -8,7 +8,7 @@
 |------|------|------|--------|--------|---------|---------|
 | **L1 世界规则** | 物理/魔法/地理/社会硬约束 | `world/rules.json` | WorldBuilder 抽取 | QualityJudge 逐条 | 不可违反 | 系统架构约束 |
 | **L2 角色契约** | 能力边界/行为模式/关系规则 | `characters/active/NAME.json` | CharacterWeaver 生成 | QualityJudge 逐条 | 可变更但需走协议 | 接口定义 |
-| **L3 章节契约** | 前置条件/目标/后置条件/验收标准 | `chapter-contracts/chapter-N.json` | PlotArchitect 派生 | QualityJudge 逐条 | 可协商但须留痕 | 函数签名+测试用例 |
+| **L3 章节契约** | 前置条件/目标/后置条件/验收标准 | `volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json` | PlotArchitect 派生 | QualityJudge 逐条 | 可协商但须留痕 | 函数签名+测试用例 |
 
 约束强度说明：
 - **L1 不可违反**（硬约束）：类似编译错误，违反即阻塞

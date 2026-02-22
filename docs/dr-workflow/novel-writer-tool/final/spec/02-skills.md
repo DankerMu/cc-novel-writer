@@ -75,7 +75,7 @@ argument-hint: ""
    - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
 5. 使用 Task 派发 WorldBuilder Agent 生成核心设定
 6. 使用 Task 派发 CharacterWeaver Agent 创建主角和配角
-7. WorldBuilder 协助初始化 `storylines.json`（从设定派生初始故事线，默认 1 条 main_arc 主线，活跃线建议 ≤4）
+7. WorldBuilder 协助初始化 `storylines.json`（从设定派生初始故事线，默认 1 条 type 为 `main_arc` 的主线，活跃线建议 ≤4）
 8. 使用 AskUserQuestion 请求用户提供 1-3 章风格样本
 9. 使用 Task 派发 StyleAnalyzer Agent 提取风格指纹
 10. 使用 Task 逐章派发试写流水线（共 3 章），每章按完整流水线执行：ChapterWriter → Summarizer → StyleRefiner → QualityJudge（**简化 context 模式**：无 volume_outline/chapter_outline/chapter_contract，仅使用 brief + world + characters + style_profile；ChapterWriter 根据 brief 自由发挥前 3 章情节。Summarizer 正常生成摘要 + state delta + memory，确保后续写作有 context 基础。QualityJudge 跳过 L3 章节契约检查和 LS 故事线检查）
@@ -189,7 +189,7 @@ for chapter_num in range(start, start + N):
      输出: staging/chapters/chapter-{C:03d}.md（+ 可选 hints，自然语言状态提示）
 
   2. Summarizer Agent → 生成摘要 + 权威状态增量 + 串线检测
-     输入: 初稿全文 + current_state + writer_hints（如有）
+     输入: 初稿全文 + current_state + foreshadowing_tasks + entity_id_map + writer_hints（如有）
      输出: staging/summaries/chapter-{C:03d}-summary.md + staging/state/chapter-{C:03d}-delta.json + staging/state/chapter-{C:03d}-crossref.json + staging/storylines/{storyline_id}/memory.md
      更新 checkpoint: pipeline_stage = "drafted"
 
@@ -211,7 +211,7 @@ for chapter_num in range(start, start + N):
      - 无 violation + overall ≥ 4.0 → 直接通过
      - 无 violation + 3.5-3.9 → StyleRefiner 二次润色后通过
      - 无 violation + 3.0-3.4 → ChapterWriter(model=opus) 自动修订
-     - 无 violation + < 3.0 → 通知用户，暂停
+     - 无 violation + < 3.0 → 通知用户：2.0-2.9 人工审核决定重写范围，< 2.0 强制全章重写，暂停
      最大修订次数: 2
      修订次数耗尽后: overall ≥ 3.0 → 强制通过并标记 force_passed; < 3.0 → 通知用户暂停
      > 修订调用：Task(subagent_type="chapter-writer", model="opus")，利用 Task 工具的 model 参数覆盖 agent frontmatter 默认的 sonnet

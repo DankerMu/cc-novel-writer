@@ -31,7 +31,7 @@ ChapterWriter 初稿 → StyleRefiner（Opus）：
 2. 调整句式匹配 style-profile
 3. 保留语义不变
 
-单章额外成本 ~$0.08-0.12。
+单章额外成本 ~$0.43（默认 Opus 润色；降级 Sonnet 时 ~$0.05）。
 
 ### Layer 4: 检测度量
 

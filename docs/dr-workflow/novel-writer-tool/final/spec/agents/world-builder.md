@@ -87,7 +87,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 3. `world/rules.md` — 规则体系叙述
 4. `world/rules.json` — L1 结构化规则表
 5. `world/changelog.md` — 变更记录（追加一条）
-6. `storylines/storylines.json` — 故事线定义（初始化模式时协助创建，默认 1 条 main_arc）
+6. `storylines/storylines.json` — 故事线定义（初始化模式时协助创建，默认 1 条 type 为 `main_arc` 的主线）
 
 增量模式下仅输出变更文件 + changelog 条目。
 

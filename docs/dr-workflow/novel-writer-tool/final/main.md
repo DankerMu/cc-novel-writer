@@ -1,4 +1,4 @@
-# 小说自动化创作工具 PRD v4
+# 小说自动化创作工具 PRD v5
 
 基于 Claude Code 的多 agent 协作小说创作系统，面向中文网文作者，通过卷制滚动工作流实现长篇小说的高效续写和质量保证。
 
@@ -61,7 +61,7 @@
 - **Spec 体系**：L1 世界规则（hard）→ L2 角色契约 → L3 章节契约，QualityJudge 双轨验收
 - **多线叙事**：storylines.json + 卷级 schedule + 章级 context 注入，三层防串线，≤4 活跃线
 - **去 AI 化**：风格锚定 → 约束注入 → StyleRefiner 后处理 → 检测度量，黑名单 < 3 次/千字
-- **成本**：混合模型（Opus + Sonnet），均摊 ~$0.75/章
+- **成本**：混合模型（Opus + Sonnet），均摊 ~$0.85/章
 - **冷启动**：.checkpoint.json + 文件状态，SessionStart hook 自动注入
 
 ## DR 报告

@@ -120,7 +120,7 @@ novel-project/
 {
   "chapter": 48,
   "base_state_version": 47,
-  "storyline_id": "main_arc",
+  "storyline_id": "main-arc",
   "ops": [
     {"op": "set", "path": "characters.lin-feng.location", "value": "幽暗森林"},
     {"op": "set", "path": "characters.lin-feng.emotional_state", "value": "警觉"},

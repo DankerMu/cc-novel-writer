@@ -7,7 +7,7 @@
 - **一致性保证**：自动追踪角色状态、伏笔、世界观，跨 100+ 章维持一致
 - **多线叙事**：支持多 POV 群像、势力博弈暗线、跨卷伏笔交汇等复杂叙事结构 [DR-021](../../v5/dr/dr-021-llm-multi-thread-narrative.md)
 - **去 AI 化**：4 层风格策略确保输出贴近用户个人文风，降低 AI 痕迹
-- **成本可控**：混合模型策略（Opus + Sonnet），每章 ~$0.75
+- **成本可控**：混合模型策略（Opus + Sonnet），每章 ~$0.85
 
 **目标用户**：中文网文作者（MVP）[DR-016](../../v2/dr/dr-016-user-segments.md)
 
@@ -84,7 +84,7 @@ cc-novel-writer/
 ```yaml
 ---
 description: 小说创作主入口 — 状态感知交互引导
-allowed-tools: Read, Write, Glob, Grep, Task, AskUserQuestion
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion
 model: sonnet
 ---
 ```
@@ -97,7 +97,7 @@ model: sonnet
 - **Checkpoint 是衔接点**：skills 之间通过 `.checkpoint.json` 传递状态，支持冷启动
 - **Orchestrator 是逻辑抽象**：Section 8 定义的状态机是逻辑设计，实际由 3 个入口 skill 分布实现（`/novel:start` 覆盖 INIT/QUICK_START/VOL_PLANNING/VOL_REVIEW，`/novel:continue` 覆盖 WRITING 循环，`/novel:status` 只读），见 Section 8.2 映射表
 - **插件资源路径**：插件安装后会被复制到缓存目录（`~/.claude/plugins/cache`），所有对插件内部文件（templates/、references/）的引用必须通过 `${CLAUDE_PLUGIN_ROOT}` 环境变量解析，禁止写死相对路径。项目运行时数据写入用户项目目录（稳定位置），插件自身文件为只读源
-- **Hooks 增强可靠性**：Plugin 通过 `hooks/hooks.json` 注册事件钩子。M2 起启用 SessionStart hook，新 session 自动注入 `.checkpoint.json` + 最近摘要到 context，免除每次手动读取。后续可扩展 PostToolUse(Write/Edit) 做 schema 校验（需外部脚本，M3+ 视需求加入）
+- **Hooks 增强可靠性**：Plugin 通过 `hooks/hooks.json` 注册事件钩子。M2 起启用 SessionStart hook（自动注入 checkpoint + 最近摘要）和 PostToolUse hook（路径审计，拦截 Agent 写入非 `staging/` 的操作）。M3+ 可扩展 PostToolUse 做 schema 校验（需外部脚本）
 - **确定性工具演进路线**：MVP 阶段所有操作通过 Claude 原生工具（Read/Write/Grep/Glob）+ Bash 完成。当 LLM 精度不足时（如 NER、黑名单统计），通过 Bash 调用 CLI 脚本补充确定性能力。MCP 是此路径的包装升级（结构化接口 + 自动发现），作为 M4+ 可选优化，不作为核心依赖
 
 ### 2.4 用户体验示例

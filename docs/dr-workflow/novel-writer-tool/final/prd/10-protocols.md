@@ -54,11 +54,12 @@ Agent 通过 Task 子代理执行，结果以结构化文本返回给入口 Skil
 章节写入采用 **staging → validate → commit** 事务模式：
 
 1. **Staging**：流水线各阶段输出写入 `staging/` 暂存目录
-   - `staging/chapters/chapter-N.md`（初稿 → 润色覆盖）
-   - `staging/summaries/chapter-N-summary.md`（摘要，由 Summarizer 产出）
-   - `staging/state/chapter-N-delta.json`（状态增量，由 Summarizer 产出）
+   - `staging/chapters/chapter-{C:03d}.md`（初稿 → 润色覆盖）
+   - `staging/summaries/chapter-{C:03d}-summary.md`（摘要，由 Summarizer 产出）
+   - `staging/state/chapter-{C:03d}-delta.json`（状态增量，由 Summarizer 产出）
+   - `staging/state/chapter-{C:03d}-crossref.json`（串线检测，由 Summarizer 产出）
    - `staging/storylines/{storyline_id}/memory.md`（故事线记忆更新，由 Summarizer 产出）
-   - `staging/evaluations/chapter-N-eval.json`（评估结果）
+   - `staging/evaluations/chapter-{C:03d}-eval.json`（评估结果）
    - 每步完成更新 `.checkpoint.json` 的 `pipeline_stage`
 2. **Validate**：QualityJudge Track 1 合规（仅 `confidence: "high"` 的 violation 触发强制修订）+ Track 2 评分通过质量门控
 3. **Commit**（原子提交）：
