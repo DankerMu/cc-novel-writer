@@ -189,6 +189,13 @@ PlotArchitect 在卷规划时，从 `storylines.json` 选取本卷活跃线，�
       "category": "dormancy",
       "rule": "休眠线重新激活时，建议通过角色回忆或对话重建读者记忆",
       "constraint_type": "soft"
+    },
+    {
+      "id": "LS-005",
+      "category": "contamination",
+      "rule": "非交汇事件章中，不得出现其他故事线的角色独有信息（Summarizer leak_risk: high 触发）",
+      "constraint_type": "soft",
+      "_note": "M1/M2 为 soft（依赖 NER 对齐，误报率高），M3 具备实体检测能力后升级为 hard"
     }
   ]
 }
@@ -249,7 +256,7 @@ DR-021 调研表明，LLM 多线叙事的五类串线风险（实体属性泄漏
 **Layer 3: 后验校验（QualityJudge 扩展）**
 - Summarizer 输出 `cross_references[]`（本章提及的非本线实体）和 `leak_risk` 标记
 - QualityJudge 对每次续写结果提取实体（角色名、地名、事件引用），与活跃线白名单交叉比对
-- LS-005（hard）：非交汇事件章中，`leak_risk: high` 的跨线实体泄漏强制修正
+- LS-005（M1/M2 soft → M3 hard）：非交汇事件章中，`leak_risk: high` 的跨线实体泄漏。M1/M2 阶段报告但不阻断（缺乏确定性 NER，误报率高）；M3 具备实体检测后升级为 hard 强制修正
 - 检测到外线实体泄漏时标记为 LS violation
 
 **分治续写架构**：每条故事线的续写是独立的 LLM 调用，不在同一 conversation 中混合多条线的正文。与 Agents' Room（Huot et al., 2024）等多智能体叙事框架的设计理念一致。

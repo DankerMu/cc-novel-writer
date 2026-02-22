@@ -9,12 +9,14 @@ novel-project/
 ├── brief.md                        # 创作纲领（精简，≤1000 字）
 ├── style-profile.json              # 用户风格指纹
 ├── ai-blacklist.json               # AI 用语黑名单
+├── style-drift.json                # 风格漂移纠偏指令（每 5 章检测生成，回归基线后清除）
 ├── research/                       # 背景研究资料（doc-workflow 导入或手动放入）
 │   └── *.md                        # 每个主题一个文件，WorldBuilder/CharacterWeaver 自动读取
 ├── world/                          # 世界观（活文档）
 │   ├── geography.md
 │   ├── history.md
 │   ├── rules.md
+│   ├── rules.json                  # L1 结构化规则表（WorldBuilder 产出）
 │   └── changelog.md
 ├── characters/
 │   ├── active/                     # 当前活跃角色
@@ -175,17 +177,19 @@ novel-project/
   "storyline_id": "main-quest",
   "started_at": "2026-03-15T14:30:00+08:00",
   "stages": [
-    {"name": "draft", "model": "sonnet", "input_tokens": 12000, "output_tokens": 3500, "duration_ms": 45000},
-    {"name": "summarize", "model": "sonnet", "input_tokens": 4000, "output_tokens": 800, "duration_ms": 8000},
-    {"name": "refine", "model": "opus", "input_tokens": 8000, "output_tokens": 3500, "duration_ms": 42000},
-    {"name": "judge", "model": "sonnet", "input_tokens": 6000, "output_tokens": 1200, "duration_ms": 15000}
+    {"name": "draft", "model": "sonnet", "duration_ms": 45000, "input_tokens": null, "output_tokens": null},
+    {"name": "summarize", "model": "sonnet", "duration_ms": 8000, "input_tokens": null, "output_tokens": null},
+    {"name": "refine", "model": "opus", "duration_ms": 42000, "input_tokens": null, "output_tokens": null},
+    {"name": "judge", "model": "sonnet", "duration_ms": 15000, "input_tokens": null, "output_tokens": null}
   ],
   "gate_decision": "pass",
   "revisions": 0,
   "total_duration_ms": 110000,
-  "total_cost_usd": 0.72
+  "total_cost_usd": null
 }
 ```
 
-> 每章流水线完成后由入口 Skill 写入 `logs/chapter-N-log.json`。用于调试（定位哪个阶段耗时/耗 token 异常）、成本追踪（累计 cost）、质量回顾（门控决策 + 修订次数统计）。`/novel:status` 可读取汇总展示。
+> 每章流水线完成后由入口 Skill 写入 `logs/chapter-N-log.json`。用于调试（定位哪个阶段耗时异常）、质量回顾（门控决策 + 修订次数统计）。`/novel:status` 可读取汇总展示。
+>
+> **降级说明**：Claude Code Task 工具不暴露 token 用量和成本。`input_tokens`、`output_tokens`、`total_cost_usd` 字段当无法获取时写入 `null`。`model` 和 `duration_ms`（通过计时差值计算）始终可用。未来若 Claude Code 开放 token 用量 API，可无缝填充这些字段。
 

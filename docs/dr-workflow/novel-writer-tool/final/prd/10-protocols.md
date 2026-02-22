@@ -133,3 +133,14 @@ rm -rf <project_root>/.novel.lock
 3. 过期保护：若 `info.json` 的 `started` 距当前时间 > 30 分钟，视为僵尸锁，强制清除后重新获取
 4. Session 中断恢复：冷启动时检查 `.novel.lock` 是否存在，存在则提示用户确认是否为僵尸锁
 
+### 10.8 手动改稿后的状态重建（M3 完整实现）
+
+用户手动编辑章节正文后，摘要、state ops、changelog、storyline memory 可能与正文不一致。重建流程：
+
+1. **识别变更范围**：用户通过 `/novel:start` 指定被修改的章节号
+2. **重跑 Summarizer**：对修改后的正文重新生成 summary + state delta + memory
+3. **回放 state**：从上一个一致的 `state_version` 开始，按 `changelog.jsonl` 回放至修改章前一章，再应用新的 delta
+4. **级联检查**：如修改章之后还有已完成章节，检查后续章节的 summary/state 是否仍一致（如有大改，提示用户逐章重建）
+
+> M1/M2 阶段暂不实现自动重建。用户手动改稿后需自行确保一致性，或删除后续章节从修改点重新续写。M3 实现完整的重建命令。
+

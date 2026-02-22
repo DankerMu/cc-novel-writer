@@ -160,7 +160,7 @@ context = {
   recent_3_summaries:  Read 最近 3 章 summaries/chapter-*-summary.md,
   current_state:       Read("state/current-state.json"),
   foreshadowing_tasks: Read("foreshadowing/global.json") 中与本章相关的条目,
-  chapter_contract:    Read("volumes/vol-{V}/chapter-contracts/chapter-{C}.json")（如存在）,
+  chapter_contract:    Read("volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json")（如存在）,
   world_rules:         Read("world/rules.json")（如存在）,
   character_contracts: 从 characters/active/*.json 中提取 contracts 字段
 }
@@ -178,26 +178,27 @@ for chapter_num in range(start, start + N):
 
   1. ChapterWriter Agent → 生成初稿
      输入: context（含 chapter_contract, world_rules, character_contracts）
-     输出: staging/chapters/chapter-{C}.md（+ 可选 hints，自然语言状态提示）
+     输出: staging/chapters/chapter-{C:03d}.md（+ 可选 hints，自然语言状态提示）
 
   2. Summarizer Agent → 生成摘要 + 权威状态增量
      输入: 初稿全文 + current_state + writer_hints（如有）
-     输出: staging/summaries/chapter-{C}-summary.md + staging/state/chapter-{C}-delta.json + staging/storylines/{storyline_id}/memory.md
+     输出: staging/summaries/chapter-{C:03d}-summary.md + staging/state/chapter-{C:03d}-delta.json + staging/storylines/{storyline_id}/memory.md
      更新 checkpoint: pipeline_stage = "drafted"
 
   3. StyleRefiner Agent → 去 AI 化润色
      输入: 初稿 + style-profile.json + ai-blacklist.json
-     输出: staging/chapters/chapter-{C}.md（覆盖）
+     输出: staging/chapters/chapter-{C:03d}.md（覆盖）
      更新 checkpoint: pipeline_stage = "refined"
 
   4. QualityJudge Agent → 质量评估（双轨验收）
      输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule
      返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
-     入口 Skill 写入: staging/evaluations/chapter-{C}-eval.json
+     入口 Skill 写入: staging/evaluations/chapter-{C:03d}-eval.json
      更新 checkpoint: pipeline_stage = "judged"
 
   5. 质量门控决策:
-     - Contract violation 存在 → ChapterWriter(model=opus) 强制修订，回到步骤 1
+     - Contract violation（confidence=high）存在 → ChapterWriter(model=opus) 强制修订，回到步骤 1
+     - Contract violation（confidence=low）存在 → 写入 eval JSON，输出警告，不阻断
      - 无 violation + overall ≥ 4.0 → 直接通过
      - 无 violation + 3.5-3.9 → StyleRefiner 二次润色后通过
      - 无 violation + 3.0-3.4 → ChapterWriter(model=opus) 自动修订
@@ -206,14 +207,14 @@ for chapter_num in range(start, start + N):
      > 修订调用：Task(subagent_type="chapter-writer", model="opus")，利用 Task 工具的 model 参数覆盖 agent frontmatter 默认的 sonnet
 
   6. 事务提交（staging → 正式目录）:
-     - 移动 staging/chapters/chapter-{C}.md → chapters/chapter-{C}.md
-     - 移动 staging/summaries/chapter-{C}-summary.md → summaries/
-     - 移动 staging/evaluations/chapter-{C}-eval.json → evaluations/
+     - 移动 staging/chapters/chapter-{C:03d}.md → chapters/chapter-{C:03d}.md
+     - 移动 staging/summaries/chapter-{C:03d}-summary.md → summaries/
+     - 移动 staging/evaluations/chapter-{C:03d}-eval.json → evaluations/
      - 移动 staging/storylines/{storyline_id}/memory.md → storylines/{storyline_id}/memory.md
      - 合并 state delta: 校验 ops（§10.6）→ 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
      - 更新 foreshadowing/global.json（从 foreshadow ops 提取）
      - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null）
-     - 写入 logs/chapter-{C}-log.json（stages 耗时/token/模型、gate_decision、revisions、total_cost_usd）
+     - 写入 logs/chapter-{C:03d}-log.json（stages 耗时/模型、gate_decision、revisions；token/cost 为估算值或 null，见降级说明）
      - 清空 staging/ 本章文件
      - 释放并发锁: rm -rf .novel.lock
 

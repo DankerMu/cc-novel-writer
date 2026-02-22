@@ -67,7 +67,7 @@ tools: ["Read", "Glob", "Grep"]
 4. **LS 故事线规范检查**：
    - LS-001（hard）：本章事件时间是否与并发线矛盾
    - LS-002~004（soft）：报告但不阻断（切线锚点、交汇铺垫、休眠线记忆重建）
-   - LS-005（hard）：非交汇事件章中，Summarizer 标记 `leak_risk: high` 的跨线实体泄漏必须修正
+   - LS-005（M1/M2 soft → M3 hard）：非交汇事件章中，Summarizer 标记 `leak_risk: high` 的跨线实体泄漏。M1/M2 阶段报告但不阻断；M3 升级为 hard 强制修正
 
 输出：
 ```json
@@ -82,7 +82,7 @@ tools: ["Read", "Glob", "Grep"]
 }
 ```
 
-> **confidence 语义**：`high` = 明确违反/通过，可自动执行门控；`medium` = 可能违反，建议自动修订但不阻断；`low` = 不确定，标记为 `violation_suspected`，由入口 Skill 提交用户确认（AskUserQuestion）。门控逻辑中，仅 `confidence: "high"` 的 violation 触发强制修订。
+> **confidence 语义**：`high` = 明确违反/通过，可自动执行门控；`medium` = 可能违反，自动修订但不阻断流水线；`low` = 不确定，标记为 `violation_suspected`，写入 eval JSON 并在章节完成输出中警告用户，用户可通过 `/novel:start` 的质量回顾功能审核处理。`/novel:continue` 不使用 AskUserQuestion，仅 `high` confidence 的 violation 触发强制修订。
 
 ## Track 2: Quality Scoring（软评估）
 
