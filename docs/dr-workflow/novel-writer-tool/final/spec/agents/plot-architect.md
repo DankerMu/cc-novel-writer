@@ -59,7 +59,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 从叙述性大纲自动派生每章的结构化契约：
 
 ```json
-// volumes/vol-{V}/chapter-contracts/chapter-{C}.json
+// volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json
 {
   "chapter": C,
   "preconditions": {
@@ -114,7 +114,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 > **格式约束**：每章以 `### 第 N 章:` 开头（N 为阿拉伯数字），后跟精确的 7-8 个 `- **Key**:` 行。入口 Skill 通过正则 `/^### 第 (\d+) 章/` 定位并提取对应章节段落，禁止使用自由散文格式。
 2. `volumes/vol-{V}/storyline-schedule.json` — 本卷故事线调度（active_storylines + interleaving_pattern + convergence_events）
 3. `volumes/vol-{V}/foreshadowing.json` — 本卷伏笔计划（新增 + 上卷延续）
-4. `volumes/vol-{V}/chapter-contracts/chapter-{C}.json` — 每章契约（批量生成，含 storyline_id + storyline_context）
+4. `volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json` — 每章契约（批量生成，含 storyline_id + storyline_context）
 5. 更新 `foreshadowing/global.json` — 全局伏笔状态
 ````
 

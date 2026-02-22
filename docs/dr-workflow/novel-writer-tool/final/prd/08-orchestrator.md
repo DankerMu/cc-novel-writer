@@ -32,7 +32,7 @@ INIT → QUICK_START → VOL_PLANNING → WRITING ⟲ (每章：写→摘要→�
 | WRITING | 门控修订（3.0-3.4 或有 high-confidence violation） | CHAPTER_REWRITE | ChapterWriter(Opus) 修订（最多 2 次） |
 | WRITING | 门控失败（< 3.0） | WRITING(暂停) | 通知用户 |
 | WRITING | 每 5 章（last_completed % 5 == 0） | WRITING | 输出质量简报（均分+问题章节），用户可选择继续/回看/调整 |
-| CHAPTER_REWRITE | 修订完成 | WRITING | 重新走门控（最多 2 次修订后强制通过并标记） |
+| CHAPTER_REWRITE | 修订完成 | WRITING | 重新走门控（最多 2 次修订；仍 ≥ 3.0 则强制通过并标记 `force_passed`；仍 < 3.0 则通知用户暂停） |
 | WRITING | 本卷最后一章 | VOL_REVIEW | 全卷检查 |
 | VOL_REVIEW | 完成 | VOL_PLANNING | 下卷规划 |
 | 任意 | 错误 | ERROR_RETRY | 重试 1 次，失败则保存 checkpoint 暂停 |

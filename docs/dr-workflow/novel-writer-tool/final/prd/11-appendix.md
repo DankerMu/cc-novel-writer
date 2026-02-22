@@ -36,6 +36,8 @@
 | ChapterWriter | Sonnet | ~12K | ~4.5K | $0.10 |
 | Summarizer | Sonnet | ~5K | ~1K | $0.03 |
 | StyleRefiner | Opus | ~6K | ~4.5K | $0.43 |
+
+> **成本优化选项**：StyleRefiner 默认使用 Opus 以保证润色质量。对于成本敏感场景，可通过 plugin 设置降级为 Sonnet（预估 $0.05/章），或改为条件触发模式（仅当 ChapterWriter 初稿的 AI 黑名单命中率 > 3 次/千字 或风格自然度预估偏低时才调用 Opus，其余章节使用 Sonnet）。
 | QualityJudge | Sonnet | ~8K | ~1K | $0.04 |
 | **单章合计** | | | | **~$0.60** |
 

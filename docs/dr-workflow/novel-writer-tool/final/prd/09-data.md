@@ -67,6 +67,8 @@ novel-project/
 
 > **chapter_id 命名规范**：全局统一使用 3 位零填充格式 `chapter-{C:03d}`（如 `chapter-001`、`chapter-048`、`chapter-150`）。适用于所有章节相关文件：`chapters/chapter-{C:03d}.md`、`summaries/chapter-{C:03d}-summary.md`、`evaluations/chapter-{C:03d}-eval.json`、`staging/` 下对应文件、`logs/chapter-{C:03d}-log.json`、`chapter-contracts/chapter-{C:03d}.json`。hook 脚本使用 `printf '%03d'` 格式化。
 
+> **实体 ID 命名规范**：角色、故事线等实体使用稳定的 **slug ID**（小写英文/拼音 + 连字符，如 `zhang-san`、`main-arc`），而非中文显示名。ops path 统一使用 ID：`characters.zhang-san.location`（非 `characters.张三.location`）。角色档案文件名即为 ID（`characters/active/zhang-san.md`），档案内 `display_name` 字段保留中文名。`storyline_id` 同理（`storylines/main-arc/memory.md`）。关系映射也使用 ID：`relationships: {"li-si": 50}`。
+
 ### 9.2 关键数据格式
 
 **Checkpoint** (`.checkpoint.json`):
@@ -97,10 +99,11 @@ novel-project/
   "state_version": 47,
   "last_updated_chapter": 47,
   "characters": {
-    "protagonist": {
+    "lin-feng": {
+      "display_name": "林枫",
       "location": "魔都",
       "emotional_state": "决意",
-      "relationships": {"mentor": 50, "rival": -30},
+      "relationships": {"chen-lao": 50, "zhao-ming": -30},
       "inventory": ["破碎魔杖", "密信"]
     }
   },
@@ -119,11 +122,11 @@ novel-project/
   "base_state_version": 47,
   "storyline_id": "main_arc",
   "ops": [
-    {"op": "set", "path": "characters.protagonist.location", "value": "幽暗森林"},
-    {"op": "set", "path": "characters.protagonist.emotional_state", "value": "警觉"},
-    {"op": "inc", "path": "characters.protagonist.relationships.mentor", "value": 10},
-    {"op": "add", "path": "characters.protagonist.inventory", "value": "密信"},
-    {"op": "remove", "path": "characters.protagonist.inventory", "value": "破碎魔杖"},
+    {"op": "set", "path": "characters.lin-feng.location", "value": "幽暗森林"},
+    {"op": "set", "path": "characters.lin-feng.emotional_state", "value": "警觉"},
+    {"op": "inc", "path": "characters.lin-feng.relationships.chen-lao", "value": 10},
+    {"op": "add", "path": "characters.lin-feng.inventory", "value": "密信"},
+    {"op": "remove", "path": "characters.lin-feng.inventory", "value": "破碎魔杖"},
     {"op": "set", "path": "world_state.time_marker", "value": "第三年冬末"},
     {"op": "foreshadow", "path": "ancient_prophecy", "value": "advanced", "detail": "主角梦见预言碎片"}
   ]
@@ -131,6 +134,30 @@ novel-project/
 ```
 
 操作类型：`set`（覆盖字段）、`add`（追加到数组）、`remove`（从数组移除）、`inc`（数值增减）、`foreshadow`（伏笔状态变更：planted/advanced/resolved）。合并器在写入前校验 `base_state_version` 匹配当前 `state_version`，应用后 `state_version += 1`，变更记录追加到 `state/changelog.jsonl`。
+
+**伏笔追踪** (`foreshadowing/global.json`):
+```json
+{
+  "foreshadowing": [
+    {
+      "id": "ancient_prophecy",
+      "description": "远古预言暗示主角命运",
+      "status": "advanced",
+      "planted_chapter": 3,
+      "planted_storyline": "main-arc",
+      "target_resolve_range": [10, 20],
+      "last_updated_chapter": 48,
+      "history": [
+        {"chapter": 3, "action": "planted", "detail": "老者口中提及预言碎片"},
+        {"chapter": 15, "action": "advanced", "detail": "主角在密室发现预言石板"},
+        {"chapter": 48, "action": "advanced", "detail": "主角梦见预言碎片"}
+      ]
+    }
+  ]
+}
+```
+
+> 伏笔状态：`planted`（埋设）→ `advanced`（推进，可多次）→ `resolved`（回收）。`target_resolve_range` 为建议回收章节范围，超过上限未回收的伏笔在 `/novel:status` 中标记为"超期"。commit 阶段从 foreshadow ops 提取更新：`planted` → 新增条目，`advanced` → 追加 history + 更新 status/last_updated_chapter，`resolved` → 更新 status。
 
 **风格指纹** (`style-profile.json`):
 ```json

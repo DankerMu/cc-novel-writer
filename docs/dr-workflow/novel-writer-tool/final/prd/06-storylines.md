@@ -170,7 +170,8 @@ PlotArchitect 在卷规划时，从 `storylines.json` 选取本卷活跃线，�
       "id": "LS-001",
       "category": "continuity",
       "rule": "同一时间发生的不同线事件，时间线不得矛盾",
-      "constraint_type": "hard"
+      "constraint_type": "hard",
+      "_note": "当前依赖 QualityJudge 语义判断 + confidence 机制防止误报；M3 计划补充结构化 time_index 实现可验证的时间线比对"
     },
     {
       "id": "LS-002",

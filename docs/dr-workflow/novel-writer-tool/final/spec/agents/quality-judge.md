@@ -82,7 +82,7 @@ tools: ["Read", "Glob", "Grep"]
 }
 ```
 
-> **confidence 语义**：`high` = 明确违反/通过，可自动执行门控；`medium` = 可能违反，自动修订但不阻断流水线；`low` = 不确定，标记为 `violation_suspected`，写入 eval JSON 并在章节完成输出中警告用户，用户可通过 `/novel:start` 的质量回顾功能审核处理。`/novel:continue` 不使用 AskUserQuestion，仅 `high` confidence 的 violation 触发强制修订。
+> **confidence 语义**：`high` = 明确违反/通过，可自动执行门控；`medium` = 可能违反，标记警告但不阻断流水线，不触发修订；`low` = 不确定，标记为 `violation_suspected`，写入 eval JSON 并在章节完成输出中警告用户。`/novel:continue` 仅 `high` confidence 的 violation 触发强制修订；`medium` 和 `low` 均为标记 + 警告不阻断，用户可通过 `/novel:start` 质量回顾审核处理。
 
 ## Track 2: Quality Scoring（软评估）
 

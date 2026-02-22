@@ -66,14 +66,21 @@ argument-hint: ""
 1. 使用 AskUserQuestion 收集基本信息（题材、主角概念、核心冲突）— 单次最多问 2-3 个问题
 2. 创建项目目录结构（参考 PRD Section 9.1）
 3. 从 `${CLAUDE_PLUGIN_ROOT}/templates/` 复制模板文件到项目目录
-4. 使用 Task 派发 WorldBuilder Agent 生成核心设定
-5. 使用 Task 派发 CharacterWeaver Agent 创建主角和配角
-6. WorldBuilder 协助初始化 `storylines.json`（从设定派生初始故事线，默认 1 条 main_arc 主线，活跃线建议 ≤4）
-7. 使用 AskUserQuestion 请求用户提供 1-3 章风格样本
-8. 使用 Task 派发 StyleAnalyzer Agent 提取风格指纹
-9. 使用 Task 派发 ChapterWriter Agent 试写 3 章
-10. 对每章依次派发 StyleRefiner → QualityJudge
-11. 展示试写结果和评分，写入 `.checkpoint.json`（状态 = VOL_PLANNING）
+4. **初始化最小可运行文件**（模板复制后立即创建，确保后续 Agent 可正常读取）：
+   - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "pending_actions": [], "last_checkpoint_time": "<now>"}`
+   - `state/current-state.json`：`{"schema_version": 1, "state_version": 0, "last_updated_chapter": 0, "characters": {}, "world_state": {}, "active_foreshadowing": []}`
+   - `foreshadowing/global.json`：`{"foreshadowing": []}`
+   - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~004）
+   - `ai-blacklist.json`：从 `${CLAUDE_PLUGIN_ROOT}/templates/ai-blacklist.json` 复制
+   - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
+5. 使用 Task 派发 WorldBuilder Agent 生成核心设定
+6. 使用 Task 派发 CharacterWeaver Agent 创建主角和配角
+7. WorldBuilder 协助初始化 `storylines.json`（从设定派生初始故事线，默认 1 条 main_arc 主线，活跃线建议 ≤4）
+8. 使用 AskUserQuestion 请求用户提供 1-3 章风格样本
+9. 使用 Task 派发 StyleAnalyzer Agent 提取风格指纹
+10. 使用 Task 派发 ChapterWriter Agent 试写 3 章（**简化 context 模式**：无 volume_outline/chapter_outline/chapter_contract，仅使用 brief + world + characters + style_profile；ChapterWriter 根据 brief 自由发挥前 3 章情节）
+11. 对每章依次派发 StyleRefiner → QualityJudge（试写阶段 QualityJudge 跳过 L3 章节契约检查和 LS 故事线检查）
+12. 展示试写结果和评分，写入 `.checkpoint.json`（状态 = VOL_PLANNING）
 
 **继续写作**：
 - 等同执行 `/novel:continue 1` 的逻辑
@@ -180,9 +187,9 @@ for chapter_num in range(start, start + N):
      输入: context（含 chapter_contract, world_rules, character_contracts）
      输出: staging/chapters/chapter-{C:03d}.md（+ 可选 hints，自然语言状态提示）
 
-  2. Summarizer Agent → 生成摘要 + 权威状态增量
+  2. Summarizer Agent → 生成摘要 + 权威状态增量 + 串线检测
      输入: 初稿全文 + current_state + writer_hints（如有）
-     输出: staging/summaries/chapter-{C:03d}-summary.md + staging/state/chapter-{C:03d}-delta.json + staging/storylines/{storyline_id}/memory.md
+     输出: staging/summaries/chapter-{C:03d}-summary.md + staging/state/chapter-{C:03d}-delta.json + staging/state/chapter-{C:03d}-crossref.json + staging/storylines/{storyline_id}/memory.md
      更新 checkpoint: pipeline_stage = "drafted"
 
   3. StyleRefiner Agent → 去 AI 化润色
@@ -191,19 +198,20 @@ for chapter_num in range(start, start + N):
      更新 checkpoint: pipeline_stage = "refined"
 
   4. QualityJudge Agent → 质量评估（双轨验收）
-     输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule
+     输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule + cross_references（来自 staging/state/chapter-{C:03d}-crossref.json）
      返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
      入口 Skill 写入: staging/evaluations/chapter-{C:03d}-eval.json
      更新 checkpoint: pipeline_stage = "judged"
 
   5. 质量门控决策:
      - Contract violation（confidence=high）存在 → ChapterWriter(model=opus) 强制修订，回到步骤 1
-     - Contract violation（confidence=low）存在 → 写入 eval JSON，输出警告，不阻断
+     - Contract violation（confidence=medium/low）存在 → 写入 eval JSON，输出警告，不阻断
      - 无 violation + overall ≥ 4.0 → 直接通过
      - 无 violation + 3.5-3.9 → StyleRefiner 二次润色后通过
      - 无 violation + 3.0-3.4 → ChapterWriter(model=opus) 自动修订
      - 无 violation + < 3.0 → 通知用户，暂停
      最大修订次数: 2
+     修订次数耗尽后: overall ≥ 3.0 → 强制通过并标记 force_passed; < 3.0 → 通知用户暂停
      > 修订调用：Task(subagent_type="chapter-writer", model="opus")，利用 Task 工具的 model 参数覆盖 agent frontmatter 默认的 sonnet
 
   6. 事务提交（staging → 正式目录）:
@@ -240,6 +248,7 @@ Ch {X}: {字数}字 {分数} {状态} | Ch {X+1}: {字数}字 {分数} {状态} 
 - 每章严格按 ChapterWriter → Summarizer → StyleRefiner → QualityJudge 顺序
 - 质量不达标时自动修订最多 2 次
 - 写入使用 staging → commit 事务模式（详见 Step 2-6）
+- **Agent 写入边界**：所有 Agent（ChapterWriter/Summarizer/StyleRefiner）仅写入 `staging/` 目录，正式目录（`chapters/`、`summaries/`、`state/`、`storylines/`、`evaluations/`）由入口 Skill 在 commit 阶段操作。QualityJudge 为只读，不写入任何文件
 - 所有输出使用中文
 ````
 

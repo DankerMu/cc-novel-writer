@@ -74,7 +74,7 @@ tools: ["Read", "Write", "Edit", "Glob"]
   "base_state_version": {current_state_version},
   "storyline_id": "{storyline_id}",
   "ops": [
-    {"op": "set", "path": "characters.角色名.字段", "value": "新值"},
+    {"op": "set", "path": "characters.{character_id}.字段", "value": "新值"},
     {"op": "foreshadow", "path": "伏笔ID", "value": "planted | advanced | resolved", "detail": "..."}
   ]
 }

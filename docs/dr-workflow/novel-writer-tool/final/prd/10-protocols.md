@@ -103,7 +103,7 @@ Summarizer 输出的 ops 在合并至 `state/current-state.json` 前，由入口
 - 其他非法 op → 丢弃该条 ops entry，记录 warn
 
 **3. path 格式校验**
-- 通用 ops（set/inc/add/remove）：path 深度 2-4 层，如 `characters.张三.location` 或 `characters.张三.relationships.mentor`
+- 通用 ops（set/inc/add/remove）：path 深度 2-4 层，如 `characters.lin-feng.location` 或 `characters.lin-feng.relationships.chen-lao`（使用实体 slug ID，非中文显示名）
 - 顶层类别白名单：`characters`、`items`、`locations`、`factions`、`world_state`、`active_foreshadowing`
 - `foreshadow` op 豁免此规则（其 path 为伏笔 ID，无层级结构）
 - 不匹配 → 丢弃该条 ops entry，记录 warn
