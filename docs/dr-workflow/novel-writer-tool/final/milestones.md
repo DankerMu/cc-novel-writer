@@ -12,7 +12,7 @@
 
 | # | 任务 | 优先级 | 预估工时 |
 |---|------|--------|---------|
-| 1.0 | 搭建 Plugin 脚手架（plugin.json + 3 commands + 8 agents + skill + templates + hooks） | P0 | 6h |
+| 1.0 | 搭建 Plugin 脚手架（plugin.json + 4 skills（3 用户可调用 + 1 自动加载）+ 8 agents + templates + hooks） | P0 | 6h |
 | 1.1 | 搭建项目结构（目录、配置、checkpoint，含 storylines/ + logs/ + research/ 目录） | P0 | 2h |
 | 1.2 | 实现 Agent Prompt 管理（plugin `agents/*.md` + 入口 Skill 变量注入） | P0 | 4h |
 | 1.3 | 实现 ChapterWriter Agent（续写模式，增量 context，支持 L1/L2/L3 Spec + 故事线 context 注入） | P0 | 8h |
