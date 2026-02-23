@@ -46,7 +46,7 @@ The plugin SHALL provide a shared knowledge base skill under `skills/novel-writi
 
 ### Requirement: ChapterWriter SHALL use style profile as positive guidance
 Downstream generation SHALL treat `style-profile.json` as positive guidance:
-- Inject `writing_directives[]` to guide tone and expression
+- Pass `writing_directives[]` via Task `prompt` parameter to guide tone and expression
 - Allow `override_constraints` to override default constraints where specified
 
 #### Scenario: Override constraints changes scene description limit

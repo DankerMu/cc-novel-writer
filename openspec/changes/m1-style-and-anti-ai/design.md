@@ -17,7 +17,7 @@
 ## Decisions
 
 1. **style-profile 以“正向指令”为核心**
-   - `writing_directives[]` 作为可执行的风格指南，直接注入 ChapterWriter prompt，避免仅靠“禁忌词”做负向约束。
+   - `writing_directives[]` 作为可执行的风格指南，通过 Task `prompt` 参数传入 ChapterWriter，避免仅靠”禁忌词”做负向约束。
 
 2. **黑名单以 versioned JSON 管理**
    - `version`/`last_updated`/`words[]`/`categories{}` 明确，可用于后续自动追加与手动审核。
@@ -30,7 +30,7 @@
 
 ## Risks / Trade-offs
 
-- [Risk] 黑名单过长导致风格僵硬、表达受限 → Mitigation：ChapterWriter 仅注入 Top-10 提醒；全量替换由 StyleRefiner 后处理完成。
+- [Risk] 黑名单过长导致风格僵硬、表达受限 → Mitigation：ChapterWriter 仅通过 Task prompt 接收 Top-10 提醒；全量替换由 StyleRefiner 后处理完成。
 - [Risk] 参考作者样本可能引入版权/来源风险 → Mitigation：仅提取风格特征，不复制具体句子；并在 `source_type` 标注来源类型。
 
 ## References

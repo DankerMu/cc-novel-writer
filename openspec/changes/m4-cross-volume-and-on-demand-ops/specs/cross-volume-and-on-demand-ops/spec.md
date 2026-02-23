@@ -36,7 +36,7 @@ When L1/L2 artifacts change, the system SHALL generate propagation signals indic
 - **THEN** the system records that the contract and downstream chapter contracts require review
 
 ### Requirement: External text injection SHALL be protected by DATA delimiter
-When on-demand operations inject external file content into agent prompts (world docs, research, profiles), the system SHALL wrap it using the `<DATA ...>` delimiter rules.
+When on-demand operations pass external file content to agents via Task `prompt` parameter (world docs, research, profiles), the system SHALL wrap it using the `<DATA ...>` delimiter rules.
 
 #### Scenario: Research content is treated as data
 - **WHEN** the system injects `research/*.md` into WorldBuilder context

@@ -21,7 +21,7 @@ When drift is detected, the system SHALL write `style-drift.json` containing:
 - **THEN** `style-drift.json` includes a directive to return to baseline pacing
 
 ### Requirement: The system SHALL inject drift directives until baseline is restored
-When `style-drift.json` exists, the system SHALL inject its directives into ChapterWriter and StyleRefiner context on subsequent chapters.
+When `style-drift.json` exists, the system SHALL pass its directives to ChapterWriter and StyleRefiner via Task `prompt` parameter on subsequent chapters.
 It SHALL clear or remove drift directives once metrics return within the recovery threshold (e.g., <10% deviation).
 
 #### Scenario: Drift cleared after recovery

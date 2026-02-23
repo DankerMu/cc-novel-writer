@@ -21,8 +21,8 @@
 
 ## 5. Integration Points (Contracts Only)
 
-- [ ] 5.1 定义 ChapterWriter 注入规则：style-profile 全量 + blacklist Top-10
-- [ ] 5.2 定义 StyleRefiner/QualityJudge 注入规则：blacklist 全量 + style-profile 全量
+- [ ] 5.1 定义 ChapterWriter Task prompt 传入规则：style-profile 全量 + blacklist Top-10
+- [ ] 5.2 定义 StyleRefiner/QualityJudge Task prompt 传入规则：blacklist 全量 + style-profile 全量
 
 ## References
 
