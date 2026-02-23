@@ -1,0 +1,44 @@
+# 创作纲领
+
+## 基本信息
+
+- **书名**：{book_title}
+- **题材**：{genre}（如：玄幻、都市、悬疑、言情、科幻）
+- **目标字数**：{target_word_count} 万字
+- **目标卷数**：{target_volumes} 卷
+- **每卷章数**：{chapters_per_volume} 章
+
+## 核心设定
+
+### 世界观一句话
+
+{world_one_liner}
+
+### 核心冲突
+
+{core_conflict}
+
+### 主角概念
+
+- **姓名**：{protagonist_name}
+- **身份**：{protagonist_identity}
+- **目标**：{protagonist_goal}
+- **内在矛盾**：{protagonist_contradiction}
+
+## 风格定位
+
+- **基调**：{tone}（如：轻松幽默、热血燃向、暗黑压抑、细腻温暖）
+- **节奏**：{pacing}（如：快节奏爽文、慢热型、张弛交替）
+- **参考作品**：{reference_works}
+- **风格样本来源**：{style_source}（original / reference / template）
+
+## 读者画像
+
+- **目标平台**：{platform}
+- **目标读者**：{target_reader}
+- **核心卖点**：{selling_point}
+
+## 备注
+
+{notes}
+

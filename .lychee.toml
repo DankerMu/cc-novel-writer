@@ -1,4 +1,5 @@
 exclude = [
   "reddit\\.com",
+  "medium\\.com",
   "neurobiber"
 ]

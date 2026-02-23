@@ -118,4 +118,3 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 5. 更新 `foreshadowing/global.json` — 全局伏笔状态
 6. `volumes/vol-{V:02d}/new-characters.json` — 本卷需要新建的角色清单（outline 中引用但 `characters/active/` 不存在的角色），格式：`[{"name": "角色名", "first_chapter": N, "role": "antagonist | supporting | minor", "brief": "一句话定位"}]`。入口 Skill 据此批量调用 CharacterWeaver 创建角色档案 + L2 契约
 ````
-

@@ -154,4 +154,3 @@ def assemble_context(agent_type, chapter_num, volume):
 - 清理 current-state.json 中已退场角色的残留条目
 - 清理过期物品/位置状态（无活跃伏笔或故事线引用的临时条目）
 - 生成清理报告供用户确认
-
