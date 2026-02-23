@@ -17,6 +17,13 @@ description: |
   assistant: "I'll use the style-analyzer agent to check for style drift."
   <commentary>定期风格校准时触发</commentary>
   </example>
+
+  <example>
+  Context: 用户指定参考作者进行仿写
+  user: "模仿番茄的写作风格"
+  assistant: "I'll use the style-analyzer agent to extract the reference author's style."
+  <commentary>仿写模式：分析参考作者公开章节，source_type 标记为 reference</commentary>
+  </example>
 model: sonnet
 color: yellow
 tools: ["Read", "Write", "Glob", "Grep"]
@@ -98,9 +105,9 @@ tools: ["Read", "Write", "Glob", "Grep"]
     "场景描写点到为止，留白给读者脑补"
   ],
   "override_constraints": {},
-	  "analysis_notes": "分析备注"
-	}
-	```
+  "analysis_notes": "分析备注"
+}
+```
 
 # Edge Cases
 

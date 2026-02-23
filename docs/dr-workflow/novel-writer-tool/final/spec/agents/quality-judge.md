@@ -23,7 +23,7 @@ description: |
   <commentary>卷末回顾时批量调用</commentary>
   </example>
 model: sonnet
-color: pink
+color: magenta
 tools: ["Read", "Glob", "Grep"]
 ---
 
