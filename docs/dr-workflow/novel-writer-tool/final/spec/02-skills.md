@@ -191,7 +191,10 @@ context = {
   hard_rules_list:     从 world_rules 中筛选 constraint_type == "hard" 的规则，格式化为禁止项列表,
   character_contracts: 从 characters/active/*.json 中提取 contracts 字段（裁剪规则：有章节契约时仅加载 chapter_contract.preconditions.character_states 中涉及的角色，无硬上限；无章节契约时加载全部活跃角色，上限 15 个，超出按最近出场排序截断）,
   character_profiles:  Read("characters/active/*.md")（如存在，作为 <DATA type="character_profile"> 注入给 QualityJudge）,
-  entity_id_map:      从 characters/active/*.json 构建 {slug_id → display_name} 映射表（如 {"lin-feng": "林枫", "chen-lao": "陈老"}），传给 Summarizer 用于正文中文名→slug ID 转换
+  entity_id_map:      从 characters/active/*.json 构建 {slug_id → display_name} 映射表（如 {"lin-feng": "林枫", "chen-lao": "陈老"}），传给 Summarizer 用于正文中文名→slug ID 转换,
+  style_guide:         Read("skills/novel-writing/references/style-guide.md")（作为 <DATA type="reference" source="style-guide" readonly="true"> 注入给 StyleRefiner 和 QualityJudge）,
+  quality_rubric:      Read("skills/novel-writing/references/quality-rubric.md")（作为 <DATA type="reference" source="quality-rubric" readonly="true"> 注入给 QualityJudge）,
+  writing_methodology: Read("skills/novel-writing/SKILL.md") body 中的"去 AI 化四层策略"和"Spec-Driven Writing 原则"章节（按需裁剪，作为 <DATA type="reference" source="methodology" readonly="true"> 注入给 ChapterWriter）
 }
 ```
 
@@ -215,12 +218,12 @@ for chapter_num in range(start, start + N):
      更新 checkpoint: pipeline_stage = "drafted"
 
   3. StyleRefiner Agent → 去 AI 化润色
-     输入: 初稿 + style-profile.json + ai-blacklist.json
+     输入: 初稿 + style-profile.json + ai-blacklist.json + style_guide
      输出: staging/chapters/chapter-{C:03d}.md（覆盖）
      更新 checkpoint: pipeline_stage = "refined"
 
   4. QualityJudge Agent → 质量评估（双轨验收）
-     输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule + cross_references（来自 staging/state/chapter-{C:03d}-crossref.json）
+     输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule + cross_references（来自 staging/state/chapter-{C:03d}-crossref.json）+ quality_rubric
      返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
      入口 Skill 写入: staging/evaluations/chapter-{C:03d}-eval.json
      更新 checkpoint: pipeline_stage = "judged"
