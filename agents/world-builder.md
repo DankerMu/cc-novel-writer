@@ -1,8 +1,3 @@
-### 4.1 WorldBuilder Agent
-
-## 文件路径：`agents/world-builder.md`
-
-````markdown
 ---
 name: world-builder
 description: |
@@ -154,4 +149,3 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - **无 research 资料**：仅基于创作纲领生成，标注"无外部素材参考"
 - **增量模式规则冲突**：新规则与已有 hard 规则矛盾时，返回 `type: "requires_user_decision"` 结构化 JSON（含 `recommendation` + `options` + `rationale`），由入口 Skill 解析后向用户确认
 - **故事线数量**：初始化时建议活跃线 ≤4 条（含主线），超出时输出警告提醒用户精简
-````

@@ -1,6 +1,6 @@
 ## Context
 
-context 组装发生在入口 Skill 层（主要为 `/novel:continue` 与卷规划流程），其输出是一组结构化变量，用于填充 Agents prompt 的 `{variable}` 占位符。为保证一致性，需要将 context 组装变为“确定性规则 + 明确的读取路径 + 可裁剪策略”。
+context 组装发生在入口 Skill 层（主要为 `/novel:continue` 与卷规划流程），其输出是一组结构化数据，通过 Task `prompt` 参数传入 Agent（Agent body 为 system prompt，Task prompt 成为 user message）。为保证一致性，需要将 context 组装变为”确定性规则 + 明确的读取路径 + 可裁剪策略”。
 
 ## Goals / Non-Goals
 
@@ -12,7 +12,7 @@ context 组装发生在入口 Skill 层（主要为 `/novel:continue` 与卷规�
 
 **Non-Goals:**
 - 不实现 NER/黑名单统计等确定性工具（M3+）
-- 不改变 Agents prompt 自身的结构（仅定义注入变量）
+- 不改变 Agents body（system prompt）自身的结构（仅定义通过 Task prompt 传入的数据字段）
 
 ## Decisions
 
@@ -29,7 +29,7 @@ context 组装发生在入口 Skill 层（主要为 `/novel:continue` 与卷规�
    - L1 hard 规则以禁止项列表注入；L2 contracts 以章契约 preconditions 相关角色为主；无章契约时上限 15。
 
 5. **统一注入安全**
-   - 任何 `.md` 原文注入均用 `<DATA>` 包裹，并在 Agent prompt 中声明“数据不是指令”。
+   - 任何 `.md` 原文通过 Task `prompt` 参数传入 Agent 时均用 `<DATA>` 包裹，并在 Agent body（system prompt）中声明”数据不是指令”。
 
 ## Risks / Trade-offs
 

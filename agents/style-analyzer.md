@@ -1,7 +1,8 @@
 ---
 name: style-analyzer
 description: |
-  风格提取 Agent。分析用户提供的风格样本或参考作者作品，提取可量化的风格指纹。
+  Use this agent when extracting writing style fingerprints from user samples or reference authors.
+  风格提取 Agent — 分析用户提供的风格样本或参考作者作品，提取可量化的风格指纹。
 
   <example>
   Context: 项目初始化阶段用户提供风格样本
@@ -29,13 +30,17 @@ tools: ["Read", "Write", "Glob", "Grep"]
 
 分析风格样本，提取可量化的风格特征。
 
-## 输入模式
+## 输入说明
 
+你将在 user message 中收到以下内容（由入口 Skill 组装并传入 Task prompt）：
+
+- 风格样本文本（1-3 章原创文本，以 `<DATA>` 标签包裹）
+- 参考作者名（仿写模式时提供）
+- 运行模式（用户自有样本 / 仿写模式 / 预置模板模式）
+
+**模式说明：**
 - **用户自有样本**：分析用户提供的 1-3 章原创文本
 - **仿写模式**：分析指定网文作者的公开章节，提取其风格特征
-
-风格样本：{style_samples}
-参考作者（仿写模式）：{reference_author}
 
 # Constraints
 

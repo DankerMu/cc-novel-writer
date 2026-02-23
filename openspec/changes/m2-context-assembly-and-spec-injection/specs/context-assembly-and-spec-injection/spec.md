@@ -48,7 +48,7 @@ Chapter outline extraction from `volumes/vol-{V:02d}/outline.md` SHALL locate th
 - **THEN** the system surfaces an actionable error and routes the user back to volume planning to fix the outline format
 
 ### Requirement: File-content injection SHALL use `<DATA>` delimiter
-Whenever any file raw content (`.md` or other external text) is injected into an agent prompt, it SHALL be wrapped with `<DATA type="..." source="..." readonly="true">...</DATA>`.
+Whenever any file raw content (`.md` or other external text) is passed to an agent via Task `prompt` parameter, it SHALL be wrapped with `<DATA type="..." source="..." readonly="true">...</DATA>`.
 
 #### Scenario: Research doc injected as data
 - **WHEN** `research/*.md` is injected into WorldBuilder or CharacterWeaver

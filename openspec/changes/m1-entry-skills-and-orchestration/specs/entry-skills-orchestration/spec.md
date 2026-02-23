@@ -53,8 +53,8 @@ AskUserQuestion SHALL only be invoked inside `/novel:start`. Sub-agents (Task) a
 - **WHEN** the user runs `/novel:status`
 - **THEN** the command reads required files and produces a formatted report without writing any files
 
-### Requirement: File-to-prompt injection SHALL use `<DATA>` delimiter
-When any entry skill injects external file contents into an Agent prompt (samples/research/chapters/profiles), it SHALL wrap the content using the `<DATA>` delimiter contract (type/source/readonly).
+### Requirement: File-to-agent injection SHALL use `<DATA>` delimiter
+When any entry skill passes external file contents to an Agent via Task `prompt` parameter (samples/research/chapters/profiles), it SHALL wrap the content using the `<DATA>` delimiter contract (type/source/readonly).
 
 #### Scenario: Injected chapter text is treated as data not instructions
 - **WHEN** a chapter markdown is injected into Summarizer or QualityJudge

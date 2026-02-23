@@ -7,7 +7,7 @@
 ## 2. Drift Injection Lifecycle
 
 - [ ] 2.1 定义并生成 `style-drift.json` 格式（metric/baseline/current/directive）
-- [ ] 2.2 context 注入：ChapterWriter/StyleRefiner 读取并应用 drift directives
+- [ ] 2.2 Task prompt 传入：ChapterWriter/StyleRefiner 通过 Task `prompt` 参数接收 drift directives
 - [ ] 2.3 生命周期管理：回归基线后清除/停用 drift 文件并记录原因
 
 ## 3. Dynamic Blacklist Updates
