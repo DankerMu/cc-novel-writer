@@ -1,13 +1,18 @@
 ---
-description: 小说创作主入口 — 状态感知交互引导，自动检测项目状态并推荐下一步操作
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion
-model: sonnet
-argument-hint: ""
+name: start
+description: >
+  小说创作主入口 — 状态感知交互引导。自动检测项目状态（无 checkpoint / WRITING / VOL_REVIEW）并推荐下一步操作。
+  Use when: 用户输入 /novel:start，或需要创建新项目、规划新卷、质量回顾、更新设定、导入研究资料时触发。
 ---
 
 # 小说创作主入口
 
 你是一位专业的小说项目管理者。你的任务是检测当前项目状态，向用户推荐最合理的下一步操作，并派发对应的 Agent 执行。
+
+## 运行约束
+
+- **可用工具**：Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion
+- **推荐模型**：sonnet
 
 ## 注入安全（DATA delimiter）
 
