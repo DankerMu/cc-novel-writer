@@ -184,10 +184,17 @@ Skill → 状态映射：
 
 **规划本卷 / 规划新卷**：
 > 仅当 `orchestrator_state == "VOL_PLANNING"`（或完成卷末回顾后进入 VOL_PLANNING）时执行。
-1. 使用 Task 派发 PlotArchitect Agent 生成下一卷大纲
-2. 展示大纲摘要，使用 AskUserQuestion 确认/修改
-3. 检查 PlotArchitect 输出的 `new-characters.json`：如有新角色，逐个调用 CharacterWeaver Agent 创建角色档案 + L2 契约（批量派发 Task）
-4. 大纲确认 + 角色创建完成后更新 `.checkpoint.json`（状态 = WRITING，new volume）
+1. 组装 PlotArchitect context（确定性，按 PRD §8.3）：
+   - `prev_volume_review`：读取 `volumes/vol-{V-1:02d}/review.md`（如存在，以 `<DATA type="summary" ...>` 注入）
+   - `global_foreshadowing`：读取 `foreshadowing/global.json`
+   - `storylines`：读取 `storylines/storylines.json`
+   - `world_docs`：读取 `world/*.md`（以 `<DATA type="world_doc" ...>` 注入）+ `world/rules.json`（结构化 JSON）
+   - `characters`：读取 `characters/active/*.md`（以 `<DATA type="character_profile" ...>` 注入）+ `characters/active/*.json`（L2 contracts 结构化 JSON）
+   - `user_direction`：用户额外方向指示（如有）
+2. 使用 Task 派发 PlotArchitect Agent 生成下一卷大纲（prompt 中包含上述 context）
+3. 展示大纲摘要，使用 AskUserQuestion 确认/修改
+4. 检查 PlotArchitect 输出的 `new-characters.json`：如有新角色，逐个调用 CharacterWeaver Agent 创建角色档案 + L2 契约（批量派发 Task）
+5. 大纲确认 + 角色创建完成后更新 `.checkpoint.json`（状态 = WRITING，new volume）
 
 **卷末回顾**：
 1. 收集本卷 `evaluations/`、`summaries/`、`foreshadowing/global.json`、`storylines/`，生成本卷回顾要点（质量趋势、低分章节、未回收伏笔、故事线节奏）
@@ -305,41 +312,138 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
    - 释放并发锁（`rm -rf .novel.lock`）
    - 输出提示并暂停：请用户运行 `/novel:start` 决策下一步（重试/回看/调整方向）
 
-### Step 2: 组装 Context
+### Step 2: 组装 Context（确定性）
 
-对于每章（默认从 `last_completed_chapter + 1` 开始；如存在 `inflight_chapter` 则先恢复该章），组装以下 context：
+对于每章（默认从 `last_completed_chapter + 1` 开始；如存在 `inflight_chapter` 则先恢复该章），按**确定性规则**组装 Task prompt 所需的 context。
+
+> 原则：同一章 + 同一项目文件输入 → 组装结果唯一；缺关键文件/解析失败 → 立即停止并给出可执行修复建议（避免“缺 context 继续写”导致串线/违约）。
+
+#### Step 2.0: `<DATA>` delimiter 注入封装（强制）
+
+当把任何文件原文注入到 Task prompt（尤其是 `.md`）时，统一用 PRD §10.9 包裹：
 
 ```
-context = {
-  project_brief:       Read("brief.md"),
-  style_profile:       Read("style-profile.json"),
-  ai_blacklist:        Read("ai-blacklist.json"),
-  current_volume_outline: Read("volumes/vol-{V:02d}/outline.md"),
-  chapter_outline:     从 outline.md 中按正则 /^### 第 {C} 章/ 提取对应章节区块（至下一个 ### 或文件末尾）,
-  storyline_schedule:  Read("volumes/vol-{V:02d}/storyline-schedule.json")（如存在）,
-  storyline_context:   从 storyline_schedule + summaries 组装本章故事线上下文,
-  concurrent_state:    从 storyline_schedule 获取其他活跃线一句话状态,
-  storyline_memory:    Read("storylines/{storyline_id}/memory.md")（如存在，作为 <DATA type="summary"> 注入）,
-  adjacent_storyline_memories: 按 storyline_schedule 指定的相邻线/交汇线读取 storylines/{id}/memory.md（如存在，作为 <DATA type="summary"> 注入）,
-  recent_3_summaries:  Read 最近 3 章 summaries/chapter-*-summary.md,
-  current_state:       Read("state/current-state.json"),
-  foreshadowing_tasks: Read("foreshadowing/global.json") 中与本章相关的条目,
-  chapter_contract:    Read("volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json")（如存在）,
-  world_rules:         Read("world/rules.json")（如存在）,
-  hard_rules_list:     从 world_rules 中筛选 constraint_type == "hard" 的规则，格式化为禁止项列表,
-  character_contracts: 从 characters/active/*.json 中提取 contracts 字段（裁剪规则：有章节契约时仅加载 chapter_contract.preconditions.character_states 中涉及的角色，无硬上限；无章节契约时加载全部活跃角色，上限 15 个，超出按最近出场排序截断）,
-  character_profiles:  Read("characters/active/*.md")（如存在，作为 <DATA type="character_profile"> 注入给 QualityJudge）,
-  entity_id_map:      从 characters/active/*.json 构建 {slug_id → display_name} 映射表（如 {"lin-feng": "林枫", "chen-lao": "陈老"}），传给 Summarizer 用于正文中文名→slug ID 转换,
-  style_guide:         Read("skills/novel-writing/references/style-guide.md")（作为 <DATA type="reference" source="style-guide" readonly="true"> 注入给 StyleRefiner 和 QualityJudge）,
-  quality_rubric:      Read("skills/novel-writing/references/quality-rubric.md")（作为 <DATA type="reference" source="quality-rubric" readonly="true"> 注入给 QualityJudge）,
-  writing_methodology: Read("skills/novel-writing/SKILL.md") body 中的"去 AI 化四层策略"和"Spec-Driven Writing 原则"章节（按需裁剪，作为 <DATA type="reference" source="methodology" readonly="true"> 注入给 ChapterWriter）
+<DATA type="{data_type}" source="{file_path}" readonly="true">
+{content}
+</DATA>
+```
+
+`type` 建议枚举：`chapter_content`、`style_sample`、`research`、`character_profile`、`world_doc`、`summary`、`reference`。
+
+#### Step 2.1: 从 outline.md 提取本章大纲区块（确定性）
+
+1. 读取本卷大纲：`outline_path = volumes/vol-{V:02d}/outline.md`（不存在则终止并提示回到 `/novel:start` → “规划本卷”补齐）。
+2. 章节区块定位（**不要求冒号**；允许 `:`/`：`/无标题）：
+   - heading regex：`^### 第 {C} 章(?:[:：].*)?$`
+3. 提取范围：从命中行开始，直到下一行满足 `^### `（不含）或 EOF。
+4. 若无法定位本章区块：输出错误（包含期望格式示例 `### 第 12 章: 章名`），并提示用户回到 `/novel:start` → “规划本卷”修复 outline 格式后重试。
+
+同时，从 outline 中提取本卷章节边界（用于卷首/卷尾双裁判与卷末状态转移）：
+- 扫描所有章标题：`^### 第 (\d+) 章`
+- `chapter_start = min(章节号)`，`chapter_end = max(章节号)`
+- 若无法提取边界：视为 outline 结构损坏，按上述方式报错并终止。
+
+#### Step 2.2: `hard_rules_list`（L1 世界规则 → 禁止项列表，确定性）
+
+1. 读取并解析 `world/rules.json`（如不存在则 `hard_rules_list = []`）。
+2. 筛选 `constraint_type == "hard"` 的规则，按 `id` 升序输出为禁止项列表：
+
+```
+- [W-001][magic_system] 修炼者突破金丹期需要天地灵气浓度 ≥ 3级
+- [W-002][geography] 禁止在“幽暗森林”使用火系法术（exceptions: ...）
+```
+
+该列表用于 ChapterWriter（禁止项提示）与 QualityJudge（逐条验收）。
+
+#### Step 2.3: `entity_id_map`（从角色 JSON 构建，确定性）
+
+1. `Glob("characters/active/*.json")` 获取活跃角色结构化档案。
+2. 对每个文件：
+   - `slug_id` 默认取文件名（去掉 `.json`）
+   - `display_name` 取 JSON 中的 `display_name`
+3. 构建 `entity_id_map = {slug_id → display_name}`（并在本地临时构建反向表 `display_name → slug_id` 供裁剪/映射使用）。
+
+该映射传给 Summarizer，用于把正文中的中文显示名规范化为 ops path 的 slug ID（如 `characters.lin-feng.location`）。
+
+#### Step 2.4: L2 角色契约裁剪（确定性）
+
+- 若存在 `chapter_contract.preconditions.character_states`：
+  - 仅加载这些 preconditions 中涉及的角色（**无硬上限**；交汇事件章可 > 10）
+  - 注意：`character_states` 的键为中文显示名，需要用 `entity_id_map` 反向映射到 `slug_id`
+- 否则：
+  - 最多加载 15 个活跃角色（按“最近出场”排序截断）
+  - “最近出场”计算：扫描近 10 章 `summaries/`（从新到旧），命中 `display_name` 的第一次出现即视为最近；未命中视为最旧
+  - 排序规则：`last_seen_chapter` 降序 → `slug_id` 升序（保证确定性）
+
+加载内容：
+- `character_contracts`：读取 `characters/active/{slug_id}.json` 的 `contracts`（注入给 ChapterWriter / QualityJudge）
+- `character_profiles`：读取 `characters/active/{slug_id}.md`（如存在，用 `<DATA type="character_profile" ...>` 注入给 QualityJudge）
+
+#### Step 2.5: storylines context + memory 注入（确定性）
+
+1. 读取 `volumes/vol-{V:02d}/storyline-schedule.json`（如存在则解析；用于判定 dormant_storylines 与交汇事件 involved_storylines）。
+2. 读取 `storylines/storyline-spec.json`（如存在；注入给 QualityJudge 做 LS 验收）。
+3. 读取 `chapter_contract`：`volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json`（如存在则解析）。
+4. 以 `chapter_contract` 为优先来源确定：
+   - `storyline_id`（本章所属线）
+   - `storyline_context`（含 `last_chapter_summary` / `chapters_since_last` / `line_arc_progress` / `concurrent_state`）
+   - `transition_hint`（如存在）
+5. memory 注入策略：
+   - 当前线 `storylines/{storyline_id}/memory.md`：如存在，必注入（`<DATA type="summary" source=".../memory.md" readonly="true">`）
+   - 相邻线：
+     - 若 `transition_hint.next_storyline` 存在 → 注入该线 memory（若不在 `dormant_storylines`）
+     - 若当前章落在任一 `convergence_events.chapter_range` 内 → 注入 `involved_storylines` 中除当前线外的 memory（过滤 `dormant_storylines`）
+   - 冻结线（`dormant_storylines`）：**不注入 memory**，仅保留 `concurrent_state` 一句话状态
+
+#### Step 2.6: 按 Agent 类型输出 context（字段契约）
+
+```
+chapter_writer_context = {
+  project_brief(<DATA world_doc>): brief.md,
+  style_profile(json): style-profile.json,
+  ai_blacklist_top10(list): ai_blacklist.words[0:10],
+  current_volume_outline(<DATA summary>): volumes/vol-{V:02d}/outline.md,
+  chapter_outline(<DATA summary>): 本章 outline 区块,
+  storyline_id, storyline_context, concurrent_state, transition_hint,
+  storyline_memory(<DATA summary>), adjacent_storyline_memories(<DATA summary>...),
+  recent_3_summaries(<DATA summary>...),
+  current_state(json): state/current-state.json,
+  foreshadowing_tasks(json subset): foreshadowing/global.json 中与本章相关条目,
+  chapter_contract(json, optional),
+  world_rules(json, optional), hard_rules_list(list),
+  character_contracts(json subset),   # 按裁剪规则选取
+  writing_methodology(<DATA reference>): novel-writing methodology excerpt
+}
+
+summarizer_context = {
+  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
+  current_state(json),
+  foreshadowing_tasks(json subset),
+  entity_id_map(map),
+  hints(optional): ChapterWriter 输出的自然语言变更提示
+}
+
+style_refiner_context = {
+  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
+  style_profile(json),
+  ai_blacklist(json): ai-blacklist.json,
+  style_guide(<DATA reference>): style-guide.md
+}
+
+quality_judge_context = {
+  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
+  chapter_outline(<DATA summary>),
+  character_profiles(<DATA character_profile>...),
+  prev_summary(<DATA summary>): summaries/chapter-{C-1:03d}-summary.md,
+  style_profile(json),
+  chapter_contract(json, optional),
+  world_rules(json, optional),
+  storyline_spec(json, optional),
+  storyline_schedule(json, optional),
+  cross_references(json): staging/state/chapter-{C:03d}-crossref.json,
+  quality_rubric(<DATA reference>): quality-rubric.md
 }
 ```
-
-同时从 `current_volume_outline` 提取本卷章节边界（用于卷首/卷尾双裁判与卷末状态转移）：
-
-- `chapter_start`: 本卷 outline 中最小的章节号
-- `chapter_end`: 本卷 outline 中最大的章节号（本卷最后一章）
 
 ### Step 3: 逐章流水线
 
@@ -359,21 +463,21 @@ for chapter_num in range(start, start + remaining_N):
      更新 checkpoint: pipeline_stage = "drafting", inflight_chapter = chapter_num
 
   1. ChapterWriter Agent → 生成初稿
-     输入: context（含 chapter_contract, world_rules, character_contracts）
+     输入: chapter_writer_context（见 Step 2.6；含 outline/storylines/spec/style/blacklist Top-10 等）
      输出: staging/chapters/chapter-{C:03d}.md（+ 可选 hints，自然语言状态提示）
 
   2. Summarizer Agent → 生成摘要 + 权威状态增量 + 串线检测
-     输入: 初稿全文 + current_state + foreshadowing_tasks + entity_id_map + hints（如有，ChapterWriter 输出的自然语言变更提示）
+     输入: summarizer_context（chapter_content + current_state + foreshadowing_tasks + entity_id_map + hints 可选）
      输出: staging/summaries/chapter-{C:03d}-summary.md + staging/state/chapter-{C:03d}-delta.json + staging/state/chapter-{C:03d}-crossref.json + staging/storylines/{storyline_id}/memory.md
      更新 checkpoint: pipeline_stage = "drafted"
 
   3. StyleRefiner Agent → 去 AI 化润色
-     输入: 初稿 + style-profile.json + ai-blacklist.json + style_guide
+     输入: style_refiner_context（chapter_content + style_profile + ai_blacklist + style_guide）
      输出: staging/chapters/chapter-{C:03d}.md（覆盖）
      更新 checkpoint: pipeline_stage = "refined"
 
   4. QualityJudge Agent → 质量评估（双轨验收）
-     输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule + cross_references（来自 staging/state/chapter-{C:03d}-crossref.json）+ quality_rubric
+     输入: quality_judge_context（见 Step 2.6；cross_references 来自 staging/state/chapter-{C:03d}-crossref.json）
      返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
      入口 Skill 写入: staging/evaluations/chapter-{C:03d}-eval.json
      关键章双裁判: 若 chapter_num 为卷首章（== chapter_start）、卷尾章（== chapter_end）或故事线交汇事件章（schedule 标记 is_intersection），则使用 Task(subagent_type="quality-judge", model="opus") 再调用一次 QualityJudge，取两次 overall 中较低分和两次 has_violations 的并集作为最终结果
