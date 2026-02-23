@@ -96,6 +96,10 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
    - heading regex：`^### 第 {C} 章(?:[:：].*)?$`
 3. 提取范围：从命中行开始，直到下一行满足 `^### `（不含）或 EOF。
 4. 若无法定位本章区块：输出错误（包含期望格式示例 `### 第 12 章: 章名`），并提示用户回到 `/novel:start` → “规划本卷”修复 outline 格式后重试。
+5. 解析章节区块内的固定 key 行（确定性；用于后续一致性校验）：
+   - 期望格式：`- **Key**: value`
+   - 必需 key：`Storyline`、`POV`、`Location`、`Conflict`、`Arc`、`Foreshadowing`、`StateChanges`、`TransitionHint`
+   - 提取 `outline_storyline_id = Storyline`（若缺失或为空 → 视为 outline 结构损坏，报错并终止）
 
 同时，从 outline 中提取本卷章节边界（用于卷首/卷尾双裁判与卷末状态转移）：
 - 扫描所有章标题：`^### 第 (\d+) 章`
@@ -126,6 +130,11 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 
 #### Step 2.4: L2 角色契约裁剪（确定性）
 
+前置：读取并解析本章 L3 章节契约（缺失则终止并提示回到 `/novel:start` → “规划本卷”补齐）：
+- `chapter_contract_path = volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json`
+
+裁剪规则：
+
 - 若存在 `chapter_contract.preconditions.character_states`：
   - 仅加载这些 preconditions 中涉及的角色（**无硬上限**；交汇事件章可 > 10）
   - 注意：`character_states` 的键为中文显示名，需要用 `entity_id_map` 反向映射到 `slug_id`
@@ -142,7 +151,10 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 
 1. 读取 `volumes/vol-{V:02d}/storyline-schedule.json`（如存在则解析；用于判定 dormant_storylines 与交汇事件 involved_storylines）。
 2. 读取 `storylines/storyline-spec.json`（如存在；注入给 QualityJudge 做 LS 验收）。
-3. 读取 `chapter_contract`：`volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json`（如存在则解析）。
+3. 章节契约与大纲一致性校验（确定性；不通过则终止，避免“拿错契约继续写”导致串线/违约）：
+   - `chapter_contract.chapter == C`
+   - `chapter_contract.storyline_id == outline_storyline_id`
+   - `chapter_contract.objectives` 至少 1 条 `required: true`
 4. 以 `chapter_contract` 为优先来源确定：
    - `storyline_id`（本章所属线）
    - `storyline_context`（含 `last_chapter_summary` / `chapters_since_last` / `line_arc_progress` / `concurrent_state`）
@@ -168,7 +180,7 @@ chapter_writer_context = {
   recent_3_summaries(<DATA summary>...),
   current_state(json): state/current-state.json,
   foreshadowing_tasks(json subset): foreshadowing/global.json 中与本章相关条目,
-  chapter_contract(json, optional),
+  chapter_contract(json),
   world_rules(json, optional), hard_rules_list(list),
   character_contracts(json subset),   # 按裁剪规则选取
   writing_methodology(<DATA reference>): novel-writing methodology excerpt
@@ -196,7 +208,7 @@ quality_judge_context = {
   prev_summary(<DATA summary>): summaries/chapter-{C-1:03d}-summary.md,
   style_profile(json),
   ai_blacklist(json): ai-blacklist.json,       # style_naturalness 维度需要黑名单命中率
-  chapter_contract(json, optional),
+  chapter_contract(json),
   world_rules(json, optional), hard_rules_list(list),   # 逐条验收 L1 硬规则
   storyline_spec(json, optional),
   storyline_schedule(json, optional),
