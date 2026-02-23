@@ -17,8 +17,15 @@ description: |
   assistant: "I'll use the quality-judge agent for a volume review."
   <commentary>卷末回顾时批量调用</commentary>
   </example>
+
+  <example>
+  Context: 修订后重新评估
+  user: "修订后再次评估第 50 章"
+  assistant: "I'll use the quality-judge agent to re-evaluate the revised chapter."
+  <commentary>章节修订后重评估，决定是否继续写/再次修订</commentary>
+  </example>
 model: sonnet
-color: pink
+color: magenta
 tools: ["Read", "Glob", "Grep"]
 ---
 

@@ -58,8 +58,12 @@ Phase 3: 入口 Skill 层
   "name": "novel",
   "version": "0.1.0",
   "description": "中文网文多 Agent 协作创作系统 — 卷制滚动工作流 + 去 AI 化输出",
-  "author": "novel",
+  "author": {
+    "name": "DankerMu",
+    "email": "mumzy@mail.ustc.edu.cn"
+  },
   "skills": "./skills/",
+  "agents": "./agents/",
   "hooks": "./hooks/hooks.json"
 }
 ```

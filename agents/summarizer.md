@@ -17,6 +17,13 @@ description: |
   assistant: "I'll use the summarizer agent to regenerate the summary."
   <commentary>修订后重算摘要时触发</commentary>
   </example>
+
+  <example>
+  Context: 交汇事件章的多线摘要与串线检测
+  user: "为交汇事件的第 60 章生成摘要"
+  assistant: "I'll use the summarizer agent to summarize the intersection chapter."
+  <commentary>交汇事件章：重点校验 cross_references 与 leak_risk，并更新相关线 memory</commentary>
+  </example>
 model: sonnet
 color: cyan
 tools: ["Read", "Write", "Edit", "Glob"]
