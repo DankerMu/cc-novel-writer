@@ -37,9 +37,12 @@ Orchestrator 是逻辑抽象，实际分布在 3 个入口 Skills 中：
 - [Risk] checkpoint 与 staging 产物不一致 → Mitigation：恢复逻辑严格以 `pipeline_stage` + 文件存在性共同判定；必要时重启整章。
 - [Risk] 卷末/质量回顾触发过于频繁打断写作 → Mitigation：触发点可配置（例如每 5/10 章），但默认遵循 PRD。
 
+## Integration Test Plan
+
+见 `openspec/changes/m2-orchestrator-state-machine/integration-test-plan.md`（1 卷 30 章，至少 2 条故事线交织，覆盖冷启动恢复、修订循环与卷末回顾）。
+
 ## References
 
 - `docs/dr-workflow/novel-writer-tool/final/prd/08-orchestrator.md`
 - `docs/dr-workflow/novel-writer-tool/final/prd/10-protocols.md`
 - `docs/dr-workflow/novel-writer-tool/final/prd/09-data.md`
-

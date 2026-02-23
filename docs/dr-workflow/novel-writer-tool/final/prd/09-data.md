@@ -78,17 +78,26 @@ novel-project/
   "orchestrator_state": "WRITING",
   "pipeline_stage": "committed",
   "inflight_chapter": null,
+  "revision_count": 0,
   "pending_actions": [],
   "last_checkpoint_time": "2026-02-21T15:30:00"
 }
 ```
 
-`pipeline_stage` 取值：`null`（空闲）→ `drafting`（初稿生成中）→ `drafted`（初稿 + 摘要 + delta 已生成）→ `refined`（润色完成）→ `judged`（评估完成）→ `committed`（已提交到正式目录）。`inflight_chapter` 记录当前正在处理的章节号。冷启动恢复时：若 `pipeline_stage != committed && inflight_chapter != null`，检查 `staging/` 子目录并从对应阶段恢复：
+`orchestrator_state` 取值（详见 PRD §8.2 状态机）：`QUICK_START`、`VOL_PLANNING`、`WRITING`、`CHAPTER_REWRITE`、`VOL_REVIEW`、`ERROR_RETRY`。（无 `.checkpoint.json` 视为 `INIT`。）
+
+`pipeline_stage` 取值：`null`（空闲）→ `drafting`（初稿生成中）→ `drafted`（初稿 + 摘要 + delta 已生成）→ `refined`（润色完成）→ `judged`（评估完成）→ `revising`（门控触发的修订/二次润色循环中）→ `committed`（已提交到正式目录）。
+
+- `inflight_chapter` 记录当前正在处理的章节号
+- `revision_count` 记录当前 `inflight_chapter` 的修订次数（用于限制修订循环；commit 后重置为 0）
+
+冷启动恢复时：若 `pipeline_stage != committed && inflight_chapter != null`，检查 `staging/` 子目录并从对应阶段恢复：
 - `drafting` 且 `staging/chapters/` 无对应文件 → 重启整章
 - `drafting` 且 `staging/chapters/` 有初稿但 `staging/summaries/` 无摘要 → 从 Summarizer 恢复
 - `drafted` → 跳过 ChapterWriter 和 Summarizer，从 StyleRefiner 恢复
 - `refined` → 从 QualityJudge 恢复
 - `judged` → 执行 commit 阶段
+- `revising` → 从 ChapterWriter 重启（保留 `revision_count`，防止无限循环）
 ```
 
 **角色状态** (`state/current-state.json`):
