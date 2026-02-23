@@ -29,14 +29,38 @@ description: >
 - current_volume: 当前卷号
 - last_completed_chapter: 上次完成的章节号
 - orchestrator_state: 当前状态（必须为 WRITING，否则提示用户先通过 /novel:start 完成规划）
+- pipeline_stage: 流水线阶段（用于中断恢复）
+- inflight_chapter: 当前处理中断的章节号（用于中断恢复）
 ```
 
 如果 `orchestrator_state` 不是 `WRITING`，输出提示并终止：
 > 当前状态为 {state}，请先执行 `/novel:start` 完成项目初始化或卷规划。
 
+同时确保 staging 子目录存在（幂等）：
+```
+mkdir -p staging/chapters staging/summaries staging/state staging/storylines staging/evaluations
+```
+
+### Step 1.5: 中断恢复（pipeline_stage）
+
+若 `.checkpoint.json` 满足以下条件：
+- `pipeline_stage != "committed"` 且 `pipeline_stage != null`
+- `inflight_chapter != null`
+
+则本次 `/novel:continue` **必须先完成** `inflight_chapter` 的流水线，并按 PRD §9.2 的规则幂等恢复：
+
+- `pipeline_stage == "drafting"`：
+  - 若 `staging/chapters/chapter-{C:03d}.md` 不存在 → 从 ChapterWriter 重启整章
+  - 若 `staging/chapters/chapter-{C:03d}.md` 已存在但 `staging/summaries/chapter-{C:03d}-summary.md` 不存在 → 从 Summarizer 恢复
+- `pipeline_stage == "drafted"` → 跳过 ChapterWriter/Summarizer，从 StyleRefiner 恢复
+- `pipeline_stage == "refined"` → 从 QualityJudge 恢复
+- `pipeline_stage == "judged"` → 直接执行 commit 阶段
+
+恢复章完成 commit 后，再继续从 `last_completed_chapter + 1` 续写后续章节，直到累计提交 N 章（包含恢复章）。
+
 ### Step 2: 组装 Context
 
-对于每章（从 chapter `last_completed_chapter + 1` 开始），组装以下 context：
+对于每章（默认从 `last_completed_chapter + 1` 开始；如存在 `inflight_chapter` 则先恢复该章），组装以下 context：
 
 ```
 context = {
@@ -72,7 +96,13 @@ context = {
 ```
 for chapter_num in range(start, start + N):
 
-  0. 获取并发锁: mkdir .novel.lock + 写入 info.json（见 PRD §10.7）
+  0. 获取并发锁（见 PRD §10.7）:
+     - 原子获取：mkdir .novel.lock（已存在则失败）
+     - 获取失败：
+       - 读取 `.novel.lock/info.json` 报告持有者信息（pid/started/chapter）
+       - 若 `started` 距当前时间 > 30 分钟，视为僵尸锁 → `rm -rf .novel.lock` 后重试一次
+       - 否则提示用户存在并发执行，拒绝继续（避免 staging 写入冲突）
+     - 写入 `.novel.lock/info.json`：`{\"pid\": <PID>, \"started\": \"<ISO-8601>\", \"chapter\": <N>}`
      更新 checkpoint: pipeline_stage = \"drafting\", inflight_chapter = chapter_num
 
   1. ChapterWriter Agent → 生成初稿
