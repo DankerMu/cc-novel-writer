@@ -3,7 +3,7 @@ name: continue
 description: >
   续写下一章或多章（高频快捷命令）。支持参数 [N] 指定章数（默认 1，建议 ≤5）。
   Use when: 用户输入 /novel:continue 或在 /novel:start 中选择"继续写作"时触发。
-  要求 orchestrator_state == WRITING。
+  要求 orchestrator_state ∈ {WRITING, CHAPTER_REWRITE}。
 ---
 
 # 续写命令
@@ -28,12 +28,13 @@ description: >
 读取 .checkpoint.json：
 - current_volume: 当前卷号
 - last_completed_chapter: 上次完成的章节号
-- orchestrator_state: 当前状态（必须为 WRITING，否则提示用户先通过 /novel:start 完成规划）
+- orchestrator_state: 当前状态（必须为 WRITING 或 CHAPTER_REWRITE，否则提示用户先通过 /novel:start 完成规划）
 - pipeline_stage: 流水线阶段（用于中断恢复）
 - inflight_chapter: 当前处理中断的章节号（用于中断恢复）
+- revision_count: 当前 inflight_chapter 的修订计数（用于限制修订循环；默认 0）
 ```
 
-如果 `orchestrator_state` 不是 `WRITING`，输出提示并终止：
+如果 `orchestrator_state` 既不是 `WRITING` 也不是 `CHAPTER_REWRITE`，输出提示并终止：
 > 当前状态为 {state}，请先执行 `/novel:start` 完成项目初始化或卷规划。
 
 同时确保 staging 子目录存在（幂等）：
@@ -58,6 +59,17 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 - `pipeline_stage == "revising"` → 修订中断，从 ChapterWriter 重启（保留 revision_count 以防无限循环）
 
 恢复章完成 commit 后，再继续从 `last_completed_chapter + 1` 续写后续章节，直到累计提交 N 章（包含恢复章）。
+
+### Step 1.6: 错误处理（ERROR_RETRY）
+
+当流水线任意阶段发生错误（Task 超时/崩溃、结构化 JSON 无法解析、写入失败、锁冲突等）时：
+
+1. **自动重试一次**：对失败步骤重试 1 次（避免瞬时错误导致整章中断）
+2. **重试成功**：继续执行流水线（不得推进 `last_completed_chapter`，直到 commit 成功）
+3. **重试仍失败**：
+   - 更新 `.checkpoint.json.orchestrator_state = "ERROR_RETRY"`（保留 `pipeline_stage`/`inflight_chapter` 便于恢复）
+   - 释放并发锁（`rm -rf .novel.lock`）
+   - 输出提示并暂停：请用户运行 `/novel:start` 决策下一步（重试/回看/调整方向）
 
 ### Step 2: 组装 Context
 
@@ -89,6 +101,11 @@ context = {
   writing_methodology: Read("skills/novel-writing/SKILL.md") body 中的"去 AI 化四层策略"和"Spec-Driven Writing 原则"章节（按需裁剪，作为 <DATA type=\"reference\" source=\"methodology\" readonly=\"true\"> 注入给 ChapterWriter）
 }
 ```
+
+同时从 `current_volume_outline` 提取本卷章节边界（用于卷首/卷尾双裁判与卷末状态转移）：
+
+- `chapter_start`: 本卷 outline 中最小的章节号
+- `chapter_end`: 本卷 outline 中最大的章节号（本卷最后一章）
 
 ### Step 3: 逐章流水线
 
@@ -129,12 +146,12 @@ for chapter_num in range(start, start + remaining_N):
      更新 checkpoint: pipeline_stage = \"judged\"
 
   5. 质量门控决策:
-     - Contract violation（confidence=high）存在 → 更新 checkpoint: pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 强制修订，回到步骤 1
+     - Contract violation（confidence=high）存在 → 更新 checkpoint: orchestrator_state = "CHAPTER_REWRITE", pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 强制修订，回到步骤 1
      - Contract violation（confidence=medium）存在 → 写入 eval JSON，输出警告，不阻断流水线
      - Contract violation（confidence=low）存在 → 标记为 violation_suspected，写入 eval JSON，章节完成输出中警告用户（用户可通过 `/novel:start` 质量回顾集中审核处理）
      - 无 violation + overall ≥ 4.0 → 直接通过
      - 无 violation + 3.5-3.9 → 更新 checkpoint: pipeline_stage = "revising" → StyleRefiner 二次润色后通过
-     - 无 violation + 3.0-3.4 → 更新 checkpoint: pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 自动修订
+     - 无 violation + 3.0-3.4 → 更新 checkpoint: orchestrator_state = "CHAPTER_REWRITE", pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 自动修订
      - 无 violation + < 3.0 → 通知用户：2.0-2.9 人工审核决定重写范围，< 2.0 强制全章重写，释放并发锁（rm -rf .novel.lock）后暂停
      最大修订次数: 2
      修订次数耗尽后: overall ≥ 3.0 → 强制通过并标记 force_passed; < 3.0 → 释放并发锁（rm -rf .novel.lock）后通知用户暂停
@@ -149,7 +166,10 @@ for chapter_num in range(start, start + remaining_N):
      - 合并 state delta: 校验 ops（§10.6）→ 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
      - 更新 foreshadowing/global.json（从 foreshadow ops 提取）
      - 处理 unknown_entities: 从 Summarizer 输出提取 unknown_entities，追加写入 logs/unknown-entities.jsonl；若累计 ≥ 3 个未注册实体，在本章输出中警告用户
-     - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = \"committed\", inflight_chapter = null）
+     - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = \"committed\", inflight_chapter = null, revision_count = 0）
+     - 状态转移：
+       - 若 chapter_num == chapter_end：更新 `.checkpoint.json.orchestrator_state = "VOL_REVIEW"` 并提示用户运行 `/novel:start` 执行卷末回顾
+       - 否则：更新 `.checkpoint.json.orchestrator_state = "WRITING"`（若本章来自 CHAPTER_REWRITE，则回到 WRITING）
      - 写入 logs/chapter-{C:03d}-log.json（stages 耗时/模型、gate_decision、revisions；token/cost 为估算值或 null，见降级说明）
      - 清空 staging/ 本章文件
      - 释放并发锁: rm -rf .novel.lock
@@ -160,6 +180,7 @@ for chapter_num in range(start, start + remaining_N):
 
 ### Step 4: 定期检查触发
 
+- 每完成 5 章（last_completed_chapter % 5 == 0）：输出质量简报（均分 + 低分章节 + 主要风险），并提示用户可运行 `/novel:start` 进入“质量回顾/调整方向”
 - 每完成 10 章（last_completed_chapter % 10 == 0）：触发一致性检查提醒
 - 到达本卷末尾章节：提示用户执行 `/novel:start` 进行卷末回顾
 

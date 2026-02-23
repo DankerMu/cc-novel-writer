@@ -8,7 +8,7 @@
 ---
 name: start
 description: >
-  小说创作主入口 — 状态感知交互引导。自动检测项目状态（无 checkpoint / WRITING / VOL_REVIEW）并推荐下一步操作。
+  小说创作主入口 — 状态感知交互引导。自动检测项目状态（INIT/QUICK_START/VOL_PLANNING/WRITING/CHAPTER_REWRITE/VOL_REVIEW/ERROR_RETRY）并推荐下一步操作。
   Use when: 用户输入 /novel:start，或需要创建新项目、规划新卷、质量回顾、更新设定、导入研究资料时触发。
 ---
 
@@ -27,18 +27,52 @@ description: >
 
 ## 启动流程
 
+## Orchestrator 状态机（M2）
+
+状态枚举（持久化于 `.checkpoint.json.orchestrator_state`；无 checkpoint 视为 INIT）：
+
+- `INIT`：新项目（无 `.checkpoint.json`）
+- `QUICK_START`：快速起步（世界观/角色/风格初始化 + 试写 3 章）
+- `VOL_PLANNING`：卷规划中（等待本卷 `outline.md` / schedule / 契约等确认）
+- `WRITING`：写作循环（`/novel:continue` 单章流水线 + 门控）
+- `CHAPTER_REWRITE`：章节修订循环（门控触发修订，最多 2 次）
+- `VOL_REVIEW`：卷末回顾（输出 review.md，准备进入下卷规划）
+- `ERROR_RETRY`：错误暂停（自动重试一次失败后进入，等待用户决定下一步）
+
+Skill → 状态映射：
+
+- `/novel:start`：负责 `INIT`/`QUICK_START`/`VOL_PLANNING`/`VOL_REVIEW` 的交互与状态推进；在 `WRITING`/`CHAPTER_REWRITE`/`ERROR_RETRY` 下提供路由与推荐入口
+- `/novel:continue`：负责 `WRITING`/`CHAPTER_REWRITE`（含门控与修订循环）
+- `/novel:status`：任意状态只读展示，不触发转移
+
 ### Step 1: 状态检测
 
 读取当前目录下的 `.checkpoint.json`：
 - 使用 Glob 检查 `.checkpoint.json` 是否存在
 - 如存在，使用 Read 读取内容
-- 解析 `orchestrator_state`、`current_volume`、`last_completed_chapter`
+- 解析 `orchestrator_state`、`current_volume`、`last_completed_chapter`、`pipeline_stage`、`inflight_chapter`
+
+无 checkpoint 时：当前状态 = `INIT`（新项目）。
+
+冷启动恢复（无状态冷启动，PRD §8.1）：当 checkpoint 存在时，额外读取最小集合用于推荐下一步与降级判断：
+
+```
+- Read("state/current-state.json")（如存在）
+- Read 最近 3 章 summaries/chapter-*-summary.md（如存在）
+- Read("volumes/vol-{V:02d}/outline.md")（如 current_volume > 0 且文件存在）
+```
+
+缺文件降级策略（只影响推荐与状态推进，不依赖会话历史）：
+
+- `orchestrator_state == "WRITING"` 但当前卷 `outline.md` 缺失 → 视为断链，强制回退到 `VOL_PLANNING`，提示用户重新规划本卷
+- `pipeline_stage != "committed"` 且 `inflight_chapter != null` → 提示“检测到中断”，推荐优先执行 `/novel:continue 1` 恢复
+- `state/current-state.json` 缺失 → 提示状态不可用，将影响 Summarizer ops 合并，建议先用 `/novel:start` 重新初始化或从最近章节重建（M3 完整实现）
 
 ### Step 2: 状态感知推荐
 
 根据检测结果，使用 AskUserQuestion 向用户展示选项（2-4 个，标记 Recommended）：
 
-**情况 A — 无 checkpoint（新用户）**：
+**情况 A — INIT（无 checkpoint，新用户）**：
 ```
 检测到当前目录无小说项目。
 
@@ -47,7 +81,29 @@ description: >
 2. 查看帮助
 ```
 
-**情况 B — 当前卷未完成**（`orchestrator_state == "WRITING"` 或 `"VOL_PLANNING"`）：
+**情况 B — QUICK_START（快速起步未完成）**：
+```
+检测到项目处于快速起步阶段（设定/角色/风格/试写 3 章）。
+
+选项：
+1. 继续快速起步 (Recommended)
+2. 导入研究资料
+3. 更新设定
+4. 查看帮助
+```
+
+**情况 C — VOL_PLANNING（卷规划中）**：
+```
+当前状态：卷规划中（第 {current_volume} 卷）。
+
+选项：
+1. 规划本卷 (Recommended)
+2. 质量回顾
+3. 导入研究资料
+4. 更新设定
+```
+
+**情况 D — WRITING（写作循环）**：
 ```
 当前进度：第 {current_volume} 卷，已完成 {last_completed_chapter} 章。
 
@@ -58,12 +114,36 @@ description: >
 4. 更新设定 — 修改世界观或角色
 ```
 
-**情况 C — 当前卷已完成**（`orchestrator_state == "VOL_REVIEW"`）：
+> 若检测到 `pipeline_stage != "committed"` 且 `inflight_chapter != null`：将选项 1 改为“恢复中断流水线 (Recommended) — 等同 /novel:continue 1”，优先完成中断章再继续。
+
+**情况 E — CHAPTER_REWRITE（章节修订中）**：
+```
+检测到上次章节处于修订循环中（inflight_chapter = {inflight_chapter}）。
+
+选项：
+1. 继续修订 (Recommended) — 等同 /novel:continue 1
+2. 质量回顾
+3. 更新设定
+4. 导入研究资料
+```
+
+**情况 F — VOL_REVIEW（卷末回顾）**：
 ```
 第 {current_volume} 卷已完成，共 {chapter_count} 章。
 
 选项：
-1. 规划新卷 (Recommended)
+1. 卷末回顾 (Recommended)
+2. 规划新卷
+3. 导入研究资料
+4. 更新设定
+```
+
+**情况 G — ERROR_RETRY（错误暂停）**：
+```
+检测到上次运行发生错误并暂停（ERROR_RETRY）。
+
+选项：
+1. 重试上次操作 (Recommended)
 2. 质量回顾
 3. 导入研究资料
 4. 更新设定
@@ -76,7 +156,7 @@ description: >
 2. 创建项目目录结构（参考 PRD Section 9.1）
 3. 从 `${CLAUDE_PLUGIN_ROOT}/templates/` 复制模板文件到项目目录
 4. **初始化最小可运行文件**（模板复制后立即创建，确保后续 Agent 可正常读取）：
-   - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "pending_actions": [], "last_checkpoint_time": "<now>"}`
+   - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "revision_count": 0, "pending_actions": [], "last_checkpoint_time": "<now>"}`
    - `state/current-state.json`：`{"schema_version": 1, "state_version": 0, "last_updated_chapter": 0, "characters": {}, "world_state": {}, "active_foreshadowing": []}`
    - `foreshadowing/global.json`：`{"foreshadowing": []}`
    - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~005）
@@ -90,14 +170,30 @@ description: >
 10. 使用 Task 逐章派发试写流水线（共 3 章），每章按完整流水线执行：ChapterWriter → Summarizer → StyleRefiner → QualityJudge（**简化 context 模式**：无 volume_outline/chapter_outline/chapter_contract，仅使用 brief + world + characters + style_profile；ChapterWriter 根据 brief 自由发挥前 3 章情节。Summarizer 正常生成摘要 + state delta + memory，确保后续写作有 context 基础。QualityJudge 跳过 L3 章节契约检查和 LS 故事线检查）
 11. 展示试写结果和评分，写入 `.checkpoint.json`（`current_volume = 1, last_completed_chapter = 3, orchestrator_state = "VOL_PLANNING"`）
 
+**继续快速起步**：
+- 读取 `.checkpoint.json`，确认 `orchestrator_state == "QUICK_START"`
+- 按“创建新项目”中的 quick start 检查清单补齐缺失环节（world/、characters/、style-profile、试写章节与 summaries/state/evaluations）
+- quick start 完成后更新 `.checkpoint.json`：`current_volume = 1, last_completed_chapter = 3, orchestrator_state = "VOL_PLANNING"`
+
 **继续写作**：
 - 等同执行 `/novel:continue 1` 的逻辑
 
-**规划新卷**：
+**继续修订**：
+- 确认 `orchestrator_state == "CHAPTER_REWRITE"`
+- 等同执行 `/novel:continue 1`，直到该章通过门控并 commit
+
+**规划本卷 / 规划新卷**：
+> 仅当 `orchestrator_state == "VOL_PLANNING"`（或完成卷末回顾后进入 VOL_PLANNING）时执行。
 1. 使用 Task 派发 PlotArchitect Agent 生成下一卷大纲
 2. 展示大纲摘要，使用 AskUserQuestion 确认/修改
 3. 检查 PlotArchitect 输出的 `new-characters.json`：如有新角色，逐个调用 CharacterWeaver Agent 创建角色档案 + L2 契约（批量派发 Task）
 4. 大纲确认 + 角色创建完成后更新 `.checkpoint.json`（状态 = WRITING，new volume）
+
+**卷末回顾**：
+1. 收集本卷 `evaluations/`、`summaries/`、`foreshadowing/global.json`、`storylines/`，生成本卷回顾要点（质量趋势、低分章节、未回收伏笔、故事线节奏）
+2. 写入 `volumes/vol-{V:02d}/review.md`
+3. AskUserQuestion 让用户确认“进入下卷规划 / 调整设定 / 导入研究资料”
+4. 确认进入下卷规划后更新 `.checkpoint.json`：`current_volume += 1, orchestrator_state = "VOL_PLANNING"`（其余字段保持；`pipeline_stage=null`, `inflight_chapter=null`）
 
 **质量回顾**：
 1. 使用 Glob + Read 收集近 10 章 `evaluations/` 评分数据
@@ -115,6 +211,11 @@ description: >
 3. 如有结果，展示可导入列表（项目名 + 首行标题），使用 AskUserQuestion 让用户勾选
 4. 将选中的 `final/main.md` 复制到 `research/<project-name>.md`
 5. 展示导入结果，提示 WorldBuilder/CharacterWeaver 下次执行时将自动引用
+
+**重试上次操作**：
+- 若 `orchestrator_state == "ERROR_RETRY"`：
+  - 输出上次中断的 `pipeline_stage` + `inflight_chapter` 信息
+  - 将 `.checkpoint.json.orchestrator_state` 恢复为 `WRITING`（或基于上下文恢复为 `CHAPTER_REWRITE`），然后执行 `/novel:continue 1`
 
 ## 约束
 
@@ -136,7 +237,7 @@ name: continue
 description: >
   续写下一章或多章（高频快捷命令）。支持参数 [N] 指定章数（默认 1，建议 ≤5）。
   Use when: 用户输入 /novel:continue 或在 /novel:start 中选择"继续写作"时触发。
-  要求 orchestrator_state == WRITING。
+  要求 orchestrator_state ∈ {WRITING, CHAPTER_REWRITE}。
 ---
 
 # 续写命令
@@ -161,12 +262,13 @@ description: >
 读取 .checkpoint.json：
 - current_volume: 当前卷号
 - last_completed_chapter: 上次完成的章节号
-- orchestrator_state: 当前状态（必须为 WRITING，否则提示用户先通过 /novel:start 完成规划）
+- orchestrator_state: 当前状态（必须为 WRITING 或 CHAPTER_REWRITE，否则提示用户先通过 /novel:start 完成规划）
 - pipeline_stage: 流水线阶段（用于中断恢复）
 - inflight_chapter: 当前处理中断的章节号（用于中断恢复）
+- revision_count: 当前 inflight_chapter 的修订计数（用于限制修订循环；默认 0）
 ```
 
-如果 `orchestrator_state` 不是 `WRITING`，输出提示并终止：
+如果 `orchestrator_state` 既不是 `WRITING` 也不是 `CHAPTER_REWRITE`，输出提示并终止：
 > 当前状态为 {state}，请先执行 `/novel:start` 完成项目初始化或卷规划。
 
 同时确保 staging 子目录存在（幂等）：
@@ -191,6 +293,17 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 - `pipeline_stage == "revising"` → 修订中断，从 ChapterWriter 重启（保留 revision_count 以防无限循环）
 
 恢复章完成 commit 后，再继续从 `last_completed_chapter + 1` 续写后续章节，直到累计提交 N 章（包含恢复章）。
+
+### Step 1.6: 错误处理（ERROR_RETRY）
+
+当流水线任意阶段发生错误（Task 超时/崩溃、结构化 JSON 无法解析、写入失败、锁冲突等）时：
+
+1. **自动重试一次**：对失败步骤重试 1 次（避免瞬时错误导致整章中断）
+2. **重试成功**：继续执行流水线（不得推进 `last_completed_chapter`，直到 commit 成功）
+3. **重试仍失败**：
+   - 更新 `.checkpoint.json.orchestrator_state = "ERROR_RETRY"`（保留 `pipeline_stage`/`inflight_chapter` 便于恢复）
+   - 释放并发锁（`rm -rf .novel.lock`）
+   - 输出提示并暂停：请用户运行 `/novel:start` 决策下一步（重试/回看/调整方向）
 
 ### Step 2: 组装 Context
 
@@ -222,6 +335,11 @@ context = {
   writing_methodology: Read("skills/novel-writing/SKILL.md") body 中的"去 AI 化四层策略"和"Spec-Driven Writing 原则"章节（按需裁剪，作为 <DATA type="reference" source="methodology" readonly="true"> 注入给 ChapterWriter）
 }
 ```
+
+同时从 `current_volume_outline` 提取本卷章节边界（用于卷首/卷尾双裁判与卷末状态转移）：
+
+- `chapter_start`: 本卷 outline 中最小的章节号
+- `chapter_end`: 本卷 outline 中最大的章节号（本卷最后一章）
 
 ### Step 3: 逐章流水线
 
@@ -262,12 +380,12 @@ for chapter_num in range(start, start + remaining_N):
      更新 checkpoint: pipeline_stage = "judged"
 
   5. 质量门控决策:
-     - Contract violation（confidence=high）存在 → 更新 checkpoint: pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 强制修订，回到步骤 1
+     - Contract violation（confidence=high）存在 → 更新 checkpoint: orchestrator_state = "CHAPTER_REWRITE", pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 强制修订，回到步骤 1
      - Contract violation（confidence=medium）存在 → 写入 eval JSON，输出警告，不阻断流水线
      - Contract violation（confidence=low）存在 → 标记为 violation_suspected，写入 eval JSON，章节完成输出中警告用户（用户可通过 `/novel:start` 质量回顾集中审核处理）
      - 无 violation + overall ≥ 4.0 → 直接通过
      - 无 violation + 3.5-3.9 → 更新 checkpoint: pipeline_stage = "revising" → StyleRefiner 二次润色后通过
-     - 无 violation + 3.0-3.4 → 更新 checkpoint: pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 自动修订
+     - 无 violation + 3.0-3.4 → 更新 checkpoint: orchestrator_state = "CHAPTER_REWRITE", pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 自动修订
      - 无 violation + < 3.0 → 通知用户：2.0-2.9 人工审核决定重写范围，< 2.0 强制全章重写，释放并发锁（rm -rf .novel.lock）后暂停
      最大修订次数: 2
      修订次数耗尽后: overall ≥ 3.0 → 强制通过并标记 force_passed; < 3.0 → 释放并发锁（rm -rf .novel.lock）后通知用户暂停
@@ -282,7 +400,10 @@ for chapter_num in range(start, start + remaining_N):
      - 合并 state delta: 校验 ops（§10.6）→ 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
      - 更新 foreshadowing/global.json（从 foreshadow ops 提取）
      - 处理 unknown_entities: 从 Summarizer 输出提取 unknown_entities，追加写入 logs/unknown-entities.jsonl；若累计 ≥ 3 个未注册实体，在本章输出中警告用户
-     - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null）
+     - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null, revision_count = 0）
+     - 状态转移：
+       - 若 chapter_num == chapter_end：更新 `.checkpoint.json.orchestrator_state = "VOL_REVIEW"` 并提示用户运行 `/novel:start` 执行卷末回顾
+       - 否则：更新 `.checkpoint.json.orchestrator_state = "WRITING"`（若本章来自 CHAPTER_REWRITE，则回到 WRITING）
      - 写入 logs/chapter-{C:03d}-log.json（stages 耗时/模型、gate_decision、revisions；token/cost 为估算值或 null，见降级说明）
      - 清空 staging/ 本章文件
      - 释放并发锁: rm -rf .novel.lock
@@ -293,6 +414,7 @@ for chapter_num in range(start, start + remaining_N):
 
 ### Step 4: 定期检查触发
 
+- 每完成 5 章（last_completed_chapter % 5 == 0）：输出质量简报（均分 + 低分章节 + 主要风险），并提示用户可运行 `/novel:start` 进入“质量回顾/调整方向”
 - 每完成 10 章（last_completed_chapter % 10 == 0）：触发一致性检查提醒
 - 到达本卷末尾章节：提示用户执行 `/novel:start` 进行卷末回顾
 

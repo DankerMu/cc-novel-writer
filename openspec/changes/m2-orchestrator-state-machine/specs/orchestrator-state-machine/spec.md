@@ -12,11 +12,11 @@ State SHALL be persisted in `.checkpoint.json.orchestrator_state`.
 ### Requirement: Skills SHALL map to states as defined
 The system SHALL route work based on the Skill entrypoint:
 - `/novel:start` SHALL handle state-aware routing for `INIT`, `QUICK_START`, `VOL_PLANNING`, `VOL_REVIEW`
-- `/novel:continue` SHALL handle `WRITING` (including gate + revision loop)
+- `/novel:continue` SHALL handle `WRITING` and `CHAPTER_REWRITE` (including gate + revision loop)
 - `/novel:status` SHALL be read-only and SHALL NOT trigger state transitions
 
 #### Scenario: Continue blocked outside WRITING
-- **WHEN** the user runs `/novel:continue` while `orchestrator_state != "WRITING"`
+- **WHEN** the user runs `/novel:continue` while `orchestrator_state` is neither `"WRITING"` nor `"CHAPTER_REWRITE"`
 - **THEN** the command refuses and points the user to `/novel:start`
 
 ### Requirement: Cold-start recovery SHALL not depend on session history
@@ -54,4 +54,3 @@ On pipeline errors, the system SHALL enter `ERROR_RETRY`, retry at most once, an
 - `docs/dr-workflow/novel-writer-tool/final/prd/08-orchestrator.md`
 - `docs/dr-workflow/novel-writer-tool/final/spec/02-skills.md`
 - `docs/dr-workflow/novel-writer-tool/final/prd/09-data.md`
-
