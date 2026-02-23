@@ -195,8 +195,9 @@ quality_judge_context = {
   character_profiles(<DATA character_profile>...),
   prev_summary(<DATA summary>): summaries/chapter-{C-1:03d}-summary.md,
   style_profile(json),
+  ai_blacklist(json): ai-blacklist.json,       # style_naturalness 维度需要黑名单命中率
   chapter_contract(json, optional),
-  world_rules(json, optional),
+  world_rules(json, optional), hard_rules_list(list),   # 逐条验收 L1 硬规则
   storyline_spec(json, optional),
   storyline_schedule(json, optional),
   cross_references(json): staging/state/chapter-{C:03d}-crossref.json,
@@ -218,29 +219,29 @@ for chapter_num in range(start, start + remaining_N):
        - 读取 `.novel.lock/info.json` 报告持有者信息（pid/started/chapter）
        - 若 `started` 距当前时间 > 30 分钟，视为僵尸锁 → `rm -rf .novel.lock` 后重试一次
        - 否则提示用户存在并发执行，拒绝继续（避免 staging 写入冲突）
-     - 写入 `.novel.lock/info.json`：`{\"pid\": <PID>, \"started\": \"<ISO-8601>\", \"chapter\": <N>}`
-     更新 checkpoint: pipeline_stage = \"drafting\", inflight_chapter = chapter_num
+     - 写入 `.novel.lock/info.json`：`{"pid": <PID>, "started": "<ISO-8601>", "chapter": <N>}`
+     更新 checkpoint: pipeline_stage = "drafting", inflight_chapter = chapter_num
 
-	  1. ChapterWriter Agent → 生成初稿
-	     输入: chapter_writer_context（见 Step 2.6；含 outline/storylines/spec/style/blacklist Top-10 等）
-	     输出: staging/chapters/chapter-{C:03d}.md（+ 可选 hints，自然语言状态提示）
+  1. ChapterWriter Agent → 生成初稿
+     输入: chapter_writer_context（见 Step 2.6；含 outline/storylines/spec/style/blacklist Top-10 等）
+     输出: staging/chapters/chapter-{C:03d}.md（+ 可选 hints，自然语言状态提示）
 
-	  2. Summarizer Agent → 生成摘要 + 权威状态增量 + 串线检测
-	     输入: summarizer_context（chapter_content + current_state + foreshadowing_tasks + entity_id_map + hints 可选）
-	     输出: staging/summaries/chapter-{C:03d}-summary.md + staging/state/chapter-{C:03d}-delta.json + staging/state/chapter-{C:03d}-crossref.json + staging/storylines/{storyline_id}/memory.md
-	     更新 checkpoint: pipeline_stage = \"drafted\"
+  2. Summarizer Agent → 生成摘要 + 权威状态增量 + 串线检测
+     输入: summarizer_context（chapter_content + current_state + foreshadowing_tasks + entity_id_map + hints 可选）
+     输出: staging/summaries/chapter-{C:03d}-summary.md + staging/state/chapter-{C:03d}-delta.json + staging/state/chapter-{C:03d}-crossref.json + staging/storylines/{storyline_id}/memory.md
+     更新 checkpoint: pipeline_stage = "drafted"
 
-	  3. StyleRefiner Agent → 去 AI 化润色
-	     输入: style_refiner_context（chapter_content + style_profile + ai_blacklist + style_guide）
-	     输出: staging/chapters/chapter-{C:03d}.md（覆盖）
-	     更新 checkpoint: pipeline_stage = \"refined\"
+  3. StyleRefiner Agent → 去 AI 化润色
+     输入: style_refiner_context（chapter_content + style_profile + ai_blacklist + style_guide）
+     输出: staging/chapters/chapter-{C:03d}.md（覆盖）
+     更新 checkpoint: pipeline_stage = "refined"
 
-	  4. QualityJudge Agent → 质量评估（双轨验收）
-	     输入: quality_judge_context（见 Step 2.6；cross_references 来自 staging/state/chapter-{C:03d}-crossref.json）
-	     返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
-	     入口 Skill 写入: staging/evaluations/chapter-{C:03d}-eval.json
+  4. QualityJudge Agent → 质量评估（双轨验收）
+     输入: quality_judge_context（见 Step 2.6；cross_references 来自 staging/state/chapter-{C:03d}-crossref.json）
+     返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
+     入口 Skill 写入: staging/evaluations/chapter-{C:03d}-eval.json
      关键章双裁判: 若 chapter_num 为卷首章（== chapter_start）、卷尾章（== chapter_end）或故事线交汇事件章（schedule 标记 is_intersection），则使用 Task(subagent_type="quality-judge", model="opus") 再调用一次 QualityJudge，取两次 overall 中较低分和两次 has_violations 的并集作为最终结果
-     更新 checkpoint: pipeline_stage = \"judged\"
+     更新 checkpoint: pipeline_stage = "judged"
 
   5. 质量门控决策:
      - Contract violation（confidence=high）存在 → 更新 checkpoint: orchestrator_state = "CHAPTER_REWRITE", pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 强制修订，回到步骤 1
@@ -252,7 +253,7 @@ for chapter_num in range(start, start + remaining_N):
      - 无 violation + < 3.0 → 通知用户：2.0-2.9 人工审核决定重写范围，< 2.0 强制全章重写，释放并发锁（rm -rf .novel.lock）后暂停
      最大修订次数: 2
      修订次数耗尽后: overall ≥ 3.0 → 强制通过并标记 force_passed; < 3.0 → 释放并发锁（rm -rf .novel.lock）后通知用户暂停
-     > 修订调用：Task(subagent_type=\"chapter-writer\", model=\"opus\")，利用 Task 工具的 model 参数覆盖 agent frontmatter 默认的 sonnet
+     > 修订调用：Task(subagent_type="chapter-writer", model="opus")，利用 Task 工具的 model 参数覆盖 agent frontmatter 默认的 sonnet
 
   6. 事务提交（staging → 正式目录）:
      - 移动 staging/chapters/chapter-{C:03d}.md → chapters/chapter-{C:03d}.md
@@ -263,7 +264,7 @@ for chapter_num in range(start, start + remaining_N):
      - 合并 state delta: 校验 ops（§10.6）→ 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
      - 更新 foreshadowing/global.json（从 foreshadow ops 提取）
      - 处理 unknown_entities: 从 Summarizer 输出提取 unknown_entities，追加写入 logs/unknown-entities.jsonl；若累计 ≥ 3 个未注册实体，在本章输出中警告用户
-     - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = \"committed\", inflight_chapter = null, revision_count = 0）
+     - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null, revision_count = 0）
      - 状态转移：
        - 若 chapter_num == chapter_end：更新 `.checkpoint.json.orchestrator_state = "VOL_REVIEW"` 并提示用户运行 `/novel:start` 执行卷末回顾
        - 否则：更新 `.checkpoint.json.orchestrator_state = "WRITING"`（若本章来自 CHAPTER_REWRITE，则回到 WRITING）

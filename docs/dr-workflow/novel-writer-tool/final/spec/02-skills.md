@@ -436,8 +436,9 @@ quality_judge_context = {
   character_profiles(<DATA character_profile>...),
   prev_summary(<DATA summary>): summaries/chapter-{C-1:03d}-summary.md,
   style_profile(json),
+  ai_blacklist(json): ai-blacklist.json,       # style_naturalness 维度需要黑名单命中率
   chapter_contract(json, optional),
-  world_rules(json, optional),
+  world_rules(json, optional), hard_rules_list(list),   # 逐条验收 L1 硬规则
   storyline_spec(json, optional),
   storyline_schedule(json, optional),
   cross_references(json): staging/state/chapter-{C:03d}-crossref.json,
