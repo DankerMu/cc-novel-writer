@@ -1,6 +1,13 @@
+---
+name: novel-writing
+description: >
+  小说创作共享方法论知识库 — 卷制滚动工作流、Spec-Driven Writing、多线叙事、去 AI 化四层策略、8 维度质量评分标准。
+  Use when: novel 插件的 Agent（ChapterWriter、StyleRefiner、QualityJudge 等）需要参考创作方法论、去 AI 化规则或质量评分标准时，由入口 Skill 读取并注入到 Agent context。
+---
+
 # 小说创作方法论
 
-本知识库为 novel 插件系统提供共享方法论。所有 Agent 在执行任务时自动参考本文档。
+本知识库为 novel 插件系统提供共享方法论。入口 Skill（`/novel:continue`、`/novel:start`）在 context 组装阶段读取本目录下的 references，按需注入到各 Agent 的 prompt 中。
 
 ## 卷制滚动工作流
 
