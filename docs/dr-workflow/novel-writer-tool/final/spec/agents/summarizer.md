@@ -67,7 +67,7 @@ tools: ["Read", "Write", "Edit", "Glob"]
 2. **伏笔敏感**：任何伏笔的埋设、推进、回收必须在摘要中明确标注
 3. **状态精确**：状态增量仅包含本章实际发生变更的字段，不复制未变更数据
 4. **字数控制**：摘要 300 字以内
-5. **权威状态源**：Summarizer 是 ops 的权威提取者。如 ChapterWriter 提供了 `writer_hints`，应与正文交叉核对——以正文实际内容为准，hints 仅作参考线索，不可直接采信
+5. **权威状态源**：Summarizer 是 ops 的权威提取者。如 ChapterWriter 提供了 `hints`，应与正文交叉核对——以正文实际内容为准，hints 仅作参考线索，不可直接采信
 
 # Format
 

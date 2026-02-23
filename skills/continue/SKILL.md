@@ -55,6 +55,7 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 - `pipeline_stage == "drafted"` → 跳过 ChapterWriter/Summarizer，从 StyleRefiner 恢复
 - `pipeline_stage == "refined"` → 从 QualityJudge 恢复
 - `pipeline_stage == "judged"` → 直接执行 commit 阶段
+- `pipeline_stage == "revising"` → 修订中断，从 ChapterWriter 重启（保留 revision_count 以防无限循环）
 
 恢复章完成 commit 后，再继续从 `last_completed_chapter + 1` 续写后续章节，直到累计提交 N 章（包含恢复章）。
 
@@ -94,7 +95,8 @@ context = {
 对每一章执行以下 Agent 链：
 
 ```
-for chapter_num in range(start, start + N):
+for chapter_num in range(start, start + remaining_N):
+  # remaining_N = N - (1 if inflight_chapter was recovered else 0)
 
   0. 获取并发锁（见 PRD §10.7）:
      - 原子获取：mkdir .novel.lock（已存在则失败）
@@ -110,7 +112,7 @@ for chapter_num in range(start, start + N):
      输出: staging/chapters/chapter-{C:03d}.md（+ 可选 hints，自然语言状态提示）
 
   2. Summarizer Agent → 生成摘要 + 权威状态增量 + 串线检测
-     输入: 初稿全文 + current_state + foreshadowing_tasks + entity_id_map + writer_hints（如有）
+     输入: 初稿全文 + current_state + foreshadowing_tasks + entity_id_map + hints（如有，ChapterWriter 输出的自然语言变更提示）
      输出: staging/summaries/chapter-{C:03d}-summary.md + staging/state/chapter-{C:03d}-delta.json + staging/state/chapter-{C:03d}-crossref.json + staging/storylines/{storyline_id}/memory.md
      更新 checkpoint: pipeline_stage = \"drafted\"
 
@@ -123,18 +125,19 @@ for chapter_num in range(start, start + N):
      输入: 润色后全文 + chapter_outline + character_profiles + prev_summary + style_profile + chapter_contract + world_rules + storyline_spec + storyline_schedule + cross_references（来自 staging/state/chapter-{C:03d}-crossref.json）+ quality_rubric
      返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
      入口 Skill 写入: staging/evaluations/chapter-{C:03d}-eval.json
+     关键章双裁判: 若 chapter_num 为卷首章（== chapter_start）、卷尾章（== chapter_end）或故事线交汇事件章（schedule 标记 is_intersection），则使用 Task(subagent_type="quality-judge", model="opus") 再调用一次 QualityJudge，取两次 overall 中较低分和两次 has_violations 的并集作为最终结果
      更新 checkpoint: pipeline_stage = \"judged\"
 
   5. 质量门控决策:
-     - Contract violation（confidence=high）存在 → ChapterWriter(model=opus) 强制修订，回到步骤 1
+     - Contract violation（confidence=high）存在 → 更新 checkpoint: pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 强制修订，回到步骤 1
      - Contract violation（confidence=medium）存在 → 写入 eval JSON，输出警告，不阻断流水线
      - Contract violation（confidence=low）存在 → 标记为 violation_suspected，写入 eval JSON，章节完成输出中警告用户（用户可通过 `/novel:start` 质量回顾集中审核处理）
      - 无 violation + overall ≥ 4.0 → 直接通过
-     - 无 violation + 3.5-3.9 → StyleRefiner 二次润色后通过
-     - 无 violation + 3.0-3.4 → ChapterWriter(model=opus) 自动修订
-     - 无 violation + < 3.0 → 通知用户：2.0-2.9 人工审核决定重写范围，< 2.0 强制全章重写，暂停
+     - 无 violation + 3.5-3.9 → 更新 checkpoint: pipeline_stage = "revising" → StyleRefiner 二次润色后通过
+     - 无 violation + 3.0-3.4 → 更新 checkpoint: pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 自动修订
+     - 无 violation + < 3.0 → 通知用户：2.0-2.9 人工审核决定重写范围，< 2.0 强制全章重写，释放并发锁（rm -rf .novel.lock）后暂停
      最大修订次数: 2
-     修订次数耗尽后: overall ≥ 3.0 → 强制通过并标记 force_passed; < 3.0 → 通知用户暂停
+     修订次数耗尽后: overall ≥ 3.0 → 强制通过并标记 force_passed; < 3.0 → 释放并发锁（rm -rf .novel.lock）后通知用户暂停
      > 修订调用：Task(subagent_type=\"chapter-writer\", model=\"opus\")，利用 Task 工具的 model 参数覆盖 agent frontmatter 默认的 sonnet
 
   6. 事务提交（staging → 正式目录）:
@@ -142,8 +145,10 @@ for chapter_num in range(start, start + N):
      - 移动 staging/summaries/chapter-{C:03d}-summary.md → summaries/
      - 移动 staging/evaluations/chapter-{C:03d}-eval.json → evaluations/
      - 移动 staging/storylines/{storyline_id}/memory.md → storylines/{storyline_id}/memory.md
+     - 移动 staging/state/chapter-{C:03d}-crossref.json → state/chapter-{C:03d}-crossref.json（保留跨线泄漏审计数据）
      - 合并 state delta: 校验 ops（§10.6）→ 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
      - 更新 foreshadowing/global.json（从 foreshadow ops 提取）
+     - 处理 unknown_entities: 从 Summarizer 输出提取 unknown_entities，追加写入 logs/unknown-entities.jsonl；若累计 ≥ 3 个未注册实体，在本章输出中警告用户
      - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = \"committed\", inflight_chapter = null）
      - 写入 logs/chapter-{C:03d}-log.json（stages 耗时/模型、gate_decision、revisions；token/cost 为估算值或 null，见降级说明）
      - 清空 staging/ 本章文件

@@ -110,8 +110,8 @@ tools: ["Read", "Glob", "Grep"]
 3. **可量化**：风格自然度基于可量化指标（黑名单命中率 < 3 次/千字，相邻 5 句重复句式 < 2）
 4. **综合分计算**：overall = 各维度 score × weight 的加权均值（8 维度权重见 Track 2 表）
 5. **risk_flags**：输出结构化风险标记（如 `character_speech_missing`、`foreshadow_premature`、`storyline_contamination`），用于趋势追踪
-6. **required_fixes**：当 recommendation 为 revise/rewrite 时，必须输出最小修订指令列表（target 段落 + 具体 instruction），供 ChapterWriter 定向修订
-7. **关键章双裁判**：卷首章、卷尾章、故事线交汇事件章使用 Opus 模型复核（普通章保持 Sonnet 单裁判控成本）。双裁判取两者较低分作为最终分
+6. **required_fixes**：当 recommendation 为 revise/review/rewrite 时，必须输出最小修订指令列表（target 段落 + 具体 instruction），供 ChapterWriter 定向修订
+7. **关键章双裁判**（由入口 Skill 控制）：卷首章、卷尾章、故事线交汇事件章由入口 Skill 使用 Opus 模型发起第二次 QualityJudge 调用进行复核（普通章保持 Sonnet 单裁判控成本）。双裁判取两者较低分作为最终分。QualityJudge 自身不切换模型，模型选择由入口 Skill 的 Task(model=opus) 参数控制
 
 # 门控决策逻辑
 
@@ -124,8 +124,10 @@ elif overall >= 3.5:
     recommendation = "polish"  # StyleRefiner 二次润色
 elif overall >= 3.0:
     recommendation = "revise"  # ChapterWriter(Opus) 修订
+elif overall >= 2.0:
+    recommendation = "review"  # 通知用户，人工审核决定重写范围
 else:
-    recommendation = "rewrite"  # 通知用户
+    recommendation = "rewrite"  # 强制全章重写，暂停
 ```
 
 # Format
@@ -153,8 +155,8 @@ else:
     "emotional_impact": {"score": 3, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
     "storyline_coherence": {"score": 4, "weight": 0.08, "reason": "...", "evidence": "原文引用"}
   },
-  "overall": 3.65,
-  "recommendation": "pass | polish | revise | rewrite",
+  "overall": 3.82,
+  "recommendation": "pass | polish | revise | review | rewrite",
   "risk_flags": ["character_speech_missing:protagonist", "foreshadow_premature:ancient_prophecy"],
   "required_fixes": [
     {"target": "paragraph_3", "instruction": "主角此处对白缺少语癖'老子'，需补充"},
@@ -169,5 +171,5 @@ else:
 
 - **无章节契约（试写阶段）**：前 3 章无 L3 契约，跳过 Track 1 的 L3 检查
 - **无故事线规范（M1 早期）**：M1 早期可能无 storyline-spec.json，跳过 LS 检查
-- **关键章双裁判模式**：卷首/卷尾/交汇事件章使用 Opus 复核，入口 Skill 负责两次调用并取较低分
+- **关键章双裁判模式**：卷首/卷尾/交汇事件章由入口 Skill 使用 Task(model=opus) 发起第二次调用并取较低分，QualityJudge 自身按正常流程执行即可
 - **修订后重评**：ChapterWriter 修订后重新评估时，应与前次评估对比确认问题已修复
