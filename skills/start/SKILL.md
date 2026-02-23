@@ -179,10 +179,17 @@ Skill → 状态映射：
 
 **规划本卷 / 规划新卷**：
 > 仅当 `orchestrator_state == "VOL_PLANNING"`（或完成卷末回顾后进入 VOL_PLANNING）时执行。
-1. 使用 Task 派发 PlotArchitect Agent 生成下一卷大纲
-2. 展示大纲摘要，使用 AskUserQuestion 确认/修改
-3. 检查 PlotArchitect 输出的 `new-characters.json`：如有新角色，逐个调用 CharacterWeaver Agent 创建角色档案 + L2 契约（批量派发 Task）
-4. 大纲确认 + 角色创建完成后更新 `.checkpoint.json`（状态 = WRITING，new volume）
+1. 组装 PlotArchitect context（确定性，按 PRD §8.3）：
+   - `prev_volume_review`：读取 `volumes/vol-{V-1:02d}/review.md`（如存在，以 `<DATA type="summary" ...>` 注入）
+   - `global_foreshadowing`：读取 `foreshadowing/global.json`
+   - `storylines`：读取 `storylines/storylines.json`
+   - `world_docs`：读取 `world/*.md`（以 `<DATA type="world_doc" ...>` 注入）+ `world/rules.json`（结构化 JSON）
+   - `characters`：读取 `characters/active/*.md`（以 `<DATA type="character_profile" ...>` 注入）+ `characters/active/*.json`（L2 contracts 结构化 JSON）
+   - `user_direction`：用户额外方向指示（如有）
+2. 使用 Task 派发 PlotArchitect Agent 生成下一卷大纲（prompt 中包含上述 context）
+3. 展示大纲摘要，使用 AskUserQuestion 确认/修改
+4. 检查 PlotArchitect 输出的 `new-characters.json`：如有新角色，逐个调用 CharacterWeaver Agent 创建角色档案 + L2 契约（批量派发 Task）
+5. 大纲确认 + 角色创建完成后更新 `.checkpoint.json`（状态 = WRITING，new volume）
 
 **卷末回顾**：
 1. 收集本卷 `evaluations/`、`summaries/`、`foreshadowing/global.json`、`storylines/`，生成本卷回顾要点（质量趋势、低分章节、未回收伏笔、故事线节奏）
