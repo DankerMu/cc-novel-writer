@@ -1,7 +1,7 @@
 ## 1. Context Schema per Agent
 
 - [ ] 1.1 定义 ChapterWriter context 字段（outline、storyline_context、memory、summaries、state、specs、style、blacklist Top-10）
-- [ ] 1.2 定义 Summarizer context 字段（chapter_content、current_state、entity_id_map、foreshadow tasks、writer_hints）
+- [ ] 1.2 定义 Summarizer context 字段（chapter_content、current_state、entity_id_map、foreshadow tasks、hints）
 - [ ] 1.3 定义 QualityJudge context 字段（chapter_content、outline、profiles、prev_summary、specs、storyline spec/schedule、crossref）
 - [ ] 1.4 定义 PlotArchitect context 字段（prev_review、global foreshadowing、storylines、world docs/rules、characters+contracts）
 

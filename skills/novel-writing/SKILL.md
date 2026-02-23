@@ -68,7 +68,7 @@ description: >
 | 情感冲击 | 8% |
 | 故事线连贯 | 8% |
 
-门控：≥4.0 通过，3.5-3.9 二次润色，3.0-3.4 自动修订，<3.0 通知用户。有 contract violation（含 LS hard）时无条件强制修订。
+门控：≥4.0 通过，3.5-3.9 二次润色，3.0-3.4 自动修订，2.0-2.9 人工审核，<2.0 强制重写。有 contract violation（confidence=high，含 LS hard）时无条件强制修订。注：LS-005（跨线实体泄漏）在 M1/M2 阶段为 soft（报告不阻断），M3 升级为 hard。
 
 ## Context 管理
 

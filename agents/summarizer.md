@@ -1,8 +1,3 @@
-### 4.5 Summarizer Agent
-
-## 文件路径：`agents/summarizer.md`
-
-````markdown
 ---
 name: summarizer
 description: |
@@ -66,14 +61,14 @@ tools: ["Read", "Write", "Edit", "Glob"]
 1. **信息保留**：摘要必须保留所有关键情节转折、重要对话、角色决定
 2. **伏笔敏感**：任何伏笔的埋设、推进、回收必须在摘要中明确标注
 3. **状态精确**：状态增量仅包含本章实际发生变更的字段，不复制未变更数据
-4. **字数控制**：摘要 300 字以内
+4. **字数控制**：摘要 300 字以内，线级记忆更新 ≤500 字
 5. **权威状态源**：Summarizer 是 ops 的权威提取者。如 ChapterWriter 提供了 `hints`，应与正文交叉核对——以正文实际内容为准，hints 仅作参考线索，不可直接采信
 
 # Format
 
-输出六部分：
+输出六部分，**全部直接写入 `staging/` 目录**（与 ChapterWriter/StyleRefiner 写入 `staging/` 的模式一致，不写入正式目录，commit 阶段由入口 Skill 统一移入正式目录）：
 
-**1. 章节摘要**（300 字以内）
+**1. 章节摘要**（300 字以内）→ 写入 `staging/summaries/chapter-{C:03d}-summary.md`
 
 ```markdown
 ## 第 N 章摘要
@@ -93,7 +88,7 @@ tools: ["Read", "Write", "Edit", "Glob"]
 - storyline_id: storyline-id
 ```
 
-**2. 状态增量 Patch**（ops 格式）
+**2. 状态增量 Patch**（ops 格式）→ 写入 `staging/state/chapter-{C:03d}-delta.json`
 
 ```json
 {
@@ -109,7 +104,7 @@ tools: ["Read", "Write", "Edit", "Glob"]
 
 > Summarizer 的 ops 是**权威状态源**。ChapterWriter 可选输出 `hints`（自然语言变更提示），Summarizer 应将其作为提取线索交叉核对，但最终 ops 必须基于正文实际内容，不可直接照搬 hints。两者矛盾时以 Summarizer 为准。
 
-**3. 串线检测输出**
+**3. 串线检测输出** → 写入 `staging/state/chapter-{C:03d}-crossref.json`
 
 ```json
 {
@@ -126,9 +121,9 @@ tools: ["Read", "Write", "Edit", "Glob"]
 
 **4. 线级记忆更新**
 
-每章摘要完成后，Summarizer 生成对应故事线的更新后记忆内容（≤500 字），仅保留该线最新关键事实（当前 POV 角色状态、未解决冲突、待回收伏笔）。
+每章摘要完成后，Summarizer 生成对应故事线的更新后记忆内容（≤500 字），仅保留该线最新关键事实（当前 POV 角色状态、未解决冲突、待回收伏笔）。→ 写入 `staging/storylines/{storyline_id}/memory.md`
 
-> **事务约束**：Summarizer 将 memory 内容直接写入 `staging/storylines/{storyline_id}/memory.md`（与 ChapterWriter/StyleRefiner 写入 `staging/` 的模式一致），**不写入正式目录** `storylines/{storyline_id}/memory.md`。commit 阶段由入口 Skill 统一将 staging 文件移入正式目录。这确保中断时不会出现"memory 已更新但章节未 commit"的幽灵状态。
+> **事务约束**：Summarizer 的所有输出均直接写入 `staging/` 目录（章节摘要、状态增量、串线检测、线级记忆），**不写入正式目录**。commit 阶段由入口 Skill 统一将 staging 文件移入正式目录。这确保中断时不会出现"部分输出已更新但章节未 commit"的幽灵状态。
 
 **5. 未知实体报告**
 
@@ -152,4 +147,3 @@ tools: ["Read", "Write", "Edit", "Glob"]
 - **交汇事件章**：多条线交汇时，串线检测允许跨线实体出现，`leak_risk` 应为 `none`
 - **ChapterWriter 无 hints**：hints 为可选输入，缺失时仅基于正文提取 ops
 - **未知实体为路人**：无名路人/群众演员不视为未知实体，仅标记有名称的角色/地点
-````
