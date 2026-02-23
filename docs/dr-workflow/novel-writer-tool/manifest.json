@@ -68,7 +68,9 @@
       "phase_completed": "REVIEW",
       "score": 90,
       "new_dr_items": 3,
-      "dr_reports": [],
+      "dr_reports": [
+        "dr/dr-021-llm-multi-thread-narrative.md"
+      ],
       "notes": "v5 新增 Section 6.6 多线叙事体系。Review 发现 3 项待验证：LLM 多线一致性、快速起步集成、权重分配。",
       "timestamp": "2026-02-22T00:30:00+08:00"
     },
@@ -77,9 +79,7 @@
       "phase_completed": "FINALIZE",
       "score": 93,
       "new_dr_items": 0,
-      "dr_reports": [
-        "dr/dr-021-llm-multi-thread-narrative.md"
-      ],
+      "dr_reports": [],
       "notes": "v6 FINALIZE：集成 DR-021（32 来源），三层防串线策略，Layer 1 增加 storyline 初始化，QualityJudge 8 维度权重明确分配。Score 93/100。",
       "timestamp": "2026-02-22T01:00:00+08:00"
     }
