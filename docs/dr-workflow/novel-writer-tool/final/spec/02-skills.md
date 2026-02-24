@@ -647,7 +647,7 @@ Ch {X}: {字数}字 {分数} {状态} | Ch {X+1}: {字数}字 {分数} {状态} 
 - 质量不达标时自动修订最多 2 次
 - 写入使用 staging → commit 事务模式（详见 Step 2-6）
 - **Agent 写入边界**：所有 Agent（ChapterWriter/Summarizer/StyleRefiner）仅写入 `staging/` 目录，正式目录（`chapters/`、`summaries/`、`state/`、`storylines/`、`evaluations/`）由入口 Skill 在 commit 阶段操作。QualityJudge 为只读，不写入任何文件
-  > **M2 路径审计**：M1 阶段写入边界为 prompt 软约束 + staging 事务模型保障。M2 计划增加 PostToolUse hook 对 Agent 的 Write/Edit 调用进行路径白名单校验（仅允许 `staging/**`），违规操作自动拦截并记录到 `logs/audit.jsonl`。
+  > **M2 路径审计**：M1 阶段写入边界为 prompt 软约束 + staging 事务模型保障。M2 启用 PreToolUse hook 对 chapter pipeline 子代理的 Write/Edit/MultiEdit 调用进行路径白名单校验（仅允许 `staging/**`），违规操作自动拦截并记录到 `logs/audit.jsonl`。
 - 所有输出使用中文
 ````
 

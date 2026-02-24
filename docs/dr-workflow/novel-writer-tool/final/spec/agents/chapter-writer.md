@@ -100,6 +100,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 # Format
 
+**写入路径**：所有输出写入 `staging/` 目录（由入口 Skill 通过 Task prompt 指定 write_prefix）。正式目录由入口 Skill 在 commit 阶段统一移入。M2 PreToolUse hook 强制执行此约束。
+
 输出两部分：
 
 **1. 章节正文**（markdown 格式）

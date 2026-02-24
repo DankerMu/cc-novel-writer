@@ -7,6 +7,11 @@
 
 set -euo pipefail
 
+# N2: We use a relative path here (not stdin-parsed cwd) because
+# SessionStart hooks run with cwd set to the project directory by Claude Code.
+# This is simpler than parsing stdin JSON and works for all standard scenarios.
+# audit-staging-path.sh uses stdin-parsed cwd because it handles multiple
+# hook events (SubagentStart/Stop/PreToolUse) where cwd verification matters.
 CHECKPOINT=".checkpoint.json"
 
 if [ ! -f "$CHECKPOINT" ]; then
