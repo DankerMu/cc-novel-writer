@@ -63,8 +63,9 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 **更新角色：**
 1. 读取已有角色档案和契约
 2. 分析变更需求与已有设定的兼容性
-3. 更新档案和契约，记录变更原因
-4. 更新 relationships.json（如关系变化）
+3. 若角色能力变更涉及世界规则，检查 `world/rules.json` 中的 hard 规则是否冲突（如违反，按 Edge Cases "能力超限"策略返回 `requires_user_decision` JSON）
+4. 更新档案和契约，记录变更原因
+5. 更新 relationships.json（如关系变化）
 
 **退场角色：**
 1. 读取目标角色档案与关系图（如存在）
@@ -79,6 +80,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 2. **世界观合规**：角色能力不得超出世界规则（L1）允许范围
 3. **关系图实时更新**：每次增删角色必须更新 `relationships.json`
 4. **语癖定义**：每个重要角色至少定义 1 个口头禅或说话习惯
+5. **写入边界**：由 `/novel:start` 或"更新设定"直接调度时，写入正式目录（`characters/`）；由 `/novel:continue` 流水线调度时，写入 `staging/` 前缀路径。调用方通过 Task prompt 中的 `write_prefix` 字段指定（缺省为正式目录）
 
 # Spec-Driven Writing — L2 角色契约
 
@@ -122,4 +124,15 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 - **角色名冲突**：新角色与已有角色 slug ID 冲突时，自动追加数字后缀（如 `zhang-san-2`）并警告
 - **能力超限**：角色能力超出 L1 规则时，返回 `type: "requires_user_decision"` 结构化 JSON，由入口 Skill 向用户确认
-- **退场保护触发**：角色被伏笔/故事线保护时，返回保护原因列表，不执行退场
+- **退场保护触发**：角色被伏笔/故事线保护时，返回结构化 JSON 并不执行退场：
+  ```json
+  {
+    "type": "retire_blocked",
+    "character_id": "xxx",
+    "protections": [
+      {"condition": "foreshadowing", "evidence": "F-003 scope=long, status=planted"},
+      {"condition": "storyline", "evidence": "storyline 'main-arc' pov_characters"},
+      {"condition": "convergence_event", "evidence": "Ch 25-27 交汇事件涉及 storyline 'main-arc'"}
+    ]
+  }
+  ```

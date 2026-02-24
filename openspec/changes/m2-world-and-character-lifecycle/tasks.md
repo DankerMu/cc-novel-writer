@@ -21,3 +21,5 @@
 - `docs/dr-workflow/novel-writer-tool/final/spec/agents/world-builder.md`
 - `docs/dr-workflow/novel-writer-tool/final/spec/agents/character-weaver.md`
 - `docs/dr-workflow/novel-writer-tool/final/prd/08-orchestrator.md`
+- `skills/start/SKILL.md`
+- `docs/dr-workflow/novel-writer-tool/final/spec/02-skills.md`

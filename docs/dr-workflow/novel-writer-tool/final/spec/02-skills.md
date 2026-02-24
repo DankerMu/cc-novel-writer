@@ -246,11 +246,14 @@ Skill → 状态映射：
 2. 写入 `volumes/vol-{V:02d}/review.md`
 3. State 清理（每卷结束时，PRD §8.5；生成清理报告供用户确认）：
    - Read `state/current-state.json`（如存在）
-   - Read `characters/retired/*.json`（如存在）并构建 `retired_ids`
+   - Read `characters/retired/*.json`（如存在；若 `characters/retired/` 目录不存在则先创建）并构建 `retired_ids`
    - **确定性安全清理（可直接执行）**：
      - 从 `state/current-state.json.characters` 移除 `retired_ids` 的残留条目
    - **候选清理（默认不自动删除）**：
-     - 标记并汇总“过期临时条目”候选（如：物品/位置等临时状态；且无活跃伏笔或故事线引用）
+     - 标记并汇总”过期临时条目”候选，判断规则：
+       1. `state/current-state.json.world_state` 中的临时标记（如活动状态、事件标志）：无活跃伏笔引用 AND 无故事线引用 AND 不属于 L1 rules 中定义的持久化属性
+       2. `state/current-state.json.characters.{id}` 中的临时属性（如 inventory 中的一次性物品、临时 buff）：无伏笔引用 AND 无故事线引用
+       3. 不确定的条目一律归为”候选”而非”确定性清理”，由用户决定
    - 在 `volumes/vol-{V:02d}/review.md` 追加 “State Cleanup” 段落：已清理项 + 候选项 + 删除理由
    - AskUserQuestion 让用户确认是否应用候选清理（不确定项默认保留）
 4. AskUserQuestion 让用户确认“进入下卷规划 / 调整设定 / 导入研究资料”
@@ -281,13 +284,14 @@ Skill → 状态映射：
      - `existing_world_docs`（`world/*.md` 原文集合）
      - `existing_rules_json`（`world/rules.json`）
      - `update_request`（新增/修改需求）
-     - `last_completed_chapter`（可选，用于更新变更规则的 `last_verified`）
+     - `last_completed_chapter`（从 `.checkpoint.json.last_completed_chapter` 读取，用于更新变更规则的 `last_verified`）
    - 退场角色（CharacterWeaver）退场保护检查（入口 Skill 必须在调用退场模式前执行；PRD §8.5）：
      - **保护条件 A — 活跃伏笔引用**：`foreshadowing/global.json` 中 scope ∈ {`medium`,`long`} 且 status != `resolved` 的条目，若其 `description`/`history.detail` 命中角色 `slug_id` 或 `display_name` → 不可退场
      - **保护条件 B — 故事线关联**：`storylines/storylines.json` 中任意 storyline（含 dormant/planned）若 `pov_characters` 或 `relationships.bridges.shared_characters` 命中角色 → 不可退场
      - `角色关联 storylines` 的计算：从 `storylines/storylines.json` 反查出包含该角色的 storyline `id` 集合（按 `pov_characters`/`bridges.shared_characters` 匹配 `slug_id`/`display_name`）；无法可靠确定时按保守策略视为有关联并阻止退场
      - **保护条件 C — 未来交汇事件**：本卷 `storyline-schedule.json.convergence_events` 若存在未来章节范围（相对 `last_completed_chapter`），且其 `involved_storylines` 与角色关联 storylines 有交集（或 `trigger/aftermath` 文本命中角色）→ 不可退场
-     - 若触发保护：拒绝退场并解释命中证据（伏笔/故事线/交汇事件）
+     - 若触发保护：拒绝退场并解释命中证据（伏笔/故事线/交汇事件），不调用 CharacterWeaver
+   - 退场保护检查通过后，使用 Task 派发 CharacterWeaver Agent 执行退场（无需重复检查）
 4. 变更后差异分析与标记（最小实现；目的：可追溯传播，避免 silent drift）：
    - 若 `world/rules.json` 发生变化：
      - 找出变更的 `rule_id` 集合（按 `id` 对齐，diff `rule`/`constraint_type`/`exceptions` 等关键字段）
