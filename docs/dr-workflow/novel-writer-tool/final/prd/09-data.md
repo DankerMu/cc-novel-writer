@@ -222,10 +222,18 @@ novel-project/
   ],
   "gate_decision": "pass",
   "revisions": 0,
+  "force_passed": false,
+  "judges": {
+    "primary": {"model": "sonnet", "overall": 4.2},
+    "used": "primary",
+    "overall_final": 4.2
+  },
   "total_duration_ms": 110000,
   "total_cost_usd": null
 }
 ```
+
+> `judges` 字段（M3 新增）：记录门控裁判详情。关键章（卷首/卷尾/交汇事件章）额外包含 `secondary` 子对象（`{"model": "opus", "overall": 3.8}`），`overall_final = min(primary.overall, secondary.overall)`，`used` 标记实际采用的裁判。普通章仅含 `primary`。`force_passed`（M3 新增）：修订次数耗尽后强制通过时为 `true`。
 
 > 每章流水线完成后由入口 Skill 写入 `logs/chapter-N-log.json`。用于调试（定位哪个阶段耗时异常）、质量回顾（门控决策 + 修订次数统计）。`/novel:status` 可读取汇总展示。
 >

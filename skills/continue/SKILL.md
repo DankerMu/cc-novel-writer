@@ -263,25 +263,24 @@ for chapter_num in range(start, start + remaining_N):
        - 关键章判定：
          - 卷首章：chapter_num == chapter_start
          - 卷尾章：chapter_num == chapter_end
-         - 交汇事件章：chapter_num 落在任一 storyline_schedule.convergence_events.chapter_range（含边界）内
+         - 交汇事件章：chapter_num 落在任一 storyline_schedule.convergence_events.chapter_range（含边界）内（若某 event 的 chapter_range 缺失或为 null，跳过该 event）
        - 若为关键章：使用 Task(subagent_type="quality-judge", model="opus") 再调用一次 QualityJudge 得到 secondary_eval
        - 最坏情况合并（用于门控）：
          - overall_final = min(primary_eval.overall, secondary_eval.overall)
-         - has_high_confidence_violation_final = high_violation(primary_eval) OR high_violation(secondary_eval)
-         - eval_used = overall 更低的一次（primary/secondary）
+         - has_high_confidence_violation = high_violation(primary_eval) OR high_violation(secondary_eval)
+         - eval_used = overall 更低的一次（primary/secondary；若相等，优先使用 secondary_eval——更强模型的判断）
        - 记录：primary/secondary 的 model + overall + eval_used + overall_final（写入 eval metadata 与 logs，便于回溯差异与成本）
      普通章：
        - overall_final = primary_eval.overall
-       - has_high_confidence_violation_final = high_violation(primary_eval)
+       - has_high_confidence_violation = high_violation(primary_eval)
        - eval_used = primary_eval
      更新 checkpoint: pipeline_stage = "judged"
 
   5. 质量门控决策（Gate Decision Engine）:
-     1) 计算 hard gate 输入（仅认 high confidence）：
+     1) high_violation 函数定义与 hard gate 输入（仅认 high confidence）：
         - high_violation(eval) := 任一 contract_verification.{l1,l2,l3}_checks 中存在 status="violation" 且 confidence="high"
           或任一 contract_verification.ls_checks 中存在 status="violation" 且 confidence="high" 且（constraint_type 缺失或 == "hard"）
-        - 对关键章：has_high_confidence_violation = high_violation(primary_eval) OR high_violation(secondary_eval)
-        - 对普通章：has_high_confidence_violation = high_violation(primary_eval)
+        - has_high_confidence_violation：取自 Step 4 的计算结果（关键章=双裁判 OR 合并，普通章=单裁判）
         > confidence=medium/low 仅记录警告，不触发 hard gate（避免误报疲劳）
 
      2) 固化门控决策函数（输出 gate_decision）：
@@ -301,7 +300,7 @@ for chapter_num in range(start, start + remaining_N):
           - 更新 checkpoint: orchestrator_state="CHAPTER_REWRITE", pipeline_stage="revising", revision_count += 1
           - 调用 ChapterWriter 修订模式（Task(subagent_type="chapter-writer", model="opus")）：
             - 输入: chapter_writer_revision_context
-            - 修订指令：以 eval.required_fixes 作为最小修订指令；若 required_fixes 为空，则用 high_confidence_violations 生成 3-5 条最小修订指令兜底
+            - 修订指令：以 eval.required_fixes 作为最小修订指令；若 required_fixes 为空，则用 high_confidence_violations 生成 3-5 条最小修订指令兜底；若两者均为空（score 3.0-3.4 无 violation 触发），则从 eval 的 8 维度中取最低分 2 个维度的 feedback 作为修订方向
             - 约束：定向修改 required_fixes 指定段落，尽量保持其余内容不变
           - 回到步骤 2 重新走 Summarizer → StyleRefiner → QualityJudge → 门控（保证摘要/state/crossref 与正文一致）
 

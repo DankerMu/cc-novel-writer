@@ -255,11 +255,11 @@ Skill → 状态映射：
 
 **质量回顾**：
 1. 使用 Glob + Read 收集近 10 章数据（按章节号排序取最新）：
-   - `evaluations/chapter-*-eval.json`（overall + contract_verification + gate metadata 如有）
+   - `evaluations/chapter-*-eval.json`（overall_final + contract_verification + gate metadata 如有）
    - `logs/chapter-*-log.json`（gate_decision/revisions/force_passed + key chapter judges 如有）
 2. 生成质量报告（简洁但可追溯）：
    - 均分与趋势：近 10 章均分 vs 全局均分
-   - 低分章节列表：overall < 3.5（按分数升序列出，展示 gate_decision + revisions）
+   - 低分章节列表：overall_final < 3.5（按分数升序列出，展示 gate_decision + revisions）
    - 强制修订统计：revisions > 0 的章节占比；并区分原因：
      - `Spec/LS high-confidence violation`（contract_verification 中任一 violation 且 confidence="high"）
      - `score 3.0-3.4`（无 high-confidence violation 但 overall 落入区间）
