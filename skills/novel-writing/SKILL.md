@@ -1,8 +1,11 @@
 ---
 name: novel-writing
 description: >
-  小说创作共享方法论知识库 — 卷制滚动工作流、Spec-Driven Writing、多线叙事、去 AI 化四层策略、8 维度质量评分标准。
-  Use when: novel 插件的 Agent（ChapterWriter、StyleRefiner、QualityJudge 等）需要参考创作方法论、去 AI 化规则或质量评分标准时，由入口 Skill 读取并注入到 Agent context。
+  小说创作共享方法论知识库（内部引用，非用户直接调用）。
+  包含卷制滚动工作流、Spec-Driven Writing 四层规范体系、多线叙事管理、去 AI 化四层策略、8 维度质量评分标准。
+  This skill is a passive reference library. It should not be triggered by user queries.
+  Entry skills (/novel:start, /novel:continue) read its references/ directory
+  and inject content into Agent contexts programmatically.
 ---
 
 # 小说创作方法论
@@ -40,7 +43,7 @@ description: >
 - **卷级调度**：PlotArchitect 在卷规划时生成 `storyline-schedule.json`（volume_role: primary/secondary/seasoning + 交汇事件）
 - **章级注入**：ChapterWriter 接收 storyline_context + concurrent_state + transition_hint
 - **防串线**：三层策略（结构化 Context + 反串线指令 + QualityJudge 后验校验），每次续写为独立 LLM 调用
-- **活跃线限制**：同时活跃 ≤ 4 条（DR-021 验证）
+- **活跃线限制**：同时活跃 ≤ 4 条
 
 ## 去 AI 化四层策略
 
@@ -52,6 +55,8 @@ description: >
 | L4 检测度量 | 黑名单命中率 + 句式重复率 + 风格匹配度 | QualityJudge |
 
 核心指标：AI 黑名单命中 < 3 次/千字，相邻 5 句重复句式 < 2。
+
+详见 `references/style-guide.md`。
 
 ## 质量评分标准
 
@@ -69,6 +74,7 @@ description: >
 | 故事线连贯 | 8% |
 
 门控：≥4.0 通过，3.5-3.9 二次润色，3.0-3.4 自动修订，2.0-2.9 人工审核，<2.0 强制重写。有 contract violation（confidence=high，含 LS hard）时无条件强制修订。注：LS-005（跨线实体泄漏）在 M1/M2 阶段为 soft（报告不阻断），M3 升级为 hard。
+<!-- TODO: M3 完成后将 LS-005 直接标记为 hard 并删除此临时说明 -->
 
 ## Context 管理
 
@@ -78,4 +84,4 @@ description: >
 - **StyleRefiner**：~8K — 章节全文 + 风格 + 黑名单
 - **QualityJudge**：~14-16K — 章节全文 + 大纲 + 角色 + 契约 + 故事线 spec
 
-摘要替代全文 + L2 角色裁剪，确保第 500 章时 context 仍稳定。模型 context window（200K）远大于实际用量。
+摘要替代全文 + L2 角色裁剪，确保第 500 章时 context 仍稳定。模型 context window（当前约 200K）远大于实际用量。

@@ -1,9 +1,10 @@
 ---
 name: continue
 description: >
-  续写下一章或多章（高频快捷命令）。支持参数 [N] 指定章数（默认 1，建议 ≤5）。
-  Use when: 用户输入 /novel:continue 或在 /novel:start 中选择"继续写作"时触发。
-  要求 orchestrator_state ∈ {WRITING, CHAPTER_REWRITE}。
+  该技能用于续写小说的下一章或批量续写多章。支持参数 [N] 指定章数（默认 1，建议不超过 5）。
+  This skill should be used when the user says "续写", "继续写", "写下一章", "继续创作",
+  "写N章", "批量续写", "恢复中断的章节", "断点续写", or selects "继续写作" from /novel:start.
+  Requires project to be in WRITING or CHAPTER_REWRITE state.
 ---
 
 # 续写命令
@@ -12,7 +13,7 @@ description: >
 
 ## 运行约束
 
-- **可用工具**：Read, Write, Edit, Glob, Grep, Bash, Task
+- **可用工具**：Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion
 - **推荐模型**：sonnet
 - **参数**：`[N]` — 续写章数，默认 1，最大建议 5
 
@@ -166,129 +167,20 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
      - 若当前章落在任一 `convergence_events.chapter_range` 内 → 注入 `involved_storylines` 中除当前线外的 memory（过滤 `dormant_storylines`）
    - 冻结线（`dormant_storylines`）：**不注入 memory**，仅保留 `concurrent_state` 一句话状态
 
-#### Step 2.6: 按 Agent 类型输出 context（字段契约）
+#### Step 2.6: Agent Context 组装
 
-```
-chapter_writer_context = {
-  project_brief(<DATA world_doc>): brief.md,
-  style_profile(json): style-profile.json,
-  style_drift(json, optional): style-drift.json,                         # active=true 时注入（用于纠偏）
-  style_drift_directives(list, optional): style_drift.drifts[].directive,
-  ai_blacklist_effective_words(list): ai_blacklist.words - (ai_blacklist.whitelist 或 ai_blacklist.exemptions.words),
-  ai_blacklist_top10(list): ai_blacklist_effective_words[0:10],
-  current_volume_outline(<DATA summary>): volumes/vol-{V:02d}/outline.md,
-  chapter_outline(<DATA summary>): 本章 outline 区块,
-  storyline_id, storyline_context, concurrent_state, transition_hint,
-  storyline_memory(<DATA summary>), adjacent_storyline_memories(<DATA summary>...),
-  recent_3_summaries(<DATA summary>...),
-  current_state(json): state/current-state.json,
-  foreshadowing_tasks(json subset): foreshadowing/global.json 中与本章相关条目,
-  chapter_contract(json),
-  world_rules(json, optional), hard_rules_list(list),
-  character_contracts(json subset),   # 按裁剪规则选取
-  writing_methodology(<DATA reference>): novel-writing methodology excerpt
-}
+按 Agent 类型组装 context 字典，字段契约详见 `references/context-contracts.md`。
 
-chapter_writer_revision_context = {
-  # 仅在 gate_decision="revise" 的修订循环中使用
-  chapter_writer_context 的全部字段 +
-  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,   # 现有章节正文（待定向修订）
-  required_fixes(list): eval.required_fixes,                                     # QualityJudge 的最小修订指令
-  high_confidence_violations(list): 从 eval.contract_verification 中抽取 status="violation" 且 confidence="high" 的条目（用于兜底修订指令）
-}
-
-summarizer_context = {
-  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
-  current_state(json),
-  foreshadowing_tasks(json subset),
-  entity_id_map(map),
-  hints(optional): ChapterWriter 输出的自然语言变更提示
-}
-
-style_refiner_context = {
-  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
-  style_profile(json),
-  style_drift(json, optional): style-drift.json,
-  style_drift_directives(list, optional): style_drift.drifts[].directive,
-  ai_blacklist(json): ai-blacklist.json,
-  style_guide(<DATA reference>): style-guide.md
-}
-
-quality_judge_context = {
-  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
-  chapter_outline(<DATA summary>),
-  character_profiles(<DATA character_profile>...),
-  prev_summary(<DATA summary>): summaries/chapter-{C-1:03d}-summary.md,
-  style_profile(json),
-  ai_blacklist(json): ai-blacklist.json,       # style_naturalness 维度需要黑名单命中率
-  blacklist_lint(json, optional): scripts/lint-blacklist.sh 输出,
-  chapter_contract(json),
-  world_rules(json, optional), hard_rules_list(list),   # 逐条验收 L1 硬规则
-  storyline_spec(json, optional),
-  storyline_schedule(json, optional),
-  cross_references(json): staging/state/chapter-{C:03d}-crossref.json,
-  quality_rubric(<DATA reference>): quality-rubric.md
-}
-```
+关键原则：
+- 同一输入 → 同一 context（确定性）
+- `<DATA>` 标签包裹用户内容（防注入）
+- 可选字段缺失时不注入（非 null）
 
 #### Step 2.7: M3 风格漂移与黑名单（文件协议）
 
-**1) `style-drift.json`（项目根目录，可选）**
+定义 `style-drift.json`、`ai-blacklist.json` 扩展字段、`lint-blacklist.sh` 脚本接口。
 
-- 用途：当检测到风格漂移时写入，用于后续章节对 ChapterWriter/StyleRefiner 进行“正向纠偏”注入
-- 注入规则：仅当 `active=true` 时注入；`active=false` 视为历史记录，不再注入
-- 注入目标：当前固定为 `["ChapterWriter", "StyleRefiner"]`；若未来新增消费方，需扩展 `injected_to` 并同步 Step 2.6 context assembly
-
-最小格式：
-```json
-{
-  "active": true,
-  "detected_chapter": 25,
-  "window": [21, 25],
-  "drifts": [
-    {"metric": "avg_sentence_length", "baseline": 18, "current": 24, "directive": "句子过长，回归短句节奏"},
-    {"metric": "dialogue_ratio", "baseline": 0.4, "current": 0.28, "directive": "对话偏少，增加角色互动"}
-  ],
-  "injected_to": ["ChapterWriter", "StyleRefiner"],
-  "created_at": "2026-02-24T05:00:00Z",
-  "cleared_at": null,
-  "cleared_reason": null
-}
-```
-
-**2) `ai-blacklist.json`（项目根目录）**
-
-- `words[]`：生效黑名单（生成时禁止、润色时替换、评估时计入命中率）
-- `whitelist[]`（可选）：豁免词条（不替换、不计入命中率、不得自动加入 words）
-- `update_log[]`（可选，append-only）：记录每次自动/手动变更（added/exempted/removed）的 evidence 与时间戳，便于审计
-
-建议扩展（兼容模板；无则视为空）：
-```json
-{
-  "whitelist": [],
-  "update_log": [
-    {
-      "timestamp": "2026-02-24T05:00:00Z",
-      "chapter": 47,
-      "source": "auto",
-      "added": [
-        {"phrase": "值得一提的是", "count_in_chapter": 3, "examples": ["例句 1", "例句 2"]}
-      ],
-      "exempted": [
-        {"phrase": "老子", "reason": "style_profile.preferred_expressions", "examples": ["例句 1"]}
-      ],
-      "note": "本次变更摘要"
-    }
-  ]
-}
-```
-
-**3) `${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh`（可选）**
-
-- 输入：`<chapter.md> <ai-blacklist.json>`
-- 输出：stdout JSON（exit 0），至少包含：
-  - `total_hits`、`hits_per_kchars`（次/千字）、`hits[]`（word/count/lines/snippets）
-- 失败回退：脚本不存在 / 退出码非 0 / stdout 非 JSON → 不阻断，QualityJudge 改为启发式估计并标注“估计值”
+详见 `references/file-protocols.md`。
 
 ### Step 3: 逐章流水线
 
@@ -347,52 +239,13 @@ for chapter_num in range(start, start + remaining_N):
      更新 checkpoint: pipeline_stage = "judged"
 
   5. 质量门控决策（Gate Decision Engine）:
-     1) high_violation 函数定义与 hard gate 输入（仅认 high confidence）：
-        - high_violation(eval) := 任一 contract_verification.{l1,l2,l3}_checks 中存在 status="violation" 且 confidence="high"
-          或任一 contract_verification.ls_checks 中存在 status="violation" 且 confidence="high" 且（constraint_type 缺失或 == "hard"）
-        - has_high_confidence_violation：取自 Step 4 的计算结果（关键章=双裁判 OR 合并，普通章=单裁判）
-        > confidence=medium/low 仅记录警告，不触发 hard gate（避免误报疲劳）
-
-     2) 固化门控决策函数（输出 gate_decision）：
-        ```
-        if has_high_confidence_violation:
-          gate_decision = "revise"
-        else:
-          if overall_final >= 4.0: gate_decision = "pass"
-          elif overall_final >= 3.5: gate_decision = "polish"
-          elif overall_final >= 3.0: gate_decision = "revise"
-          elif overall_final >= 2.0: gate_decision = "pause_for_user"
-          else: gate_decision = "pause_for_user_force_rewrite"
-        ```
-
-     3) 自动修订闭环（max revisions = 2）：
-        - 若 gate_decision="revise" 且 revision_count < 2：
-          - 更新 checkpoint: orchestrator_state="CHAPTER_REWRITE", pipeline_stage="revising", revision_count += 1
-          - 调用 ChapterWriter 修订模式（Task(subagent_type="chapter-writer", model="opus")）：
-            - 输入: chapter_writer_revision_context
-            - 修订指令：以 eval.required_fixes 作为最小修订指令；若 required_fixes 为空，则用 high_confidence_violations 生成 3-5 条最小修订指令兜底；若两者均为空（score 3.0-3.4 无 violation 触发），则从 eval 的 8 维度中取最低分 2 个维度的 feedback 作为修订方向
-            - 约束：定向修改 required_fixes 指定段落，尽量保持其余内容不变
-          - 回到步骤 2 重新走 Summarizer → StyleRefiner → QualityJudge → 门控（保证摘要/state/crossref 与正文一致）
-
-        - 若 gate_decision="revise" 且 revision_count == 2（次数耗尽）：
-          - 若 has_high_confidence_violation=false 且 overall_final >= 3.0：
-            - 设置 force_passed=true，允许提交（避免无限循环）
-            - 记录：eval metadata + log 中标记 force_passed=true（门控被上限策略终止）
-            - 将 gate_decision 覆写为 "pass"
-          - 否则：
-            - 释放并发锁（rm -rf .novel.lock）并暂停，提示用户在 `/novel:start` 决策下一步（手动修订/重写/接受）
-
-     4) 其他决策的后续动作：
-        - gate_decision="pass"：直接进入 commit
-        - gate_decision="polish"：更新 checkpoint: pipeline_stage="revising" → StyleRefiner 二次润色后进入 commit（不再重复 QualityJudge 以控成本）
-        - gate_decision="pause_for_user" / "pause_for_user_force_rewrite"：释放并发锁（rm -rf .novel.lock）并暂停，等待用户通过 `/novel:start` 决策
-
-     5) 写入评估与门控元数据（可追溯）：
-        - 写入 staging/evaluations/chapter-{C:03d}-eval.json：
-          - 内容：eval_used（普通章=primary_eval；关键章=overall 更低的一次）+ metadata
-          - metadata 至少包含：
-            - judges: {primary:{model,overall}, secondary?:{model,overall}, used, overall_final}
-            - gate: {decision: gate_decision, revisions: revision_count, force_passed: bool}
+     门控决策（详见 `references/gate-decision.md`）：
+       - overall ≥ 4.0 且无 high-confidence violation → pass
+       - overall ≥ 3.5 → polish（StyleRefiner 二次润色）
+       - overall ≥ 3.0 → revise（ChapterWriter Opus 修订，最多 2 轮）
+       - overall ≥ 2.0 → review（暂停，通知用户审核）
+       - overall < 2.0 → rewrite（强制重写，暂停）
+       - 修订上限 2 次后 overall ≥ 3.0 → force_passed
 
   6. 事务提交（staging → 正式目录）:
      - 移动 staging/chapters/chapter-{C:03d}.md → chapters/chapter-{C:03d}.md
@@ -405,52 +258,15 @@ for chapter_num in range(start, start + remaining_N):
      - 处理 unknown_entities: 从 Summarizer 输出提取 unknown_entities，追加写入 logs/unknown-entities.jsonl；若累计 ≥ 3 个未注册实体，在本章输出中警告用户
      - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null, revision_count = 0）
      - 状态转移：
-       - 若 chapter_num == chapter_end：更新 `.checkpoint.json.orchestrator_state = "VOL_REVIEW"` 并提示用户运行 `/novel:start` 执行卷末回顾
-       - 否则：更新 `.checkpoint.json.orchestrator_state = "WRITING"`（若本章来自 CHAPTER_REWRITE，则回到 WRITING）
-     - M3：AI 黑名单动态维护（不阻断）：
-       - 从 eval_used.anti_ai.blacklist_update_suggestions[] 读取新增候选（必须包含：phrase + count_in_chapter + examples）
-       - 增长上限检查：若 `words[]` 长度 ≥ 80，跳过自动追加，仅记录到 `update_log[]`（source="auto_skipped_cap"），并在 `/novel:start` 质量回顾中提示用户审核黑名单规模
-       - 自动追加门槛（保守，避免误伤）：
-         - `confidence ∈ {medium, high}` 且 `count_in_chapter >= 3` → 才允许自动追加
-         - 其余仅记录为”候选建议”，不自动写入（可在 `/novel:start` 质量回顾中提示用户手动处理）
-         - 注意：当前门槛为单章统计；跨章高频但单章 < 3 的词不会自动追加，依赖用户在质量回顾中审核候选列表
-       - 更新 `ai-blacklist.json`（按 Step 2.7 协议；幂等、可追溯）：
-         - 确保存在 `whitelist[]` 与 `update_log[]`（不存在则创建为空）
-         - added：追加到 `words[]`（去重；若已存在于 words/whitelist 则跳过）
-         - exempted（误伤保护，自动豁免，不作为命中/不替换）：
-           - 若候选短语命中 `style-profile.json.preferred_expressions[]`（样本高频表达）或用户显式 `ai-blacklist.json.whitelist[]`：
-             - 将其加入 whitelist（若未存在）
-             - 记录为 exempted，并且**不得加入** words
-         - 更新 `last_updated`（YYYY-MM-DD）与 `version`（若存在且为合法 semver 则 patch bump；字段缺失或不可解析时仅更新 `last_updated`，不创建 `version`）
-         - 追加 `update_log[]`（append-only）：记录 timestamp/chapter/source="auto"/added/exempted + evidence（例句）
-       - 用户可控入口：
-         - 用户可手动编辑 `ai-blacklist.json` 的 `words[]/whitelist[]`
-         - 若用户删除某词但不希望未来被自动再加回，请将其加入 `whitelist[]`（系统不得自动加入 whitelist 内词条）
-     - M3：风格漂移检测与纠偏（每 5 章触发）：
-       - 触发条件：last_completed_chapter % 5 == 0
-       - 窗口：读取最近 5 章 `chapters/chapter-{C-4..C}.md`
-       - 调用 StyleAnalyzer 提取当前 metrics（仅需 avg_sentence_length / dialogue_ratio；其余字段可忽略）
-       - 与 `style-profile.json` 基线对比（相对偏移，确定性公式）：
-         - 前置检查：若 `base.avg_sentence_length` 为 null/0 或 `base.dialogue_ratio` 为 null/0，跳过对应维度的漂移检测（记录日志 "baseline metric unavailable, skipping drift check"）
-         - `sentence_dev = abs(curr.avg_sentence_length - base.avg_sentence_length) / base.avg_sentence_length`
-         - `dialogue_dev = abs(curr.dialogue_ratio - base.dialogue_ratio) / base.dialogue_ratio`
-       - 漂移判定：
-         - `sentence_dev > 0.20` 或 `dialogue_dev > 0.15` → drift=true
-         - 回归判定：`sentence_dev < 0.10` 且 `dialogue_dev < 0.10` → recovered=true
-       - drift=true：
-         - 写入/更新 `style-drift.json`（按 Step 2.7；active=true）
-         - drifts[].directive 生成规则（最多 3 条，短句可执行）：
-           - 句长偏长：强调短句/动作推进/拆句
-           - 句长偏短：允许适度长句与节奏变化（但仍以 style-profile 为准）
-           - 对话偏少：强调通过对话推进（交给 ChapterWriter；StyleRefiner 不得硬造新对白）
-           - 对话偏多：加强叙述性承接与内心活动（不删对白，仅调整段落与叙述衔接）
-       - recovered=true：
-         - 清除纠偏：删除 `style-drift.json` 或标记 `active=false`，并写入 `cleared_at/cleared_reason="metrics_recovered"`
-       - 超时清除：若当前章 - `style-drift.json.detected_chapter` > 15（即纠偏指令已注入超过 15 章仍未回归），自动标记 `active=false`，`cleared_reason="stale_timeout"`
-       - 其余情况：保持现状（不新增、不清除），避免频繁抖动
+       - 若 chapter_num == chapter_end：更新 `.checkpoint.json.orchestrator_state = “VOL_REVIEW”` 并提示用户运行 `/novel:start` 执行卷末回顾
+       - 否则：更新 `.checkpoint.json.orchestrator_state = “WRITING”`（若本章来自 CHAPTER_REWRITE，则回到 WRITING）
      - 写入 logs/chapter-{C:03d}-log.json（stages 耗时/模型、gate_decision、revisions、force_passed；关键章额外记录 primary/secondary judge 的 model+overall 与 overall_final；token/cost 为估算值或 null，见降级说明）
      - 清空 staging/ 本章文件
      - 释放并发锁: rm -rf .novel.lock
+
+     - **Step 3.7: M3 周期性维护（非阻断，详见 `references/periodic-maintenance.md`）**
+       - AI 黑名单动态维护：从 QualityJudge suggestions 读取候选 → 自动追加（confidence medium+high, count≥3, words<80）或记录候选
+       - 风格漂移检测（每 5 章）：StyleAnalyzer 提取 metrics → 与基线对比 → 漂移则写入 style-drift.json / 回归则清除 / 超时(>15章)则 stale_timeout
 
   7. 输出本章结果:
      > 第 {C} 章已生成（{word_count} 字），评分 {overall_final}/5.0，门控 {gate_decision}，修订 {revision_count} 次 {pass_icon}
@@ -476,5 +292,4 @@ Ch {X}: {字数}字 {分数} {状态} | Ch {X+1}: {字数}字 {分数} {状态} 
 - 质量不达标时自动修订最多 2 次
 - 写入使用 staging → commit 事务模式（详见 Step 2-6）
 - **Agent 写入边界**：所有 Agent（ChapterWriter/Summarizer/StyleRefiner）仅写入 `staging/` 目录，正式目录（`chapters/`、`summaries/`、`state/`、`storylines/`、`evaluations/`）由入口 Skill 在 commit 阶段操作。QualityJudge 为只读，不写入任何文件
-  > **M2 路径审计**：M1 阶段写入边界为 prompt 软约束 + staging 事务模型保障。M2 启用 PreToolUse hook 对 chapter pipeline 子代理的 Write/Edit/MultiEdit 调用进行路径白名单校验（仅允许 `staging/**`），违规操作自动拦截并记录到 `logs/audit.jsonl`。
 - 所有输出使用中文

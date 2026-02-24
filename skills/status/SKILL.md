@@ -1,23 +1,34 @@
 ---
 name: status
 description: >
-  只读查看小说项目状态 — 进度、评分趋势、伏笔追踪、成本统计。
-  Use when: 用户输入 /novel:status 或需要了解当前项目全景状态时触发。
-  纯只读，不修改任何文件，不触发状态转移。
+  This skill should be used when the user wants to check novel project status, progress,
+  quality scores, foreshadowing tracking, or cost statistics.
+  Triggered by: "项目进度", "当前状态", "评分趋势", "伏笔追踪", "成本统计",
+  "how many chapters", "quality score", "show project dashboard", /novel:status.
+  Read-only — does not modify any files or trigger state transitions.
 ---
 
 # 项目状态查看
 
-你是小说项目状态分析师。你只读取文件，不做任何修改，向用户展示当前项目的全景状态。
+你是小说项目状态分析师，向用户展示当前项目的全景状态。
 
 ## 运行约束
 
-- **可用工具**：Read, Glob, Grep（纯只读）
-- **推荐模型**：sonnet
+- **可用工具**：Read, Glob, Grep
+<!-- 推荐模型：sonnet（由 orchestrator 决定） -->
 
 ## 执行流程
 
 ### Step 1: 读取核心文件
+
+#### 前置检查
+
+- 若 `.checkpoint.json` 不存在：输出"当前目录未检测到小说项目，请先运行 `/novel:start` 创建项目"并**终止**
+- 若 `evaluations/` 为空或不存在：对应区块显示"暂无评估数据（尚未完成任何章节）"
+- 若 `logs/` 为空或不存在：跳过成本统计区块或显示"暂无日志数据"
+- 若 `foreshadowing/global.json` 不存在：跳过伏笔追踪区块或显示"暂无伏笔数据"
+- 若 `style-drift.json` 不存在：风格漂移区块显示"未启用漂移检测"
+- 若 `ai-blacklist.json` 不存在：黑名单维护区块显示"未配置 AI 黑名单"
 
 ```
 1. .checkpoint.json → 当前卷号、章节数、状态
@@ -30,6 +41,19 @@ description: >
 ```
 
 ### Step 2: 计算统计
+
+#### 数据字段来源
+
+| 指标 | 来源文件 | JSON 路径 |
+|------|---------|----------|
+| 综合评分 | `evaluations/chapter-*-eval.json` | `.overall_final` |
+| 门控决策 | `logs/chapter-*-log.json` | `.gate_decision` |
+| 修订次数 | `logs/chapter-*-log.json` | `.revisions` |
+| 强制通过 | `logs/chapter-*-log.json` | `.force_passed` |
+| 伏笔状态 | `foreshadowing/global.json` | `.items[].status` ∈ `{"planted","advanced","resolved","expired"}` |
+| Token/成本 | `logs/chapter-*-log.json` | `.stages[].tokens` / `.stages[].cost_usd` |
+| 漂移状态 | `style-drift.json` | `.active` / `.drifts[]` |
+| 黑名单版本 | `ai-blacklist.json` | `.version` / `.last_updated` / `.words` / `.whitelist` |
 
 ```
 - 总章节数
