@@ -16,7 +16,7 @@ chapter_writer_context = {
   storyline_memory(<DATA summary>), adjacent_storyline_memories(<DATA summary>...),
   recent_3_summaries(<DATA summary>...),
   current_state(json): state/current-state.json,
-  foreshadowing_tasks(json subset): foreshadowing/global.json 中与本章相关条目,
+  foreshadowing_tasks(json subset): 由 global(事实)+vol plan(计划) 派生的本章相关伏笔子集（详见 references/foreshadowing.md）,
   chapter_contract(json),
   world_rules(json, optional), hard_rules_list(list),
   character_contracts(json subset),   # 按裁剪规则选取

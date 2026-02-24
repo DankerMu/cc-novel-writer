@@ -28,7 +28,7 @@
    - `staging/volumes/vol-{V:02d}/foreshadowing.json`
    - `staging/volumes/vol-{V:02d}/new-characters.json`（可为空数组）
    - `staging/volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json`（`C ∈ [plan_start, plan_end]`）
-   - `staging/foreshadowing/global.json`
+   - （注意：`foreshadowing/global.json` 为事实索引，由 `/novel:continue` 在每章 commit 阶段从 `foreshadow` ops 更新；卷规划阶段不生成/覆盖 global.json）
 4. 规划产物校验（对 `staging/` 下的产物执行；失败则停止并给出修复建议，禁止"缺文件继续写"导致断链）：
    - `outline.md` 可解析：可用 `/^### 第 (\\d+) 章/` 找到章节区块，且连续覆盖 `plan_start..plan_end`（不允许跳章，否则下游契约缺失会导致流水线崩溃）
    - 每个章节区块包含固定 key 行：`Storyline/POV/Location/Conflict/Arc/Foreshadowing/StateChanges/TransitionHint`
@@ -51,7 +51,6 @@
 6. 若确认进入写作：
    - commit 规划产物（staging → 正式目录）：
      - `mv staging/volumes/vol-{V:02d}/* → volumes/vol-{V:02d}/`（幂等覆盖）
-     - `mv staging/foreshadowing/global.json → foreshadowing/global.json`
      - 清空 `staging/volumes/` 和 `staging/foreshadowing/`
    - 读取 `volumes/vol-{V:02d}/new-characters.json`：
      - 若非空：批量调用 CharacterWeaver 创建角色档案 + L2 契约（按 `first_chapter` 升序派发 Task，便于先创建早出场角色）

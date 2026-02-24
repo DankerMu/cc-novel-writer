@@ -48,7 +48,7 @@ novel-project/
 │   ├── storylines/                 # 故事线记忆更新（Summarizer 产出，commit 时覆盖 storylines/*/memory.md）
 │   ├── evaluations/                # 评估结果
 │   ├── volumes/                    # 卷规划产物（PlotArchitect 产出，用户批准后 commit 至 volumes/）
-│   └── foreshadowing/              # 伏笔计划更新（PlotArchitect 产出，commit 时覆盖 foreshadowing/）
+│   └── foreshadowing/              # 预留：伏笔相关中间产物/报告（global.json 由每章 commit 阶段从 foreshadow ops 更新）
 ├── summaries/                      # 章节摘要（context 压缩核心）
 │   ├── chapter-001-summary.md
 │   └── ...

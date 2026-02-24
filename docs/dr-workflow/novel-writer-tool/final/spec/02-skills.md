@@ -407,6 +407,33 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
      - 若当前章落在任一 `convergence_events.chapter_range` 内 → 注入 `involved_storylines` 中除当前线外的 memory（过滤 `dormant_storylines`）
    - 冻结线（`dormant_storylines`）：**不注入 memory**，仅保留 `concurrent_state` 一句话状态
 
+#### Step 2.5.6: `foreshadowing_tasks` 组装（确定性）
+
+数据来源：
+- 事实层：`foreshadowing/global.json`（如不存在则视为空）
+- 计划层：`volumes/vol-{V:02d}/foreshadowing.json`（如不存在则视为空）
+
+优先确定性脚本（M3+ 扩展点；见 `docs/dr-workflow/novel-writer-tool/final/spec/06-extensions.md`）：
+
+- 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh`：
+  - 执行（超时 10 秒）：`timeout 10 bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh {C}`
+  - 若退出码为 0 且 stdout 为合法 JSON 且 `.items` 为 list → `foreshadowing_tasks = .items`
+  - 否则（脚本缺失/失败/输出非 JSON）→ 回退规则过滤（不得阻断流水线）
+
+规则过滤回退（确定性；详见 `references/foreshadowing.md`）：
+
+1. 读取并解析 global 与本卷计划 JSON（允许 schema 为 object.foreshadowing[]；缺失则视为空）。
+2. 选取候选（按 `id` 去重；输出按 `id` 升序）：
+   - **计划命中**：本卷计划中满足以下任一条件的未回收条目：
+     - `planted_chapter == C`（本章计划埋设）
+     - `target_resolve_range` 覆盖 `C`（本章处于计划推进/回收窗口）
+   - **事实命中**：global 中满足以下任一条件的未回收条目：
+     - `target_resolve_range` 覆盖 `C`
+     - `scope=="short"` 且 `target_resolve_range` 存在且 `C > target_resolve_range[1]`（超期 short）
+3. 合并字段（不覆盖事实）：
+   - 若某 `id` 同时存在于 global 与 plan：以 global 为主，仅在 global 缺失时从 plan 回填 `description/scope/target_resolve_range`。
+4. 得到 `foreshadowing_tasks`（list；为空则 `[]`）。
+
 #### Step 2.6: Agent Context 组装
 
 按 Agent 类型组装 context 字典，字段契约详见 `references/context-contracts.md`。
@@ -504,7 +531,15 @@ for chapter_num in range(start, start + remaining_N):
      - 移动 staging/storylines/{storyline_id}/memory.md → storylines/{storyline_id}/memory.md
      - 移动 staging/state/chapter-{C:03d}-crossref.json → state/chapter-{C:03d}-crossref.json（保留跨线泄漏审计数据）
      - 合并 state delta: 校验 ops（§10.6）→ 逐条应用 → state_version += 1 → 追加 state/changelog.jsonl
-     - 更新 foreshadowing/global.json（从 foreshadow ops 提取）
+     - 更新 foreshadowing/global.json（从 foreshadow ops 提取；幂等合并，详见 `references/foreshadowing.md`）：
+       - 读取 `staging/state/chapter-{C:03d}-delta.json`，筛选 `ops[]` 中 `op=="foreshadow"` 的记录
+       - 读取 `foreshadowing/global.json`（不存在则初始化为 `{"foreshadowing":[]}`）
+       - 读取（可选）`volumes/vol-{V:02d}/foreshadowing.json`（用于在 global 缺条目/缺元数据时回填 `description/scope/target_resolve_range`；不得覆盖既有事实字段）
+       - 对每条 foreshadow op（按 ops 顺序）更新对应条目：
+         - `history` 以 `{chapter:C, action:value}` 去重后追加 `{chapter, action, detail}`
+         - `status` 单调推进（resolved > advanced > planted；不得降级）
+         - `planted_chapter`/`planted_storyline` 仅在 planted/缺失时回填；`last_updated_chapter` 取 max
+       - 写回 `foreshadowing/global.json`（JSON，UTF-8）
      - 处理 unknown_entities: 从 Summarizer 输出提取 unknown_entities，追加写入 logs/unknown-entities.jsonl；若累计 ≥ 3 个未注册实体，在本章输出中警告用户
      - 更新 .checkpoint.json（last_completed_chapter + 1, pipeline_stage = "committed", inflight_chapter = null, revision_count = 0）
      - 状态转移：
@@ -525,7 +560,10 @@ for chapter_num in range(start, start + remaining_N):
 ### Step 4: 定期检查触发
 
 - 每完成 5 章（last_completed_chapter % 5 == 0）：输出质量简报（均分 + 低分章节 + 主要风险）+ 风格漂移检测结果（是否生成/清除 style-drift.json），并提示用户可运行 `/novel:start` 进入“质量回顾/调整方向”
-- 每完成 10 章（last_completed_chapter % 10 == 0）：触发一致性检查提醒（建议运行 `/novel:start` → “质量回顾”，将生成 `logs/continuity/latest.json` 与 `logs/continuity/continuity-report-*.json`）
+- 每完成 10 章（last_completed_chapter % 10 == 0）：触发周期性盘点提醒（建议运行 `/novel:start` → “质量回顾”，将生成：
+  - 一致性报告：`logs/continuity/latest.json` 与 `logs/continuity/continuity-report-*.json`
+  - 伏笔盘点与桥梁检查：`logs/foreshadowing/latest.json`、`logs/storylines/broken-bridges-latest.json`
+  - 故事线节奏分析：`logs/storylines/rhythm-latest.json`）
 - 到达本卷末尾章节：提示用户执行 `/novel:start` 进行卷末回顾
 
 ### Step 5: 汇总输出
@@ -582,6 +620,7 @@ description: >
 - 若 `evaluations/` 为空或不存在：对应区块显示"暂无评估数据（尚未完成任何章节）"
 - 若 `logs/` 为空或不存在：跳过成本统计区块或显示"暂无日志数据"
 - 若 `foreshadowing/global.json` 不存在：跳过伏笔追踪区块或显示"暂无伏笔数据"
+- 若 `volumes/vol-{V:02d}/storyline-schedule.json` 不存在：跳过故事线节奏区块或显示"暂无故事线调度数据"
 - 若 `style-drift.json` 不存在：风格漂移区块显示"未生成纠偏文件（style-drift.json 不存在）"
 - 若 `ai-blacklist.json` 不存在：黑名单维护区块显示"未配置 AI 黑名单"
 
@@ -590,9 +629,11 @@ description: >
 2. brief.md → 项目名称和题材
 3. state/current-state.json → 角色位置、情绪、关系
 4. foreshadowing/global.json → 伏笔状态
-5. Glob("evaluations/chapter-*-eval.json") → 所有评分
-6. Glob("chapters/chapter-*.md") → 章节文件列表（统计字数）
-7. Glob("logs/chapter-*-log.json") → 流水线日志（成本、耗时、修订次数）
+5. volumes/vol-{V:02d}/storyline-schedule.json → 本卷故事线调度（节奏提示用）
+6. Glob("summaries/chapter-*-summary.md") → 提取 storyline_id（节奏提示用）
+7. Glob("evaluations/chapter-*-eval.json") → 所有评分
+8. Glob("chapters/chapter-*.md") → 章节文件列表（统计字数）
+9. Glob("logs/chapter-*-log.json") → 流水线日志（成本、耗时、修订次数）
 ```
 
 ### Step 2: 计算统计
@@ -616,11 +657,28 @@ description: >
 - 评分均值（overall 字段平均）
 - 评分趋势（最近 10 章 vs 全局均值）
 - 各维度均值
-- 未回收伏笔数量和列表
+- 未回收伏笔数量和列表（planted/advanced）
+- 超期 short 伏笔数量与列表（`scope=="short"` 且 `status!="resolved"` 且 `last_completed_chapter > target_resolve_range[1]`）
+- 故事线节奏提示（基于 summaries 的 storyline_id + schedule 的 `secondary_min_appearance`）
 - 活跃角色数量
 - 累计成本（sum total_cost_usd）、平均每章成本、平均每章耗时
 - 修订率（revisions > 0 的章节占比）
 ```
+
+#### 故事线节奏提示（轻量、只读）
+
+1. 读取并解析 `volumes/vol-{V:02d}/storyline-schedule.json`（如存在）：
+   - `active_storylines[]`（storyline_id + volume_role）
+   - `interleaving_pattern.secondary_min_appearance`（形如 `"every_8_chapters"`）
+2. 从 `secondary_min_appearance` 解析最小出场频率窗口：
+   - 若匹配 `^every_(\\d+)_chapters$` → `N = int(...)`
+   - 否则 `N = null`（仅展示 last_seen，不做“疑似休眠”判断）
+3. 从 `summaries/chapter-*-summary.md` 提取每章 `storyline_id`：
+   - 建议只扫描最近 60 章 summaries（从新到旧），用正则 `^- storyline_id:\\s*(.+)$` 抽取
+   - 得到 `last_seen_chapter_by_storyline`
+4. 对每个 `active_storylines[]`：
+   - `chapters_since_last = last_completed_chapter - last_seen_chapter`（未出现过则显示“未出现”）
+   - 若 `volume_role=="secondary"` 且 `N!=null` 且 `chapters_since_last > N` → 记为“疑似休眠”（提示用户在后续章节/大纲中安排一次出场或通过回忆重建）
 
 ### Step 3: 格式化输出
 
@@ -639,7 +697,11 @@ description: >
 伏笔追踪：
   活跃：{active_count} 个
   已回收：{resolved_count} 个
-  超期未回收（>10章）：{overdue}
+  超期 short（超过 target_resolve_range 上限）：{overdue_short}
+
+故事线节奏：
+  本卷活跃线：{active_storylines_brief}
+  疑似休眠：{dormant_hints}
 
 活跃角色：{character_count} 个
 
