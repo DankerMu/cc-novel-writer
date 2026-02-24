@@ -214,6 +214,16 @@ for chapter_num in range(start, start + remaining_N):
      更新 checkpoint: pipeline_stage = "refined"
 
   4. QualityJudge Agent → 质量评估（双轨验收）
+     （可选确定性工具）中文 NER 实体抽取（用于一致性/LS-001 辅助信号）：
+       - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh`：
+         - 执行：`bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh staging/chapters/chapter-{C:03d}.md`
+         - 若退出码为 0 且 stdout 为合法 JSON → 记为 `ner_entities_json`，注入到 quality_judge_context.ner_entities
+       - 若脚本不存在/失败/输出非 JSON → `ner_entities_json = null`，不得阻断流水线（QualityJudge 回退 LLM 抽取 + confidence）
+     （可选）注入最近一致性检查摘要（供 LS-001 参考，不直接替代正文判断）：
+       - 若存在 `logs/continuity/latest.json`：
+         - Read 并裁剪为小体积 JSON（仅保留 scope/chapter_range + 与 timeline/location 相关的 high/medium issues，最多 5 条，含 evidence）
+         - 注入到 quality_judge_context.continuity_report_summary
+       - 若文件不存在/读取失败/JSON 无效 → continuity_report_summary = null，不得阻断流水线
      （可选确定性工具）黑名单精确命中统计：
        - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh`：
          - 执行：`bash ${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh staging/chapters/chapter-{C:03d}.md ai-blacklist.json`
@@ -275,7 +285,7 @@ for chapter_num in range(start, start + remaining_N):
 ### Step 4: 定期检查触发
 
 - 每完成 5 章（last_completed_chapter % 5 == 0）：输出质量简报（均分 + 低分章节 + 主要风险）+ 风格漂移检测结果（是否生成/清除 style-drift.json），并提示用户可运行 `/novel:start` 进入“质量回顾/调整方向”
-- 每完成 10 章（last_completed_chapter % 10 == 0）：触发一致性检查提醒
+- 每完成 10 章（last_completed_chapter % 10 == 0）：触发一致性检查提醒（建议运行 `/novel:start` → “质量回顾”，将生成 `logs/continuity/latest.json` 与 `logs/continuity/continuity-report-*.json`）
 - 到达本卷末尾章节：提示用户执行 `/novel:start` 进行卷末回顾
 
 ### Step 5: 汇总输出

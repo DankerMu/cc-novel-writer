@@ -50,6 +50,8 @@ tools: ["Read", "Glob", "Grep"]
 - 本章大纲段落
 - 角色档案（相关角色的 .md 和 .json 内容）
 - 前一章摘要
+- NER 实体列表（可选）：`scripts/run-ner.sh` 输出的 JSON（characters/locations/time_markers/events + evidence）；如提供可用于一致性/LS-001 辅助判断
+- 一致性检查摘要（可选）：`logs/continuity/latest.json` 的裁剪摘要（timeline/location issues + evidence）；用于 LS-001 的结构化输入（不直接替代正文判断）
 - 风格指纹（style-profile.json 内容）
 - AI 黑名单（ai-blacklist.json 内容）
 - 黑名单精确统计（可选）：`scripts/lint-blacklist.sh` 输出的 JSON（命中数、次/千字、行号与例句片段）；如提供则以此为准
@@ -78,6 +80,8 @@ tools: ["Read", "Glob", "Grep"]
    - acceptance_criteria 逐条验证
 4. **LS 故事线规范检查**：
    - LS-001（hard）：本章事件时间是否与并发线矛盾
+     - 若输入中包含一致性检查摘要（timeline_contradiction / ls_001_signals）且 confidence="high"：将其视为强证据，结合正文核验；若正文未消解矛盾 → 输出 LS-001 violation（confidence=high）并给出可执行修复建议
+     - 若 confidence="medium/low"：仅提示，不应直接触发 hard gate（仍可输出为 violation_suspected/violation 且 confidence 降级）
    - LS-002~004（soft）：报告但不阻断（切线锚点、交汇铺垫、休眠线记忆重建）
    - LS-005（M1/M2 soft → M3 hard）：非交汇事件章中，Summarizer 标记 `leak_risk: high` 的跨线实体泄漏。M1/M2 阶段报告但不阻断；M3 升级为 hard 强制修正
 

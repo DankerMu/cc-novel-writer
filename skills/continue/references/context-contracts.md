@@ -56,6 +56,8 @@ quality_judge_context = {
   style_profile(json),
   ai_blacklist(json): ai-blacklist.json,       # style_naturalness 维度需要黑名单命中率
   blacklist_lint(json, optional): scripts/lint-blacklist.sh 输出,
+  ner_entities(json, optional): scripts/run-ner.sh 输出（NER candidates + evidence）,
+  continuity_report_summary(json, optional): logs/continuity/latest.json 裁剪摘要（LS-001 signals + evidence）,
   chapter_contract(json),
   world_rules(json, optional), hard_rules_list(list),   # 逐条验收 L1 硬规则
   storyline_spec(json, optional),
@@ -64,3 +66,5 @@ quality_judge_context = {
   quality_rubric(<DATA reference>): quality-rubric.md
 }
 ```
+
+另见：`continuity-checks.md`（NER schema + 一致性报告 schema + LS-001 结构化输入约定）。
