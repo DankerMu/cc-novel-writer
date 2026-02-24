@@ -23,7 +23,7 @@ description: |
   <commentary>调整大纲或伏笔计划时触发</commentary>
   </example>
 model: opus
-color: orange
+color: yellow
 tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 ---
 
@@ -40,6 +40,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 你将在 user message 中收到以下内容（由入口 Skill 组装并传入 Task prompt）：
 
 - 卷号和章节范围（如：第 2 卷，第 31-60 章）
+- 项目简介（brief.md，首卷必需；后续卷可选，已被 world docs 消化）
 - 上卷回顾（上卷大纲 + 一致性报告）
 - 全局伏笔状态（foreshadowing/global.json 内容）
 - 故事线定义（storylines/storylines.json 内容）
@@ -79,6 +80,13 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 // volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json
 {
   "chapter": C,
+  "storyline_id": "storyline_id",
+  "storyline_context": {
+    "last_chapter_summary": "上次该线最后一章摘要",
+    "chapters_since_last": 0,
+    "line_arc_progress": "该线弧线进展描述",
+    "concurrent_state": "其他活跃线一句话状态"
+  },
   "preconditions": {
     "character_states": {"角色名": {"location": "...", "状态key": "..."}},
     "required_world_rules": ["W-001", "W-002"]
@@ -97,7 +105,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
   },
   "acceptance_criteria": [
     "OBJ-{C}-1 在正文中明确体现",
-    "不违反 W-001",
+    "不违反 W-001, W-002",
+    "不违反 C-角色ID-001（L2 角色契约）",
     "postconditions 中的状态变更在正文中有因果支撑"
   ]
 }
@@ -122,18 +131,18 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - **Arc**: character_arc_progression
 - **Foreshadowing**: foreshadowing_actions
 - **StateChanges**: expected_state_changes
-- **TransitionHint**: transition_to_next_chapter（切线章必填）
+- **TransitionHint**: next_storyline + bridge 描述（切线章必填；如 `{"next_storyline": "jiangwang-dao", "bridge": "主角闭关被海域震动打断"}`）
 
 ### 第 C+1 章: 章名
 ...
 ```
 
-> **格式约束**：每章以 `### 第 N 章:` 开头（N 为阿拉伯数字），后跟精确的 7-8 个 `- **Key**:` 行。入口 Skill 通过正则 `/^### 第 (\d+) 章/` 定位并提取对应章节段落，禁止使用自由散文格式。
+> **格式约束**：每章以 `### 第 N 章` 开头（N 为阿拉伯数字，可选冒号和章名，如 `### 第 5 章: 暗流`），后跟精确的 8 个 `- **Key**:` 行。入口 Skill 通过正则 `/^### 第 (\d+) 章/` 定位并提取对应章节段落，禁止使用自由散文格式。
 2. `volumes/vol-{V:02d}/storyline-schedule.json` — 本卷故事线调度（active_storylines + interleaving_pattern + convergence_events）
-3. `volumes/vol-{V:02d}/foreshadowing.json` — 本卷伏笔计划（新增 + 上卷延续）
+3. `volumes/vol-{V:02d}/foreshadowing.json` — 本卷伏笔计划（新增 + 上卷延续），每条伏笔含 `id`/`description`/`scope`(`short`|`medium`|`long`)/`status`/`planted_chapter`/`target_resolve_range`/`history`
 4. `volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json` — 每章契约（批量生成，含 storyline_id + storyline_context）
 5. 更新 `foreshadowing/global.json` — 全局伏笔状态
-6. `volumes/vol-{V:02d}/new-characters.json` — 本卷需要新建的角色清单（outline 中引用但 `characters/active/` 不存在的角色），格式：`[{"name": "角色名", "first_chapter": N, "role": "antagonist | supporting | minor", "brief": "一句话定位"}]`。入口 Skill 据此批量调用 CharacterWeaver 创建角色档案 + L2 契约
+6. `volumes/vol-{V:02d}/new-characters.json` — 本卷需要新建的角色清单（outline 中引用但 `characters/active/` 不存在的角色），格式：`[{"name": "角色名", "first_chapter": N, "role": "antagonist | supporting | minor", "brief": "一句话定位"}]`。`role` 描述角色在全书中的故事定位（区别于 primary/secondary/seasoning 的本卷叙事权重）。入口 Skill 据此批量调用 CharacterWeaver 创建角色档案 + L2 契约
 
 # Edge Cases
 

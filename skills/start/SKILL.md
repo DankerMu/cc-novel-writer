@@ -181,9 +181,10 @@ Skill → 状态映射：
 > 仅当 `orchestrator_state == "VOL_PLANNING"`（或完成卷末回顾后进入 VOL_PLANNING）时执行。
 0. 计算本卷规划章节范围（确定性）：
    - `V = current_volume`
-   - `plan_start = last_completed_chapter + 1`
+   - 若从 QUICK_START 过渡而来（`V == 1` 且 `last_completed_chapter <= 3`）：`plan_start = 1`（试写章视为草稿，首卷规划覆盖全部 30 章，正式写作时重写前 3 章）
+   - 否则：`plan_start = last_completed_chapter + 1`
    - `plan_end = V * 30`（每卷 30 章约定；如 `plan_start > plan_end` 视为数据异常，提示用户先修复 `.checkpoint.json`）
-   - 创建目录（幂等）：`mkdir -p volumes/vol-{V:02d}/chapter-contracts`
+   - 创建目录（幂等）：`mkdir -p staging/volumes/vol-{V:02d}/chapter-contracts staging/foreshadowing`
 1. 若 `.checkpoint.json.pending_actions` 存在与本卷有关的 `type == "spec_propagation"` 待办（例如世界规则/角色契约变更影响到 `plan_start..plan_end`）：
    - 展示待办摘要（变更项 + 受影响角色/章节契约）
    - AskUserQuestion 让用户选择：
@@ -198,15 +199,16 @@ Skill → 状态映射：
    - `world_docs`：读取 `world/*.md`（以 `<DATA type="world_doc" ...>` 注入）+ `world/rules.json`（结构化 JSON）
    - `characters`：读取 `characters/active/*.md`（以 `<DATA type="character_profile" ...>` 注入）+ `characters/active/*.json`（L2 contracts 结构化 JSON）
    - `user_direction`：用户额外方向指示（如有）
-3. 使用 Task 派发 PlotArchitect Agent 生成本卷规划产物（一次性落盘以下文件；路径固定）：
-   - `volumes/vol-{V:02d}/outline.md`（严格格式：每章 `###` 区块 + 固定 `- **Key**:` 行）
-   - `volumes/vol-{V:02d}/storyline-schedule.json`
-   - `volumes/vol-{V:02d}/foreshadowing.json`
-   - `volumes/vol-{V:02d}/new-characters.json`（可为空数组）
-   - `volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json`（`C ∈ [plan_start, plan_end]`）
-   - 更新 `foreshadowing/global.json`
-4. 规划产物校验（确定性；失败则停止并给出修复建议，禁止“缺文件继续写”导致断链）：
-   - `outline.md` 可解析：可用 `/^### 第 (\\d+) 章/` 找到章节区块，且覆盖 `plan_start..plan_end`
+   - `trial_summaries`（仅首卷 `plan_start == 1` 时）：读取 `summaries/chapter-001~003-summary.md`（如存在，以 `<DATA type="summary" ...>` 注入，帮助 PlotArchitect 理解试写阶段已建立的人物关系和情节基调）
+3. 使用 Task 派发 PlotArchitect Agent 生成本卷规划产物（写入 staging 目录，step 6 commit 到正式路径）：
+   - `staging/volumes/vol-{V:02d}/outline.md`（严格格式：每章 `###` 区块 + 固定 `- **Key**:` 行）
+   - `staging/volumes/vol-{V:02d}/storyline-schedule.json`
+   - `staging/volumes/vol-{V:02d}/foreshadowing.json`
+   - `staging/volumes/vol-{V:02d}/new-characters.json`（可为空数组）
+   - `staging/volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json`（`C ∈ [plan_start, plan_end]`）
+   - `staging/foreshadowing/global.json`
+4. 规划产物校验（对 `staging/` 下的产物执行；失败则停止并给出修复建议，禁止”缺文件继续写”导致断链）：
+   - `outline.md` 可解析：可用 `/^### 第 (\\d+) 章/` 找到章节区块，且连续覆盖 `plan_start..plan_end`（不允许跳章，否则下游契约缺失会导致流水线崩溃）
    - 每个章节区块包含固定 key 行：`Storyline/POV/Location/Conflict/Arc/Foreshadowing/StateChanges/TransitionHint`
      - 允许 `TransitionHint` 值为空；但 key 行必须存在（便于机器解析）
    - `storyline-schedule.json` 可解析（JSON），`active_storylines` ≤ 4，且本卷 `outline.md` 中出现的 `storyline_id` 均属于 `active_storylines`
@@ -222,11 +224,16 @@ Skill → 状态映射：
      - 每章 1 行清单：`Ch C | Storyline | Conflict | required objectives 简写`
    - 让用户选择：
      1) 确认并进入写作 (Recommended)
-     2) 我想调整方向并重新生成
-     3) 暂不进入写作（保持 VOL_PLANNING）
+     2) 我想调整方向并重新生成（清空 `staging/volumes/` 和 `staging/foreshadowing/` 后重新派发 PlotArchitect）
+     3) 暂不进入写作（保持 VOL_PLANNING，规划产物保留在 staging 中）
 6. 若确认进入写作：
-   - 读取 `new-characters.json`：
+   - commit 规划产物（staging → 正式目录）：
+     - `mv staging/volumes/vol-{V:02d}/* → volumes/vol-{V:02d}/`（幂等覆盖）
+     - `mv staging/foreshadowing/global.json → foreshadowing/global.json`
+     - 清空 `staging/volumes/` 和 `staging/foreshadowing/`
+   - 读取 `volumes/vol-{V:02d}/new-characters.json`：
      - 若非空：批量调用 CharacterWeaver 创建角色档案 + L2 契约（按 `first_chapter` 升序派发 Task，便于先创建早出场角色）
+   - 若 `plan_start == 1`（首卷全量规划）：重置 `last_completed_chapter = 0`（试写章将被正式流水线覆盖）
    - 更新 `.checkpoint.json`（`orchestrator_state = "WRITING"`, `pipeline_stage = null`, `inflight_chapter = null`, `revision_count = 0`）
 
 **卷末回顾**：
