@@ -27,7 +27,7 @@ description: >
 - 若 `evaluations/` 为空或不存在：对应区块显示"暂无评估数据（尚未完成任何章节）"
 - 若 `logs/` 为空或不存在：跳过成本统计区块或显示"暂无日志数据"
 - 若 `foreshadowing/global.json` 不存在：跳过伏笔追踪区块或显示"暂无伏笔数据"
-- 若 `style-drift.json` 不存在：风格漂移区块显示"未启用漂移检测"
+- 若 `style-drift.json` 不存在：风格漂移区块显示"未生成纠偏文件（style-drift.json 不存在）"
 - 若 `ai-blacklist.json` 不存在：黑名单维护区块显示"未配置 AI 黑名单"
 
 ```
@@ -50,8 +50,8 @@ description: >
 | 门控决策 | `logs/chapter-*-log.json` | `.gate_decision` |
 | 修订次数 | `logs/chapter-*-log.json` | `.revisions` |
 | 强制通过 | `logs/chapter-*-log.json` | `.force_passed` |
-| 伏笔状态 | `foreshadowing/global.json` | `.items[].status` ∈ `{"planted","advanced","resolved","expired"}` |
-| Token/成本 | `logs/chapter-*-log.json` | `.stages[].tokens` / `.stages[].cost_usd` |
+| 伏笔状态 | `foreshadowing/global.json` | `.foreshadowing[].status` ∈ `{"planted","advanced","resolved"}` |
+| Token/成本 | `logs/chapter-*-log.json` | `.stages[].input_tokens` / `.stages[].output_tokens` / `.total_cost_usd` |
 | 漂移状态 | `style-drift.json` | `.active` / `.drifts[]` |
 | 黑名单版本 | `ai-blacklist.json` | `.version` / `.last_updated` / `.words` / `.whitelist` |
 
