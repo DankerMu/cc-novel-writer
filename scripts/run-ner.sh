@@ -33,12 +33,12 @@ fi
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "run-ner.sh: python3 is required but not found" >&2
-  exit 1
+  exit 2
 fi
 
 if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 7) else 1)" 2>/dev/null; then
   echo "run-ner.sh: python3 >= 3.7 is required" >&2
-  exit 1
+  exit 2
 fi
 
 python3 - "$chapter_path" <<'PY'
@@ -430,19 +430,24 @@ def _extract_locations(lines: List[Tuple[int, str]]) -> Tuple[Dict[str, int], Di
         if not token:
             return token
 
-        # If token starts with a trigger (e.g. "踏入幽暗森林"),
-        # strip the trigger prefix only when it appears at position 0.
-        last_end: Optional[int] = None
+        # Strip the earliest trigger found in the token.
+        # e.g. "他已踏入幽暗森林" → find("踏入") at pos 2 → "幽暗森林"
+        # Uses first occurrence (find, not rfind) so that triggers
+        # embedded inside a real location name are preserved:
+        # e.g. "前往踏入之森林" → find("前往") at pos 0 → "踏入之森林"
+        first_pos: Optional[int] = None
+        first_end: Optional[int] = None
         for trig in LOCATION_PREFIX_TRIGGERS:
             idx = token.find(trig)
-            if idx != 0:
+            if idx == -1:
                 continue
-            end = len(trig)
-            if last_end is None or end > last_end:
-                last_end = end
+            end = idx + len(trig)
+            if first_pos is None or idx < first_pos or (idx == first_pos and end > first_end):
+                first_pos = idx
+                first_end = end
 
-        if last_end is not None and last_end < len(token):
-            token = token[last_end:]
+        if first_end is not None and first_end < len(token):
+            token = token[first_end:]
 
         # Strip leading 1-char prepositions (common in "在幽暗森林")
         token = re.sub(r"^(?:在|于|到|往|向|朝)+", "", token)

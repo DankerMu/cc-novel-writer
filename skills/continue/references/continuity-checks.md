@@ -76,7 +76,7 @@
 {
   "schema_version": 1,
   "generated_at": "2026-02-24T12:00:00Z",
-  "scope": "periodic | volume",
+  "scope": "periodic",
   "volume": 2,
   "chapter_range": [39, 48],
   "issues": [
@@ -97,7 +97,7 @@
         {"chapter": 48, "source": "chapter", "line": 120, "snippet": "林枫抬头望向幽暗森林深处……"}
       ],
       "suggestions": [
-        "确认时间标尺是否应推进（例如从"第三年冬末"推进到"翌日清晨"）。",
+        "确认时间标尺是否应推进（例如从'第三年冬末'推进到'翌日清晨'）。",
         "若确为跨地移动，补一段赶路/传送的因果说明。"
       ]
     }
