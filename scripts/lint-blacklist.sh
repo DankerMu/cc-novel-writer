@@ -120,7 +120,10 @@ def main() -> None:
     whitelist = _get_whitelist_words(blacklist)
 
     effective_words = [w.strip() for w in words if isinstance(w, str) and w.strip() and w.strip() not in whitelist]
-    effective_words = _unique_preserve_order(effective_words)
+    effective_words = list(dict.fromkeys(effective_words))  # dedup preserving order
+
+    # Sort by length descending to match longest phrases first
+    effective_words.sort(key=lambda w: -len(w))
 
     try:
         with open(chapter_path, "r", encoding="utf-8") as f:
@@ -131,15 +134,19 @@ def main() -> None:
     lines = text.splitlines()
     non_ws_chars = len(re.sub(r"\s+", "", text))
 
+    # Use a working copy for masking matched phrases
+    masked_text = text
+
     hits: List[Dict[str, Any]] = []
     total_hits = 0
 
     for word in effective_words:
-        count = text.count(word)
+        count = masked_text.count(word)
         if count <= 0:
             continue
         total_hits += count
 
+        # Collect line numbers and snippets from ORIGINAL text
         line_numbers: List[int] = []
         snippets: List[str] = []
         for idx, line in enumerate(lines, start=1):
@@ -160,6 +167,9 @@ def main() -> None:
             }
         )
 
+        # Mask matched word in working copy to prevent substring double-counting
+        masked_text = masked_text.replace(word, "\x00" * len(word))
+
     hits.sort(key=lambda x: (-int(x["count"]), str(x["word"])))
 
     hits_per_kchars = 0.0
@@ -178,7 +188,7 @@ def main() -> None:
         "hits": hits,
     }
 
-    sys.stdout.write(json.dumps(out, ensure_ascii=False))
+    sys.stdout.write(json.dumps(out, ensure_ascii=False) + "\n")
 
 
 try:

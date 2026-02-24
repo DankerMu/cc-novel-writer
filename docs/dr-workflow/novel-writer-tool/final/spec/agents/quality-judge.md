@@ -131,6 +131,8 @@ tools: ["Read", "Glob", "Grep"]
 
 # 门控决策逻辑
 
+> **注意**：QualityJudge 输出的 `contract_verification.has_violations` 包含**所有** confidence 级别的违规。入口 Skill（`/novel:continue`）在做 `gate_decision` 时仅以 `confidence="high"` 为准。两者语义不同：QualityJudge 提供完整信息供审计，入口 Skill 做保守决策。
+
 ```
 if has_violations:
     recommendation = "revise"  # 强制修订，不管分数多高
