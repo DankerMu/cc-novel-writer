@@ -239,6 +239,7 @@ Skill → 状态映射：
 2. 写入 `volumes/vol-{V:02d}/review.md`
 3. State 清理（每卷结束时，PRD §8.5；生成清理报告供用户确认）：
    - Read `state/current-state.json`（如存在）
+   - Read `world/rules.json`（如存在；用于辅助判断“持久化属性”vs“临时条目”；缺失时该判断无法执行，相关条目一律归为候选）
    - Read `characters/retired/*.json`（如存在；若 `characters/retired/` 目录不存在则先创建）并构建 `retired_ids`
    - **确定性安全清理（可直接执行）**：
      - 从 `state/current-state.json.characters` 移除 `retired_ids` 的残留条目

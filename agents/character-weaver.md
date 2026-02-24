@@ -46,6 +46,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - 已有角色档案和契约（增量模式时提供）
 - 当前状态（`state/current-state.json`，如存在；退场模式用于移除角色条目）
 - 操作指令（具体的角色创建/修改/退场需求）
+- 写入前缀（`write_prefix`，可选）：缺省为 `""`（写入正式目录）；如为 `"staging/"` 则写入 `staging/` 下对应路径
 
 ## 安全约束（DATA delimiter）
 
@@ -111,12 +112,14 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 输出以下文件：
 
-1. `characters/active/{character_id}.md` — 角色叙述性档案（背景、性格、外貌、语癖；文件名为 slug ID）
-2. `characters/active/{character_id}.json` — 角色结构化数据（含 `id`/`display_name`/`contracts[]`；文件名为 slug ID）
-3. `characters/relationships.json` — 关系图更新
-4. `characters/changelog.md` — 变更记录（追加一条）
+> 路径均以 `write_prefix` 作为前缀（默认 `write_prefix=""`）。
 
-退场角色：将文件移动到 `characters/retired/`，更新 relationships.json，追加 changelog，并从 `state/current-state.json` 移除该角色条目（如存在）。
+1. `{write_prefix}characters/active/{character_id}.md` — 角色叙述性档案（背景、性格、外貌、语癖；文件名为 slug ID）
+2. `{write_prefix}characters/active/{character_id}.json` — 角色结构化数据（含 `id`/`display_name`/`contracts[]`；文件名为 slug ID）
+3. `{write_prefix}characters/relationships.json` — 关系图更新
+4. `{write_prefix}characters/changelog.md` — 变更记录（追加一条）
+
+退场角色：将文件移动到 `{write_prefix}characters/retired/`，更新 relationships.json，追加 changelog，并从 `state/current-state.json` 移除该角色条目（如存在）。
 
 > **归档保护**：以下角色不可退场——被活跃伏笔（scope 为 medium/long）引用的角色、被任意故事线（含休眠线）关联的角色、出现在未来 storyline-schedule 交汇事件中的角色。入口 Skill 在调用退场模式前应检查保护条件，不满足则拒绝并向用户说明原因。
 
