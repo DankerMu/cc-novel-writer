@@ -181,8 +181,7 @@ Skill → 状态映射：
 > 仅当 `orchestrator_state == "VOL_PLANNING"`（或完成卷末回顾后进入 VOL_PLANNING）时执行。
 0. 计算本卷规划章节范围（确定性）：
    - `V = current_volume`
-   - 若从 QUICK_START 过渡而来（`V == 1` 且 `last_completed_chapter <= 3`）：`plan_start = 1`（试写章视为草稿，首卷规划覆盖全部 30 章，正式写作时重写前 3 章）
-   - 否则：`plan_start = last_completed_chapter + 1`
+   - `plan_start = last_completed_chapter + 1`
    - `plan_end = V * 30`（每卷 30 章约定；如 `plan_start > plan_end` 视为数据异常，提示用户先修复 `.checkpoint.json`）
    - 创建目录（幂等）：`mkdir -p staging/volumes/vol-{V:02d}/chapter-contracts staging/foreshadowing`
 1. 若 `.checkpoint.json.pending_actions` 存在与本卷有关的 `type == "spec_propagation"` 待办（例如世界规则/角色契约变更影响到 `plan_start..plan_end`）：
@@ -199,7 +198,7 @@ Skill → 状态映射：
    - `world_docs`：读取 `world/*.md`（以 `<DATA type="world_doc" ...>` 注入）+ `world/rules.json`（结构化 JSON）
    - `characters`：读取 `characters/active/*.md`（以 `<DATA type="character_profile" ...>` 注入）+ `characters/active/*.json`（L2 contracts 结构化 JSON）
    - `user_direction`：用户额外方向指示（如有）
-   - `trial_summaries`（仅首卷 `plan_start == 1` 时）：读取 `summaries/chapter-001~003-summary.md`（如存在，以 `<DATA type="summary" ...>` 注入，帮助 PlotArchitect 理解试写阶段已建立的人物关系和情节基调）
+   - `prev_chapter_summaries`（首卷替代 `prev_volume_review`）：若 `prev_volume_review` 不存在且 `last_completed_chapter > 0`，读取最近 3 章 `summaries/chapter-*-summary.md` 作为上下文（黄金三章是 QUICK_START 多轮交互的核心产出，PlotArchitect 必须基于其已建立的人物关系和情节基调规划后续章节），以 `<DATA type="summary" ...>` 注入
 3. 使用 Task 派发 PlotArchitect Agent 生成本卷规划产物（写入 staging 目录，step 6 commit 到正式路径）：
    - `staging/volumes/vol-{V:02d}/outline.md`（严格格式：每章 `###` 区块 + 固定 `- **Key**:` 行）
    - `staging/volumes/vol-{V:02d}/storyline-schedule.json`
@@ -216,7 +215,7 @@ Skill → 状态映射：
      - `chapter == C`
      - `storyline_id` 与 outline 中 `- **Storyline**:` 一致
      - `objectives` 至少 1 条 `required: true`
-   - 链式传递检查（最小实现）：若 `chapter-{C-1}.json.postconditions.state_changes` 中出现角色 X，则 `chapter-{C}.json.preconditions.character_states` 必须包含 X（值可不同，代表显式覆盖）
+   - 链式传递检查（最小实现）：若 `chapter-{C-1}.json.postconditions.state_changes` 中出现角色 X，则 `chapter-{C}.json.preconditions.character_states` 必须包含 X（值可不同，代表显式覆盖）。对 `plan_start` 章：若 `chapter-{plan_start-1}.json` 不存在（如首卷试写章无契约），跳过该章的链式传递检查，其 preconditions 由 PlotArchitect 从试写摘要派生
    - `foreshadowing.json` 与 `new-characters.json` 均存在且为合法 JSON
 5. 审核点交互（AskUserQuestion）：
    - 展示摘要：
@@ -233,7 +232,6 @@ Skill → 状态映射：
      - 清空 `staging/volumes/` 和 `staging/foreshadowing/`
    - 读取 `volumes/vol-{V:02d}/new-characters.json`：
      - 若非空：批量调用 CharacterWeaver 创建角色档案 + L2 契约（按 `first_chapter` 升序派发 Task，便于先创建早出场角色）
-   - 若 `plan_start == 1`（首卷全量规划）：重置 `last_completed_chapter = 0`（试写章将被正式流水线覆盖）
    - 更新 `.checkpoint.json`（`orchestrator_state = "WRITING"`, `pipeline_stage = null`, `inflight_chapter = null`, `revision_count = 0`）
 
 **卷末回顾**：
