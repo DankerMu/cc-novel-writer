@@ -154,13 +154,15 @@ Skill → 状态映射：
 **创建新项目**：
 1. 使用 AskUserQuestion 收集基本信息（题材、主角概念、核心冲突）— 单次最多问 2-3 个问题
 2. 创建项目目录结构（参考 PRD Section 9.1）
-3. 从 `${CLAUDE_PLUGIN_ROOT}/templates/` 复制模板文件到项目目录
+3. 从 `${CLAUDE_PLUGIN_ROOT}/templates/` 复制模板文件到项目目录（至少生成以下文件）：
+   - `brief.md`：从 `brief-template.md` 复制并用用户输入填充占位符
+   - `style-profile.json`：从 `style-profile-template.json` 复制（后续由 StyleAnalyzer 填充）
+   - `ai-blacklist.json`：从 `ai-blacklist.json` 复制
 4. **初始化最小可运行文件**（模板复制后立即创建，确保后续 Agent 可正常读取）：
    - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "revision_count": 0, "pending_actions": [], "last_checkpoint_time": "<now>"}`
    - `state/current-state.json`：`{"schema_version": 1, "state_version": 0, "last_updated_chapter": 0, "characters": {}, "world_state": {}, "active_foreshadowing": []}`
    - `foreshadowing/global.json`：`{"foreshadowing": []}`
    - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~005）
-   - `ai-blacklist.json`：从 `${CLAUDE_PLUGIN_ROOT}/templates/ai-blacklist.json` 复制
    - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
 5. 使用 Task 派发 WorldBuilder Agent 生成核心设定
 6. 使用 Task 派发 CharacterWeaver Agent 创建主角和配角
@@ -184,17 +186,60 @@ Skill → 状态映射：
 
 **规划本卷 / 规划新卷**：
 > 仅当 `orchestrator_state == "VOL_PLANNING"`（或完成卷末回顾后进入 VOL_PLANNING）时执行。
-1. 组装 PlotArchitect context（确定性，按 PRD §8.3）：
+0. 计算本卷规划章节范围（确定性）：
+   - `V = current_volume`
+   - `plan_start = last_completed_chapter + 1`
+   - `plan_end = V * 30`（每卷 30 章约定；如 `plan_start > plan_end` 视为数据异常，提示用户先修复 `.checkpoint.json`）
+   - 创建目录（幂等）：`mkdir -p staging/volumes/vol-{V:02d}/chapter-contracts staging/foreshadowing`
+1. 若 `.checkpoint.json.pending_actions` 存在与本卷有关的 `type == "spec_propagation"` 待办（例如世界规则/角色契约变更影响到 `plan_start..plan_end`）：
+   - 展示待办摘要（变更项 + 受影响角色/章节契约）
+   - AskUserQuestion 让用户选择：
+     1) 先处理待办并重新生成受影响契约 (Recommended)
+     2) 继续规划（保留待办，后续人工处理）
+     3) 取消
+2. 组装 PlotArchitect context（确定性，按 PRD §8.3）：
+   - `volume_plan`: `{ "volume": V, "chapter_range": [plan_start, plan_end] }`
    - `prev_volume_review`：读取 `volumes/vol-{V-1:02d}/review.md`（如存在，以 `<DATA type="summary" ...>` 注入）
    - `global_foreshadowing`：读取 `foreshadowing/global.json`
    - `storylines`：读取 `storylines/storylines.json`
    - `world_docs`：读取 `world/*.md`（以 `<DATA type="world_doc" ...>` 注入）+ `world/rules.json`（结构化 JSON）
    - `characters`：读取 `characters/active/*.md`（以 `<DATA type="character_profile" ...>` 注入）+ `characters/active/*.json`（L2 contracts 结构化 JSON）
    - `user_direction`：用户额外方向指示（如有）
-2. 使用 Task 派发 PlotArchitect Agent 生成下一卷大纲（prompt 中包含上述 context）
-3. 展示大纲摘要，使用 AskUserQuestion 确认/修改
-4. 检查 PlotArchitect 输出的 `new-characters.json`：如有新角色，逐个调用 CharacterWeaver Agent 创建角色档案 + L2 契约（批量派发 Task）
-5. 大纲确认 + 角色创建完成后更新 `.checkpoint.json`（状态 = WRITING，new volume）
+   - `prev_chapter_summaries`（首卷替代 `prev_volume_review`）：若 `prev_volume_review` 不存在且 `last_completed_chapter > 0`，读取最近 3 章 `summaries/chapter-*-summary.md` 作为上下文（黄金三章是 QUICK_START 多轮交互的核心产出，PlotArchitect 必须基于其已建立的人物关系和情节基调规划后续章节），以 `<DATA type="summary" ...>` 注入
+3. 使用 Task 派发 PlotArchitect Agent 生成本卷规划产物（写入 staging 目录，step 6 commit 到正式路径）：
+   - `staging/volumes/vol-{V:02d}/outline.md`（严格格式：每章 `###` 区块 + 固定 `- **Key**:` 行）
+   - `staging/volumes/vol-{V:02d}/storyline-schedule.json`
+   - `staging/volumes/vol-{V:02d}/foreshadowing.json`
+   - `staging/volumes/vol-{V:02d}/new-characters.json`（可为空数组）
+   - `staging/volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json`（`C ∈ [plan_start, plan_end]`）
+   - `staging/foreshadowing/global.json`
+4. 规划产物校验（对 `staging/` 下的产物执行；失败则停止并给出修复建议，禁止”缺文件继续写”导致断链）：
+   - `outline.md` 可解析：可用 `/^### 第 (\\d+) 章/` 找到章节区块，且连续覆盖 `plan_start..plan_end`（不允许跳章，否则下游契约缺失会导致流水线崩溃）
+   - 每个章节区块包含固定 key 行：`Storyline/POV/Location/Conflict/Arc/Foreshadowing/StateChanges/TransitionHint`
+     - 允许 `TransitionHint` 值为空；但 key 行必须存在（便于机器解析）
+   - `storyline-schedule.json` 可解析（JSON），`active_storylines` ≤ 4，且本卷 `outline.md` 中出现的 `storyline_id` 均属于 `active_storylines`
+   - `chapter-contracts/` 全量存在且可解析（JSON），并满足最小一致性检查：
+     - `chapter == C`
+     - `storyline_id` 与 outline 中 `- **Storyline**:` 一致
+     - `objectives` 至少 1 条 `required: true`
+   - 链式传递检查（最小实现）：若 `chapter-{C-1}.json.postconditions.state_changes` 中出现角色 X，则 `chapter-{C}.json.preconditions.character_states` 必须包含 X（值可不同，代表显式覆盖）。对 `plan_start` 章：若 `chapter-{plan_start-1}.json` 不存在（如首卷试写章无契约），跳过该章的链式传递检查，其 preconditions 由 PlotArchitect 从试写摘要派生
+   - `foreshadowing.json` 与 `new-characters.json` 均存在且为合法 JSON
+5. 审核点交互（AskUserQuestion）：
+   - 展示摘要：
+     - `storyline-schedule.json` 的活跃线与交汇事件概览
+     - 每章 1 行清单：`Ch C | Storyline | Conflict | required objectives 简写`
+   - 让用户选择：
+     1) 确认并进入写作 (Recommended)
+     2) 我想调整方向并重新生成（清空 `staging/volumes/` 和 `staging/foreshadowing/` 后重新派发 PlotArchitect）
+     3) 暂不进入写作（保持 VOL_PLANNING，规划产物保留在 staging 中）
+6. 若确认进入写作：
+   - commit 规划产物（staging → 正式目录）：
+     - `mv staging/volumes/vol-{V:02d}/* → volumes/vol-{V:02d}/`（幂等覆盖）
+     - `mv staging/foreshadowing/global.json → foreshadowing/global.json`
+     - 清空 `staging/volumes/` 和 `staging/foreshadowing/`
+   - 读取 `volumes/vol-{V:02d}/new-characters.json`：
+     - 若非空：批量调用 CharacterWeaver 创建角色档案 + L2 契约（按 `first_chapter` 升序派发 Task，便于先创建早出场角色）
+   - 更新 `.checkpoint.json`（`orchestrator_state = "WRITING"`, `pipeline_stage = null`, `inflight_chapter = null`, `revision_count = 0`）
 
 **卷末回顾**：
 1. 收集本卷 `evaluations/`、`summaries/`、`foreshadowing/global.json`、`storylines/`，生成本卷回顾要点（质量趋势、低分章节、未回收伏笔、故事线节奏）
@@ -210,7 +255,26 @@ Skill → 状态映射：
 
 **更新设定**：
 1. 使用 AskUserQuestion 确认更新类型（世界观/角色/关系）
-2. 使用 Task 派发 WorldBuilder 或 CharacterWeaver Agent
+2. 变更前快照（用于 Spec 传播差异分析，确定性）：
+   - 世界观更新：Read `world/rules.json`（如存在）
+   - 角色更新：Read 目标角色的 `characters/active/*.json`（如存在）
+3. 使用 Task 派发 WorldBuilder 或 CharacterWeaver Agent 执行增量更新（写入变更文件 + changelog）
+4. 变更后差异分析与标记（最小实现；目的：可追溯传播，避免 silent drift）：
+   - 若 `world/rules.json` 发生变化：
+     - 找出变更的 `rule_id` 集合（按 `id` 对齐，diff `rule`/`constraint_type`/`exceptions` 等关键字段）
+     - 受影响 L2（角色契约）识别规则：
+       1) 明确引用：角色契约 `rule` 文本中出现 `W-XXX`
+       2) 最小关键字：从变更规则 `rule` 句子中抽取 3-5 个关键短语，在角色契约 `rule` 文本中命中则视为可能受影响
+     - 受影响 L3（章节契约）识别规则：
+       1) 明确引用：`preconditions.required_world_rules` 含变更 `W-XXX`
+       2) 受影响角色：`preconditions.character_states` 含受影响角色（按 display_name 匹配）
+     - 将结果写入 `.checkpoint.json.pending_actions`（新增一条 `type: "spec_propagation"` 记录：包含 changed_rule_ids + affected_character_contracts + affected_chapter_contracts）
+   - 若角色契约发生变化：
+     - 以角色 `slug_id` 为主键，记录该角色为受影响实体
+     - 扫描本卷及后续 `volumes/**/chapter-contracts/*.json`：若 `preconditions.character_states` 含该角色 display_name 或 `acceptance_criteria`/`objectives` 提及该角色，则标记受影响
+     - 写入 `.checkpoint.json.pending_actions`（`type: "spec_propagation"`，包含 changed_character_ids + affected_chapter_contracts）
+5. 输出变更传播摘要并提示用户：
+   - 推荐回到 `VOL_PLANNING` 重新生成/审核受影响的角色契约与章节契约，再继续写作（避免规则变更后隐性矛盾）
 
 **导入研究资料**：
 1. 使用 Glob 扫描 `docs/dr-workflow/*/final/main.md`（doc-workflow 标准输出路径）
@@ -337,6 +401,10 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
    - heading regex：`^### 第 {C} 章(?:[:：].*)?$`
 3. 提取范围：从命中行开始，直到下一行满足 `^### `（不含）或 EOF。
 4. 若无法定位本章区块：输出错误（包含期望格式示例 `### 第 12 章: 章名`），并提示用户回到 `/novel:start` → “规划本卷”修复 outline 格式后重试。
+5. 解析章节区块内的固定 key 行（确定性；用于后续一致性校验）：
+   - 期望格式：`- **Key**: value`
+   - 必需 key：`Storyline`、`POV`、`Location`、`Conflict`、`Arc`、`Foreshadowing`、`StateChanges`、`TransitionHint`
+   - 提取 `outline_storyline_id = Storyline`（若缺失或为空 → 视为 outline 结构损坏，报错并终止）
 
 同时，从 outline 中提取本卷章节边界（用于卷首/卷尾双裁判与卷末状态转移）：
 - 扫描所有章标题：`^### 第 (\d+) 章`
@@ -367,6 +435,11 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 
 #### Step 2.4: L2 角色契约裁剪（确定性）
 
+前置：读取并解析本章 L3 章节契约（缺失则终止并提示回到 `/novel:start` → “规划本卷”补齐）：
+- `chapter_contract_path = volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json`
+
+裁剪规则：
+
 - 若存在 `chapter_contract.preconditions.character_states`：
   - 仅加载这些 preconditions 中涉及的角色（**无硬上限**；交汇事件章可 > 10）
   - 注意：`character_states` 的键为中文显示名，需要用 `entity_id_map` 反向映射到 `slug_id`
@@ -383,7 +456,10 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 
 1. 读取 `volumes/vol-{V:02d}/storyline-schedule.json`（如存在则解析；用于判定 dormant_storylines 与交汇事件 involved_storylines）。
 2. 读取 `storylines/storyline-spec.json`（如存在；注入给 QualityJudge 做 LS 验收）。
-3. 读取 `chapter_contract`：`volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json`（如存在则解析）。
+3. 章节契约与大纲一致性校验（确定性；不通过则终止，避免“拿错契约继续写”导致串线/违约）：
+   - `chapter_contract.chapter == C`
+   - `chapter_contract.storyline_id == outline_storyline_id`
+   - `chapter_contract.objectives` 至少 1 条 `required: true`
 4. 以 `chapter_contract` 为优先来源确定：
    - `storyline_id`（本章所属线）
    - `storyline_context`（含 `last_chapter_summary` / `chapters_since_last` / `line_arc_progress` / `concurrent_state`）
@@ -409,7 +485,7 @@ chapter_writer_context = {
   recent_3_summaries(<DATA summary>...),
   current_state(json): state/current-state.json,
   foreshadowing_tasks(json subset): foreshadowing/global.json 中与本章相关条目,
-  chapter_contract(json, optional),
+  chapter_contract(json),
   world_rules(json, optional), hard_rules_list(list),
   character_contracts(json subset),   # 按裁剪规则选取
   writing_methodology(<DATA reference>): novel-writing methodology excerpt
@@ -437,7 +513,7 @@ quality_judge_context = {
   prev_summary(<DATA summary>): summaries/chapter-{C-1:03d}-summary.md,
   style_profile(json),
   ai_blacklist(json): ai-blacklist.json,       # style_naturalness 维度需要黑名单命中率
-  chapter_contract(json, optional),
+  chapter_contract(json),
   world_rules(json, optional), hard_rules_list(list),   # 逐条验收 L1 硬规则
   storyline_spec(json, optional),
   storyline_schedule(json, optional),

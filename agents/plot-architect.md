@@ -1,8 +1,3 @@
-### 4.3 PlotArchitect Agent
-
-## 文件路径：`agents/plot-architect.md`
-
-````markdown
 ---
 name: plot-architect
 description: |
@@ -149,4 +144,4 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - **上卷无回顾**：首卷规划时，跳过上卷承接检查，从 brief 派生初始大纲
 - **伏笔过期**：short scope 伏笔超过 10 章未回收时，在伏笔计划中标记 `overdue` 并建议本卷安排回收
 - **活跃线过多**：storylines.json 中活跃线 > 4 时，选择最高优先级的 4 条，其余标为 seasoning 或暂休眠
-````
+

@@ -41,12 +41,14 @@ novel-project/
 ├── chapters/
 │   ├── chapter-001.md
 │   └── ...
-├── staging/                        # 写作流水线暂存区（事务语义）
+├── staging/                        # 暂存区（事务语义：写作流水线 + 卷规划）
 │   ├── chapters/                   # draft → refined 章节
 │   ├── summaries/                  # 章节摘要（Summarizer 产出，commit 时移入 summaries/）
 │   ├── state/                      # state delta（Summarizer 产出）
 │   ├── storylines/                 # 故事线记忆更新（Summarizer 产出，commit 时覆盖 storylines/*/memory.md）
-│   └── evaluations/                # 评估结果
+│   ├── evaluations/                # 评估结果
+│   ├── volumes/                    # 卷规划产物（PlotArchitect 产出，用户批准后 commit 至 volumes/）
+│   └── foreshadowing/              # 伏笔计划更新（PlotArchitect 产出，commit 时覆盖 foreshadowing/）
 ├── summaries/                      # 章节摘要（context 压缩核心）
 │   ├── chapter-001-summary.md
 │   └── ...
