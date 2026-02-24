@@ -2,7 +2,7 @@
 
 1. 收集本卷 `evaluations/`、`summaries/`、`foreshadowing/global.json`、`storylines/`，生成本卷回顾要点（质量趋势、低分章节、未回收伏笔、故事线节奏）
 2. 写入 `volumes/vol-{V:02d}/review.md`
-3. State 清理（每卷结束时，`docs/prd/08-orchestration.md` §8.5；生成清理报告供用户确认）：
+3. State 清理（每卷结束时，`docs/prd/08-orchestrator.md` §8.5；生成清理报告供用户确认）：
    - Read `state/current-state.json`（如存在）
    - Read `world/rules.json`（如存在；用于辅助判断"持久化属性"vs"临时条目"；缺失时该判断无法执行，相关条目一律归为候选）
    - Read `characters/retired/*.json`（如存在；若 `characters/retired/` 目录不存在则先创建）并构建 `retired_ids`

@@ -13,7 +13,7 @@
      1) 先处理待办并重新生成受影响契约 (Recommended)
      2) 继续规划（保留待办，后续人工处理）
      3) 取消
-2. 组装 PlotArchitect context（确定性，按 `docs/prd/08-orchestration.md` §8.3）：
+2. 组装 PlotArchitect context（确定性，按 `docs/prd/08-orchestrator.md` §8.3）：
    - `volume_plan`: `{ "volume": V, "chapter_range": [plan_start, plan_end] }`
    - `prev_volume_review`：读取 `volumes/vol-{V-1:02d}/review.md`（如存在，以 `<DATA type="summary" ...>` 注入）
    - `global_foreshadowing`：读取 `foreshadowing/global.json`
