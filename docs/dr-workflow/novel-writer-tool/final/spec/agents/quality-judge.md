@@ -22,6 +22,13 @@ description: |
   assistant: "I'll use the quality-judge agent for a volume review."
   <commentary>卷末回顾时批量调用</commentary>
   </example>
+
+  <example>
+  Context: 修订后重新评估
+  user: "修订后再次评估第 50 章"
+  assistant: "I'll use the quality-judge agent to re-evaluate the revised chapter."
+  <commentary>章节修订后重评估，决定是否继续写/再次修订</commentary>
+  </example>
 model: sonnet
 color: magenta
 tools: ["Read", "Glob", "Grep"]
@@ -50,6 +57,7 @@ tools: ["Read", "Glob", "Grep"]
 - 前一章摘要
 - 风格指纹（style-profile.json 内容）
 - AI 黑名单（ai-blacklist.json 内容）
+- 黑名单精确统计（可选）：`scripts/lint-blacklist.sh` 输出的 JSON（命中数、次/千字、行号与例句片段）；如提供则以此为准
 - 故事线规范（storylines/storyline-spec.json 内容）
 - 本卷故事线调度（volumes/vol-{V:02d}/storyline-schedule.json 内容）
 - Summarizer 串线检测输出（cross_references + leak_risk）
@@ -113,10 +121,13 @@ tools: ["Read", "Glob", "Grep"]
 1. **独立评分**：每个维度独立评分，附具体理由和引用原文
 2. **不给面子分**：明确指出问题而非回避
 3. **可量化**：风格自然度基于可量化指标（黑名单命中率 < 3 次/千字，相邻 5 句重复句式 < 2）
+   - 若 prompt 中提供了黑名单精确统计 JSON（lint-blacklist），你必须使用其中的 `total_hits` / `hits_per_kchars` / `hits[]` 作为计数依据（忽略 whitelist/exemptions 的词条）
+   - 若未提供，则你可以基于正文做启发式估计，但需在 `style_naturalness.reason` 中明确标注为“估计值”
 4. **综合分计算**：overall = 各维度 score × weight 的加权均值（8 维度权重见 Track 2 表）
 5. **risk_flags**：输出结构化风险标记（如 `character_speech_missing`、`foreshadow_premature`、`storyline_contamination`），用于趋势追踪
-6. **required_fixes**：当 recommendation 为 revise/rewrite 时，必须输出最小修订指令列表（target 段落 + 具体 instruction），供 ChapterWriter 定向修订
-7. **关键章双裁判**：卷首章、卷尾章、故事线交汇事件章使用 Opus 模型复核（普通章保持 Sonnet 单裁判控成本）。双裁判取两者较低分作为最终分
+6. **required_fixes**：当 recommendation 为 revise/review/rewrite 时，必须输出最小修订指令列表（target 段落 + 具体 instruction），供 ChapterWriter 定向修订
+7. **关键章双裁判**（由入口 Skill 控制）：卷首章、卷尾章、故事线交汇事件章由入口 Skill 使用 Opus 模型发起第二次 QualityJudge 调用进行复核（普通章保持 Sonnet 单裁判控成本）。双裁判取两者较低分作为最终分。QualityJudge 自身不切换模型，模型选择由入口 Skill 的 Task(model=opus) 参数控制
+8. **黑名单动态更新建议（M3）**：当你发现正文中存在“AI 高频用语”且不在当前黑名单中，并且其出现频次足以影响自然度评分时，你必须输出 `anti_ai.blacklist_update_suggestions[]`（见 Format）。新增候选必须提供 evidence（频次/例句），避免把角色语癖、专有名词或作者风格高频词误判为 AI 用语。
 
 # 门控决策逻辑
 
@@ -129,8 +140,10 @@ elif overall >= 3.5:
     recommendation = "polish"  # StyleRefiner 二次润色
 elif overall >= 3.0:
     recommendation = "revise"  # ChapterWriter(Opus) 修订
+elif overall >= 2.0:
+    recommendation = "review"  # 通知用户，人工审核决定重写范围
 else:
-    recommendation = "rewrite"  # 通知用户
+    recommendation = "rewrite"  # 强制全章重写，暂停
 ```
 
 # Format
@@ -148,6 +161,22 @@ else:
     "has_violations": false,
     "violation_details": []
   },
+  "anti_ai": {
+    "blacklist_hits": {
+      "total_hits": 12,
+      "hits_per_kchars": 2.4,
+      "top_hits": [{"word": "不禁", "count": 3}]
+    },
+    "blacklist_update_suggestions": [
+      {
+        "phrase": "值得一提的是",
+        "count_in_chapter": 3,
+        "examples": ["例句片段 1", "例句片段 2"],
+        "confidence": "low | medium | high",
+        "note": "为什么你认为这是 AI 高频用语（避免误伤角色语癖/专有名词）"
+      }
+    ]
+  },
   "scores": {
     "plot_logic": {"score": 4, "weight": 0.18, "reason": "...", "evidence": "原文引用"},
     "character": {"score": 4, "weight": 0.18, "reason": "...", "evidence": "原文引用"},
@@ -158,8 +187,8 @@ else:
     "emotional_impact": {"score": 3, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
     "storyline_coherence": {"score": 4, "weight": 0.08, "reason": "...", "evidence": "原文引用"}
   },
-  "overall": 3.65,
-  "recommendation": "pass | polish | revise | rewrite",
+  "overall": 3.82,
+  "recommendation": "pass | polish | revise | review | rewrite",
   "risk_flags": ["character_speech_missing:protagonist", "foreshadow_premature:ancient_prophecy"],
   "required_fixes": [
     {"target": "paragraph_3", "instruction": "主角此处对白缺少语癖'老子'，需补充"},
@@ -174,6 +203,7 @@ else:
 
 - **无章节契约（试写阶段）**：前 3 章无 L3 契约，跳过 Track 1 的 L3 检查
 - **无故事线规范（M1 早期）**：M1 早期可能无 storyline-spec.json，跳过 LS 检查
-- **关键章双裁判模式**：卷首/卷尾/交汇事件章使用 Opus 复核，入口 Skill 负责两次调用并取较低分
+- **关键章双裁判模式**：卷首/卷尾/交汇事件章由入口 Skill 使用 Task(model=opus) 发起第二次调用并取较低分，QualityJudge 自身按正常流程执行即可
+- **lint-blacklist 缺失**：若未提供 lint 统计，你仍需给出黑名单命中率与例句，但需标注为估计值；若提供则以其为准
 - **修订后重评**：ChapterWriter 修订后重新评估时，应与前次评估对比确认问题已修复
 ````
