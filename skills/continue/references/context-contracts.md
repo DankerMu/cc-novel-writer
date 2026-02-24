@@ -67,4 +67,4 @@ quality_judge_context = {
 }
 ```
 
-另见：`references/continuity-checks.md`（NER schema + 一致性报告 schema + LS-001 结构化输入约定）。
+另见：`continuity-checks.md`（NER schema + 一致性报告 schema + LS-001 结构化输入约定）。

@@ -463,6 +463,7 @@ for chapter_num in range(start, start + remaining_N):
        - 若存在 `logs/continuity/latest.json`：
          - Read 并裁剪为小体积 JSON（仅保留 scope/chapter_range + 与 timeline/location 相关的 high/medium issues，最多 5 条，含 evidence）
          - 注入到 quality_judge_context.continuity_report_summary
+       - 若文件不存在/读取失败/JSON 无效 → continuity_report_summary = null，不得阻断流水线
      （可选确定性工具）黑名单精确命中统计：
        - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh`：
          - 执行：`bash ${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh staging/chapters/chapter-{C:03d}.md ai-blacklist.json`

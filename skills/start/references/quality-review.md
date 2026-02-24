@@ -1,13 +1,16 @@
 # 质量回顾
 
 1. 使用 Glob + Read 收集近 10 章数据（按章节号排序取最新）：
+   质量评估数据：
    - `evaluations/chapter-*-eval.json`（overall_final + contract_verification + gate metadata 如有）
    - `logs/chapter-*-log.json`（gate_decision/revisions/force_passed + key chapter judges 如有）
+   一致性检查数据（Step 2 使用）：
    - `chapters/chapter-*.md`（一致性检查需要；只取最近 10 章）
    - `summaries/chapter-*-summary.md`（用于交叉验证与降级）
    - `volumes/vol-{V:02d}/chapter-contracts/chapter-*.json`（如存在：用于解析 concurrent_state 做 LS-001 对齐）
    - `storylines/storyline-spec.json` 与 `volumes/vol-{V:02d}/storyline-schedule.json`（如存在）
    - `characters/active/*.json` + `state/current-state.json`（display_name ↔ slug 映射核对）
+   风格与黑名单（Step 3 使用）：
    - `style-drift.json`（如存在：active + drifts + detected_chapter）
    - `ai-blacklist.json`（version/last_updated/words/whitelist/update_log）
    - `style-profile.json`（preferred_expressions；用于解释黑名单豁免）

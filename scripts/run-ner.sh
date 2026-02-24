@@ -33,7 +33,12 @@ fi
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "run-ner.sh: python3 is required but not found" >&2
-  exit 2
+  exit 1
+fi
+
+if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 7) else 1)" 2>/dev/null; then
+  echo "run-ner.sh: python3 >= 3.7 is required" >&2
+  exit 1
 fi
 
 python3 - "$chapter_path" <<'PY'
@@ -41,7 +46,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 
 def _die(msg: str, exit_code: int) -> None:
@@ -200,7 +205,7 @@ SPEECH_MODIFIERS = [
 
 COMMON_SURNAMES_1: Set[str] = set(
     list(
-        "赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏水窦章云苏潘葛奚范彭郎鲁韦昌马苗凤花方俞任袁柳酆鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝邬安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋茅庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田樊胡凌霍虞万支柯昝管卢莫经房裘缪干解应宗丁宣贲邓郁单杭洪包诸左石崔吉龚程嵇邢滑裴陆荣翁荀羊於惠甄曲家封芮羿储靳汲邴糜松井段富巫乌焦巴弓牧隗山谷车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘钭厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲邰从鄂索咸籍赖卓蔺屠蒙池乔阴欎胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍却璩桑桂濮牛寿通边扈燕冀郏浦尚农温别庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧殳沃利蔚越夔隆师巩厍聂晁勾敖融冷訾辛阚那简饶空曾毋沙乜养鞠须丰巢关蒯相查后荆红游竺权逯盖益桓公万俟司马上官欧阳夏侯诸葛闻人东方赫连皇甫尉迟公羊澹台公冶宗政濮阳淳于单于太叔申屠公孙仲孙轩辕令狐钟离宇文长孙慕容鲜于闾丘司徒司空亓官司寇仉督子车颛孙端木巫马公西漆雕乐正壤驷公良拓跋夹谷宰父谷梁晋楚闫法汝鄢涂钦段干百里东郭南门呼延归海羊舌微生岳帅缑亢况后有琴梁丘左丘东门西门商牟佘佴伯赏南宫墨哈谯笪年爱阳佟"
+        "赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏水窦章云苏潘葛奚范彭郎鲁韦昌马苗凤花方俞任袁柳酆鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝邬安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋茅庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田樊胡凌霍虞万支柯昝管卢莫经房裘缪干解应宗丁宣贲邓郁单杭洪包诸左石崔吉龚程嵇邢滑裴陆荣翁荀羊於惠甄曲家封芮羿储靳汲邴糜松井段富巫乌焦巴弓牧隗山谷车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘钭厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲邰从鄂索咸籍赖卓蔺屠蒙池乔阴欎胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍却璩桑桂濮牛寿通边扈燕冀郏浦尚农温别庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧殳沃利蔚越夔隆师巩厍聂晁勾敖融冷訾辛阚那简饶空曾毋沙乜养鞠须丰巢关蒯相查后荆红游竺权逯盖益桓公"
     )
 )
 
@@ -417,7 +422,7 @@ def _extract_locations(lines: List[Tuple[int, str]]) -> Tuple[Dict[str, int], Di
     mentions: Dict[str, List[Mention]] = {}
 
     suffix_re = "|".join(sorted(map(re.escape, LOCATION_SUFFIXES), key=len, reverse=True))
-    pat = re.compile(rf"([\u4e00-\u9fff]{{2,10}}(?:{suffix_re}))")
+    pat = re.compile(rf"([\u3400-\u9fff]{{2,10}}(?:{suffix_re}))")
     bracket_pat = re.compile(r"【([^】]{2,12})】")
 
     def normalize(token: str) -> str:
@@ -425,14 +430,14 @@ def _extract_locations(lines: List[Tuple[int, str]]) -> Tuple[Dict[str, int], Di
         if not token:
             return token
 
-        # If token contains an embedded trigger (e.g. "他已踏入幽暗森林"),
-        # strip everything up to the LAST trigger.
+        # If token starts with a trigger (e.g. "踏入幽暗森林"),
+        # strip the trigger prefix only when it appears at position 0.
         last_end: Optional[int] = None
         for trig in LOCATION_PREFIX_TRIGGERS:
-            idx = token.rfind(trig)
-            if idx == -1:
+            idx = token.find(trig)
+            if idx != 0:
                 continue
-            end = idx + len(trig)
+            end = len(trig)
             if last_end is None or end > last_end:
                 last_end = end
 
@@ -475,10 +480,10 @@ def _extract_character_candidates(lines: List[Tuple[int, str]]) -> Tuple[Dict[st
     speech_suffix_re = "|".join(map(re.escape, SPEECH_ENDINGS))
     speech_mod_re = "|".join(map(re.escape, SPEECH_MODIFIERS))
     speech_name_pat = re.compile(
-        rf"([\u4e00-\u9fff]{{2,3}})(?:(?:{speech_mod_re}))?(?:{speech_suffix_re})"
+        rf"(?:^|(?<=[，。！？；：、\s\"「『（]))([\u3400-\u9fff]{{2,3}})(?:(?:{speech_mod_re}))?(?:{speech_suffix_re})"
     )
 
-    token_pat = re.compile(r"([\u4e00-\u9fff]{2,3})")
+    token_pat = re.compile(r"([\u3400-\u9fff]{2,3})")
 
     for line_no, line in lines:
         # high-confidence: name + speech verb patterns
@@ -496,7 +501,7 @@ def _extract_character_candidates(lines: List[Tuple[int, str]]) -> Tuple[Dict[st
                 continue
             if any(token.endswith(suf) for suf in LOCATION_SUFFIXES):
                 continue
-            if re.search(r"[春夏秋冬]", token):
+            if re.match(r"^[春夏秋冬][初中末]?$", token) or re.match(r"^(?:初|仲|暮|孟)[春夏秋冬]$", token):
                 continue
             if token.endswith("道") and token not in {"道长"}:
                 continue
@@ -529,7 +534,7 @@ def _extract_events(lines: List[Tuple[int, str]]) -> Tuple[Dict[str, int], Dict[
     mentions: Dict[str, List[Mention]] = {}
 
     trigger_re = "|".join(map(re.escape, EVENT_TRIGGERS))
-    pat = re.compile(rf"([\u4e00-\u9fff]{{2,18}}(?:{trigger_re}))")
+    pat = re.compile(rf"([\u3400-\u9fff]{{2,8}}(?:{trigger_re}))")
 
     for line_no, line in lines:
         for token in pat.findall(line):
@@ -550,7 +555,7 @@ def _extract_events(lines: List[Tuple[int, str]]) -> Tuple[Dict[str, int], Dict[
 def _build_entities(
     counts: Dict[str, int],
     mentions: Dict[str, List[Mention]],
-    confidence_fn,
+    confidence_fn: Union[Callable[[str], str], Callable[[str, int, int], str]],
     extra: Optional[Dict[str, int]] = None,
     limit: int = 30,
 ) -> List[Entity]:
@@ -569,7 +574,8 @@ def main() -> None:
     chapter_path = sys.argv[1]
 
     try:
-        raw = open(chapter_path, "r", encoding="utf-8").read()
+        with open(chapter_path, "r", encoding="utf-8-sig") as f:
+            raw = f.read()
     except Exception as e:
         _die(f"run-ner.sh: failed to read chapter: {e}", 1)
 
@@ -593,6 +599,7 @@ def main() -> None:
             "characters": [
                 {
                     "text": e.text,
+                    "slug_id": None,
                     "confidence": e.confidence,
                     "mentions": [{"line": m.line, "snippet": m.snippet} for m in e.mentions],
                 }
@@ -609,6 +616,7 @@ def main() -> None:
             "time_markers": [
                 {
                     "text": e.text,
+                    # TODO: implement actual time normalization; currently identity mapping
                     "normalized": e.text,
                     "confidence": e.confidence,
                     "mentions": [{"line": m.line, "snippet": m.snippet} for m in e.mentions],
