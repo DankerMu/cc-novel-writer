@@ -234,7 +234,7 @@ novel-project/
 ```
 
 > `judges` 字段（M3 新增）：记录门控裁判详情。关键章（卷首/卷尾/交汇事件章）额外包含 `secondary` 子对象（`{"model": "opus", "overall": 3.8}`），`overall_final = min(primary.overall, secondary.overall)`，`used` 标记实际采用的裁判。普通章仅含 `primary`。`force_passed`（M3 新增）：修订次数耗尽后强制通过时为 `true`。
-
+>
 > 每章流水线完成后由入口 Skill 写入 `logs/chapter-N-log.json`。用于调试（定位哪个阶段耗时异常）、质量回顾（门控决策 + 修订次数统计）。`/novel:status` 可读取汇总展示。
 >
 > **降级说明**：Claude Code Task 工具不暴露 token 用量和成本。`input_tokens`、`output_tokens`、`total_cost_usd` 字段当无法获取时写入 `null`。`model` 和 `duration_ms`（通过计时差值计算）始终可用。未来若 Claude Code 开放 token 用量 API，可无缝填充这些字段。
