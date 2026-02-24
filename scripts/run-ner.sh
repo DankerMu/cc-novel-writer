@@ -425,32 +425,49 @@ def _extract_locations(lines: List[Tuple[int, str]]) -> Tuple[Dict[str, int], Di
     pat = re.compile(rf"([\u3400-\u9fff]{{2,10}}(?:{suffix_re}))")
     bracket_pat = re.compile(r"【([^】]{2,12})】")
 
+    weak_single = {"在", "于", "到", "往", "向", "朝"}
+    strict_candidate_pat = re.compile(rf"^[\u3400-\u9fff]{{2,10}}(?:{suffix_re})$")
+    loose_candidate_pat = re.compile(rf"^[\u3400-\u9fff]{{1,10}}(?:{suffix_re})$")
+
     def normalize(token: str) -> str:
         token = token.strip()
         if not token:
             return token
 
-        # Strip the earliest trigger found in the token.
-        # e.g. "他已踏入幽暗森林" → find("踏入") at pos 2 → "幽暗森林"
-        # Uses first occurrence (find, not rfind) so that triggers
-        # embedded inside a real location name are preserved:
-        # e.g. "前往踏入之森林" → find("前往") at pos 0 → "踏入之森林"
-        first_pos: Optional[int] = None
-        first_end: Optional[int] = None
+        # Strip the earliest trigger found in the token, but avoid
+        # corrupting real location names that start with a preposition-like
+        # character (e.g. "向阳村", "朝阳城", "于都城").
+        best_pos: Optional[int] = None
+        best_end: Optional[int] = None
         for trig in LOCATION_PREFIX_TRIGGERS:
             idx = token.find(trig)
             if idx == -1:
                 continue
             end = idx + len(trig)
-            if first_pos is None or idx < first_pos or (idx == first_pos and end > first_end):
-                first_pos = idx
-                first_end = end
+            if end >= len(token):
+                continue
 
-        if first_end is not None and first_end < len(token):
-            token = token[first_end:]
+            candidate = token[end:]
+            if not candidate:
+                continue
 
-        # Strip leading 1-char prepositions (common in "在幽暗森林")
-        token = re.sub(r"^(?:在|于|到|往|向|朝)+", "", token)
+            is_weak = len(trig) == 1 and trig in weak_single
+            if is_weak:
+                # Only strip weak single-char triggers when the remainder still
+                # looks like a >=3-char place name (>=2 chars before suffix).
+                if not strict_candidate_pat.match(candidate):
+                    continue
+            else:
+                if not loose_candidate_pat.match(candidate):
+                    continue
+
+            if best_pos is None or idx < best_pos or (idx == best_pos and end > best_end):
+                best_pos = idx
+                best_end = end
+
+        if best_end is not None and best_end < len(token):
+            token = token[best_end:]
+
         return token
 
     for line_no, line in lines:
