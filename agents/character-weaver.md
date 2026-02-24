@@ -1,8 +1,3 @@
-### 4.2 CharacterWeaver Agent
-
-## 文件路径：`agents/character-weaver.md`
-
-````markdown
 ---
 name: character-weaver
 description: |
@@ -144,4 +139,3 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
     ]
   }
   ```
-````
