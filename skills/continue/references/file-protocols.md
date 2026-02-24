@@ -56,3 +56,9 @@
 - 输出：stdout JSON（exit 0），至少包含：
   - `total_hits`、`hits_per_kchars`（次/千字）、`hits[]`（word/count/lines/snippets）
 - 失败回退：脚本不存在 / 退出码非 0 / stdout 非 JSON → 不阻断，QualityJudge 改为启发式估计并标注"估计值"
+
+**4) `${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh`（可选）**
+
+- 输入：`<chapter.md>`
+- 输出：stdout JSON（exit 0），实体输出 schema 见 `references/continuity-checks.md`（characters/locations/time_markers/events + evidence）
+- 失败回退：脚本不存在 / 退出码非 0 / stdout 非 JSON → 不阻断；入口 Skill/QualityJudge 走 LLM fallback（抽取实体 + 输出 confidence）
