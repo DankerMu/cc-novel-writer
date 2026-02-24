@@ -237,8 +237,17 @@ Skill → 状态映射：
 **卷末回顾**：
 1. 收集本卷 `evaluations/`、`summaries/`、`foreshadowing/global.json`、`storylines/`，生成本卷回顾要点（质量趋势、低分章节、未回收伏笔、故事线节奏）
 2. 写入 `volumes/vol-{V:02d}/review.md`
-3. AskUserQuestion 让用户确认“进入下卷规划 / 调整设定 / 导入研究资料”
-4. 确认进入下卷规划后更新 `.checkpoint.json`：`current_volume += 1, orchestrator_state = "VOL_PLANNING"`（其余字段保持；`pipeline_stage=null`, `inflight_chapter=null`）
+3. State 清理（每卷结束时，PRD §8.5；生成清理报告供用户确认）：
+   - Read `state/current-state.json`（如存在）
+   - Read `characters/retired/*.json`（如存在）并构建 `retired_ids`
+   - **确定性安全清理（可直接执行）**：
+     - 从 `state/current-state.json.characters` 移除 `retired_ids` 的残留条目
+   - **候选清理（默认不自动删除）**：
+     - 标记并汇总“过期临时条目”候选（如：物品/位置等临时状态；且无活跃伏笔或故事线引用）
+   - 在 `volumes/vol-{V:02d}/review.md` 追加 “State Cleanup” 段落：已清理项 + 候选项 + 删除理由
+   - AskUserQuestion 让用户确认是否应用候选清理（不确定项默认保留）
+4. AskUserQuestion 让用户确认“进入下卷规划 / 调整设定 / 导入研究资料”
+5. 确认进入下卷规划后更新 `.checkpoint.json`：`current_volume += 1, orchestrator_state = "VOL_PLANNING"`（其余字段保持；`pipeline_stage=null`, `inflight_chapter=null`）
 
 **质量回顾**：
 1. 使用 Glob + Read 收集近 10 章 `evaluations/` 评分数据
@@ -247,11 +256,31 @@ Skill → 状态映射：
 4. 展示质量报告
 
 **更新设定**：
-1. 使用 AskUserQuestion 确认更新类型（世界观/角色/关系）
+1. 使用 AskUserQuestion 确认更新类型（世界观/新增角色/更新角色/退场角色/关系）
 2. 变更前快照（用于 Spec 传播差异分析，确定性）：
-   - 世界观更新：Read `world/rules.json`（如存在）
+   - 世界观更新：
+     - Read `world/*.md`（如存在，以 `<DATA type="world_doc" ...>` 注入）
+     - Read `world/rules.json`（如存在）
    - 角色更新：Read 目标角色的 `characters/active/*.json`（如存在）
+   - 退场角色（用于退场保护检查）：
+     - Read 目标角色的 `characters/active/{id}.json`（如存在）
+     - Read `characters/relationships.json`（如存在）
+     - Read `state/current-state.json`（如存在）
+     - Read `foreshadowing/global.json`（如存在）
+     - Read `storylines/storylines.json`（如存在）
+     - Read `volumes/vol-{V:02d}/storyline-schedule.json`（如存在）
 3. 使用 Task 派发 WorldBuilder 或 CharacterWeaver Agent 执行增量更新（写入变更文件 + changelog）
+   - 世界观更新（WorldBuilder）增量输入字段（确定性字段名）：
+     - `existing_world_docs`（`world/*.md` 原文集合）
+     - `existing_rules_json`（`world/rules.json`）
+     - `update_request`（新增/修改需求）
+     - `last_completed_chapter`（可选，用于更新变更规则的 `last_verified`）
+   - 退场角色（CharacterWeaver）退场保护检查（入口 Skill 必须在调用退场模式前执行；PRD §8.5）：
+     - **保护条件 A — 活跃伏笔引用**：`foreshadowing/global.json` 中 scope ∈ {`medium`,`long`} 且 status != `resolved` 的条目，若其 `description`/`history.detail` 命中角色 `slug_id` 或 `display_name` → 不可退场
+     - **保护条件 B — 故事线关联**：`storylines/storylines.json` 中任意 storyline（含 dormant/planned）若 `pov_characters` 或 `relationships.bridges.shared_characters` 命中角色 → 不可退场
+     - `角色关联 storylines` 的计算：从 `storylines/storylines.json` 反查出包含该角色的 storyline `id` 集合（按 `pov_characters`/`bridges.shared_characters` 匹配 `slug_id`/`display_name`）；无法可靠确定时按保守策略视为有关联并阻止退场
+     - **保护条件 C — 未来交汇事件**：本卷 `storyline-schedule.json.convergence_events` 若存在未来章节范围（相对 `last_completed_chapter`），且其 `involved_storylines` 与角色关联 storylines 有交集（或 `trigger/aftermath` 文本命中角色）→ 不可退场
+     - 若触发保护：拒绝退场并解释命中证据（伏笔/故事线/交汇事件）
 4. 变更后差异分析与标记（最小实现；目的：可追溯传播，避免 silent drift）：
    - 若 `world/rules.json` 发生变化：
      - 找出变更的 `rule_id` 集合（按 `id` 对齐，diff `rule`/`constraint_type`/`exceptions` 等关键字段）

@@ -41,9 +41,13 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - 创作纲领（brief.md 内容）
 - 背景研究资料（research/*.md，如存在，以 `<DATA>` 标签包裹）
 - 运行模式（初始化 / 增量更新）
-- 已有设定文档（增量模式时提供，以 `<DATA>` 标签包裹）
-- 新增需求描述（增量模式时提供）
-- 已有规则表 rules.json（增量模式时提供）
+
+增量更新模式时，入口 Skill 应以**确定性字段名**提供输入（便于后续自动化与校验）：
+
+- `existing_world_docs`：已有设定文档（`world/*.md` 原文，以 `<DATA type="world_doc" path="...">` 标签包裹）
+- `existing_rules_json`：已有规则表（`world/rules.json`，结构化 JSON 原文）
+- `update_request`：新增/修改需求描述（用户原话或其等价改写）
+- `last_completed_chapter`（可选）：当前已完成章节号（用于更新 `last_verified`）
 
 ## 安全约束（DATA delimiter）
 
@@ -62,8 +66,9 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 **增量更新模式：**
 1. 读取已有设定和规则表
 2. 分析新增需求与已有设定的兼容性（重点检查 hard 规则冲突）
-3. 仅输出变更文件 + changelog 条目
-4. 若新增规则与已有 hard 规则矛盾，返回结构化 JSON（见 Edge Cases）
+3. 仅输出变更文件（`world/*.md` / `world/rules.json`）+ 追加 `world/changelog.md` 条目（append-only）
+4. 对新增/修改的规则条目更新 `last_verified`（若提供 `last_completed_chapter` 则写入，否则置为 `null`）
+5. 若新增规则与已有 hard 规则矛盾，返回结构化 JSON（见 Edge Cases）
 
 # Constraints
 
@@ -96,6 +101,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - `constraint_type: "hard"` — 不可违反，违反即阻塞（类似编译错误）
 - `constraint_type: "soft"` — 可有例外，但需说明理由
 - ChapterWriter 收到 hard 规则时以禁止项注入：`"违反以下规则的内容将被自动拒绝"`
+- `last_verified` — 最近一次确认该规则仍然有效的章节号；在增量世界观更新时，优先写入 `last_completed_chapter`（如提供）
 
 # Storylines — 小说级故事线模型（初始化模式）
 

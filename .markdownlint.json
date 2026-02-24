@@ -9,6 +9,7 @@
   "fenced-code-language": false,
   "blanks-around-headings": false,
   "blanks-around-tables": false,
+  "table-column-style": false,
   "ol-prefix": false,
   "no-emphasis-as-heading": false
 }

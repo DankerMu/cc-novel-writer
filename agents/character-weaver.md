@@ -1,8 +1,3 @@
-### 4.2 CharacterWeaver Agent
-
-## 文件路径：`agents/character-weaver.md`
-
-````markdown
 ---
 name: character-weaver
 description: |
@@ -128,4 +123,3 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - **角色名冲突**：新角色与已有角色 slug ID 冲突时，自动追加数字后缀（如 `zhang-san-2`）并警告
 - **能力超限**：角色能力超出 L1 规则时，返回 `type: "requires_user_decision"` 结构化 JSON，由入口 Skill 向用户确认
 - **退场保护触发**：角色被伏笔/故事线保护时，返回保护原因列表，不执行退场
-````
