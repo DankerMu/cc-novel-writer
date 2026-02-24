@@ -2,13 +2,13 @@
 
 hooks 是“非交互增强层”，用于在不改变三命令 UX 的前提下提升可靠性：
 - SessionStart：每次新 session 进入项目目录时执行，注入项目状态到宿主上下文
-- PostToolUse：拦截工具写入事件，对路径做白名单校验
+- PreToolUse：拦截工具写入事件，对路径做白名单校验（可阻断）
 
 ## Goals / Non-Goals
 
 **Goals:**
 - SessionStart：快速、可降级、只在小说项目目录生效
-- PostToolUse：强制 Agents 写入边界（仅 `staging/**`），并提供可审计日志
+- PreToolUse：强制 chapter pipeline 子代理写入边界（仅 `staging/**`），并提供可审计日志
 
 **Non-Goals:**
 - 不在 hook 中执行复杂计算（必须在严格超时内完成）
@@ -23,7 +23,7 @@ hooks 是“非交互增强层”，用于在不改变三命令 UX 的前提下�
    - 最近摘要最多注入 2000 字符，避免大文件导致 token 浪费或 hook 超时。
 
 3. **路径审计白名单**
-   - 对 Agent 的 Write/Edit 只允许 `staging/**`；入口 Skill 的 commit 阶段仍可写正式目录（不在审计拦截范围内或通过不同身份区分）。
+   - 对 chapter pipeline 子代理（ChapterWriter/Summarizer/StyleRefiner）的 Write/Edit/MultiEdit 只允许 `staging/**`；入口 Skill 的 commit 阶段仍可写正式目录（不在审计拦截范围内）。
 
 4. **审计日志 append-only**
    - 违规拦截写入 `logs/audit.jsonl`，便于后续排查与安全回溯。
@@ -38,4 +38,3 @@ hooks 是“非交互增强层”，用于在不改变三命令 UX 的前提下�
 - `docs/dr-workflow/novel-writer-tool/final/spec/01-overview.md`
 - `docs/dr-workflow/novel-writer-tool/final/prd/10-protocols.md`
 - `docs/dr-workflow/novel-writer-tool/final/milestones.md`
-

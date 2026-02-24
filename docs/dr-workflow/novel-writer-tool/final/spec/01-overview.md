@@ -28,8 +28,9 @@
 | 16 | `templates/brief-template.md` | 项目简介模板 | 无 |
 | 17 | `templates/ai-blacklist.json` | AI 用语黑名单（≥30 条） | 无 |
 | 18 | `templates/style-profile-template.json` | 风格指纹空模板 | 无 |
-| 19 | `hooks/hooks.json` | 事件钩子配置（SessionStart） | plugin.json |
+| 19 | `hooks/hooks.json` | 事件钩子配置（SessionStart / PreToolUse） | plugin.json |
 | 20 | `scripts/inject-context.sh` | SessionStart 注入项目状态摘要 | hooks.json |
+| 21 | `scripts/audit-staging-path.sh` | PreToolUse 写入边界审计（chapter pipeline 子代理仅允许写入 staging/**） | hooks.json |
 
 ### 1.2 开发顺序
 
@@ -90,6 +91,42 @@ Phase 3: 入口 Skill 层
           }
         ]
       }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/audit-staging-path.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/audit-staging-path.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/audit-staging-path.sh",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
@@ -125,5 +162,7 @@ echo "=== 状态注入完毕 ==="
 ````
 
 > SessionStart hook 在每次新 session 进入项目目录时自动执行。输出内容注入到 Claude 的 system context，使后续 `/novel:continue` 可跳过 checkpoint 读取步骤。hook 超时 5 秒，无 checkpoint 文件时静默退出（非小说项目不触发）。JSON 解析优先使用 python3，降级至 jq；摘要截断至 2000 字符避免大文件浪费 token。
+>
+> **M2 写入边界审计（PreToolUse）**：当 chapter pipeline 子代理（ChapterWriter/Summarizer/StyleRefiner）尝试通过 Write/Edit/MultiEdit 写入非 `staging/**` 路径时，hook 将阻断该写入并追加记录到 `logs/audit.jsonl`。入口 Skill 的 commit 阶段写入不在该拦截范围内（由 SubagentStart/SubagentStop 跟踪子代理上下文）。
 
 ---

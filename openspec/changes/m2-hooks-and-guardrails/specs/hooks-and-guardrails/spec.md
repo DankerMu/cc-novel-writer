@@ -17,14 +17,14 @@ The hook SHALL complete within a strict timeout (e.g., 5 seconds). If JSON parsi
 - **WHEN** python3 is unavailable but jq exists
 - **THEN** the hook still resolves `last_completed_chapter` and injects the summary if present
 
-### Requirement: PostToolUse hook SHALL enforce staging-only writes for Agents
-When invoked for Agent Write/Edit tool calls, the path-audit hook SHALL:
+### Requirement: PreToolUse hook SHALL enforce staging-only writes for chapter pipeline subagents
+When invoked for chapter pipeline subagent (ChapterWriter/Summarizer/StyleRefiner) Write/Edit/MultiEdit tool calls, the path-audit hook SHALL:
 - Allow only paths under `staging/**`
 - Block writes outside the allowlist
 - Append an audit event to `logs/audit.jsonl`
 
 #### Scenario: Agent write outside staging is blocked
-- **WHEN** an Agent attempts to write `chapters/chapter-001.md`
+- **WHEN** a chapter pipeline subagent attempts to write `chapters/chapter-001.md`
 - **THEN** the operation is blocked and an audit event is appended to `logs/audit.jsonl`
 
 ### Requirement: Audit log SHALL be append-only and machine-readable
@@ -41,4 +41,3 @@ timestamp, tool_name, path, allowed, reason.
 - `docs/dr-workflow/novel-writer-tool/final/prd/01-product.md`
 - `docs/dr-workflow/novel-writer-tool/final/spec/02-skills.md`
 - `docs/dr-workflow/novel-writer-tool/final/prd/10-protocols.md`
-

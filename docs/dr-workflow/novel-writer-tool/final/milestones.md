@@ -66,7 +66,7 @@
 | 2.11 | 实现故事线 context 组装（storyline_context + concurrent_state + transition_hint） | P0 | 6h |
 | 2.12 | 实现 SessionStart hook（inject-context.sh：自动注入 checkpoint + 最近摘要） | P1 | 2h |
 | 2.13 | 实现"导入研究资料"功能（扫描 doc-workflow 产出 → research/，WorldBuilder/CharacterWeaver 自动引用） | P1 | 3h |
-| 2.14 | 实现 PostToolUse 路径审计 hook（Agent Write/Edit 白名单校验 staging/**，违规拦截 + 记录 audit.jsonl） | P1 | 3h |
+| 2.14 | 实现 PreToolUse 路径审计 hook（chapter pipeline 子代理 Write/Edit 白名单校验 staging/**，违规拦截 + 记录 audit.jsonl） | P1 | 3h |
 | 2.15 | 集成测试：完成 1 卷 30 章循环（含多线叙事 + Spec 全链路验证） | P0 | 14h |
 
 ### 验收标准
@@ -80,7 +80,7 @@
 - [ ] 故事线切换章节能正确注入 storyline_context 和 concurrent_state
 - [ ] 交汇事件能在预规划的章节范围内正确触发
 - [ ] SessionStart hook 在新 session 自动注入 checkpoint + 最近摘要，非项目目录静默跳过
-- [ ] PostToolUse 路径审计 hook 可拦截 Agent 写入非 staging/ 目录的操作
+- [ ] PreToolUse 路径审计 hook 可拦截 chapter pipeline 子代理写入非 staging/ 目录的操作
 - [ ] entity_id_map 自动从 characters/active/ 构建，L2 契约裁剪：有契约时加载契约指定角色（无硬上限），无契约时上限 15
 
 ### 依赖
