@@ -261,10 +261,21 @@ Skill → 状态映射：
 5. 确认进入下卷规划后更新 `.checkpoint.json`：`current_volume += 1, orchestrator_state = "VOL_PLANNING"`（其余字段保持；`pipeline_stage=null`, `inflight_chapter=null`）
 
 **质量回顾**：
-1. 使用 Glob + Read 收集近 10 章 `evaluations/` 评分数据
-2. 计算均分、趋势、低分章节
-3. 检查伏笔状态（`foreshadowing/global.json`）
-4. 展示质量报告
+1. 使用 Glob + Read 收集近 10 章数据（按章节号排序取最新）：
+   - `evaluations/chapter-*-eval.json`（overall_final + contract_verification + gate metadata 如有）
+   - `logs/chapter-*-log.json`（gate_decision/revisions/force_passed + key chapter judges 如有）
+2. 生成质量报告（简洁但可追溯）：
+   - 均分与趋势：近 10 章均分 vs 全局均分
+   - 低分章节列表：overall_final < 3.5（按分数升序列出，展示 gate_decision + revisions）
+   - 强制修订统计：revisions > 0 的章节占比；并区分原因：
+     - `Spec/LS high-confidence violation`（contract_verification 中任一 violation 且 confidence="high"）
+     - `score 3.0-3.4`（无 high-confidence violation 但 overall 落入区间）
+   - force pass：force_passed=true 的章节列表（提示“已达修订上限后强制通过”）
+   - 关键章双裁判：存在 secondary judge 的章节，展示 primary/secondary/overall_final（取 min）与使用的裁判（used）
+3. 检查伏笔状态（Read `foreshadowing/global.json`）：未回收伏笔数量 + 超期（>10章）条目
+4. 输出建议动作（不强制）：
+   - 对低分/高风险章节：建议用户“回看/手动修订/接受并继续”
+   - 若存在多章连续低分：建议先暂停写作，回到“更新设定/调整方向”
 
 **更新设定**：
 1. 使用 AskUserQuestion 确认更新类型（世界观/新增角色/更新角色/退场角色/关系）
@@ -525,6 +536,14 @@ chapter_writer_context = {
   writing_methodology(<DATA reference>): novel-writing methodology excerpt
 }
 
+chapter_writer_revision_context = {
+  # 仅在 gate_decision="revise" 的修订循环中使用
+  chapter_writer_context 的全部字段 +
+  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,   # 现有章节正文（待定向修订）
+  required_fixes(list): eval.required_fixes,                                     # QualityJudge 的最小修订指令
+  high_confidence_violations(list): 从 eval.contract_verification 中抽取 status="violation" 且 confidence="high" 的条目（用于兜底修订指令）
+}
+
 summarizer_context = {
   chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
   current_state(json),
@@ -590,21 +609,70 @@ for chapter_num in range(start, start + remaining_N):
   4. QualityJudge Agent → 质量评估（双轨验收）
      输入: quality_judge_context（见 Step 2.6；cross_references 来自 staging/state/chapter-{C:03d}-crossref.json）
      返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
-     入口 Skill 写入: staging/evaluations/chapter-{C:03d}-eval.json
-     关键章双裁判: 若 chapter_num 为卷首章（== chapter_start）、卷尾章（== chapter_end）或故事线交汇事件章（schedule 标记 is_intersection），则使用 Task(subagent_type="quality-judge", model="opus") 再调用一次 QualityJudge，取两次 overall 中较低分和两次 has_violations 的并集作为最终结果
+     关键章双裁判:
+       - 关键章判定：
+         - 卷首章：chapter_num == chapter_start
+         - 卷尾章：chapter_num == chapter_end
+         - 交汇事件章：chapter_num 落在任一 storyline_schedule.convergence_events.chapter_range（含边界）内（若某 event 的 chapter_range 缺失或为 null，跳过该 event）
+       - 若为关键章：使用 Task(subagent_type="quality-judge", model="opus") 再调用一次 QualityJudge 得到 secondary_eval
+       - 最坏情况合并（用于门控）：
+         - overall_final = min(primary_eval.overall, secondary_eval.overall)
+         - has_high_confidence_violation = high_violation(primary_eval) OR high_violation(secondary_eval)
+         - eval_used = overall 更低的一次（primary/secondary；若相等，优先使用 secondary_eval——更强模型的判断）
+       - 记录：primary/secondary 的 model + overall + eval_used + overall_final（写入 eval metadata 与 logs，便于回溯差异与成本）
+     普通章：
+       - overall_final = primary_eval.overall
+       - has_high_confidence_violation = high_violation(primary_eval)
+       - eval_used = primary_eval
      更新 checkpoint: pipeline_stage = "judged"
 
-  5. 质量门控决策:
-     - Contract violation（confidence=high）存在 → 更新 checkpoint: orchestrator_state = "CHAPTER_REWRITE", pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 强制修订，回到步骤 1
-     - Contract violation（confidence=medium）存在 → 写入 eval JSON，输出警告，不阻断流水线
-     - Contract violation（confidence=low）存在 → 标记为 violation_suspected，写入 eval JSON，章节完成输出中警告用户（用户可通过 `/novel:start` 质量回顾集中审核处理）
-     - 无 violation + overall ≥ 4.0 → 直接通过
-     - 无 violation + 3.5-3.9 → 更新 checkpoint: pipeline_stage = "revising" → StyleRefiner 二次润色后通过
-     - 无 violation + 3.0-3.4 → 更新 checkpoint: orchestrator_state = "CHAPTER_REWRITE", pipeline_stage = "revising", revision_count += 1 → ChapterWriter(model=opus) 自动修订
-     - 无 violation + < 3.0 → 通知用户：2.0-2.9 人工审核决定重写范围，< 2.0 强制全章重写，释放并发锁（rm -rf .novel.lock）后暂停
-     最大修订次数: 2
-     修订次数耗尽后: overall ≥ 3.0 → 强制通过并标记 force_passed; < 3.0 → 释放并发锁（rm -rf .novel.lock）后通知用户暂停
-     > 修订调用：Task(subagent_type="chapter-writer", model="opus")，利用 Task 工具的 model 参数覆盖 agent frontmatter 默认的 sonnet
+  5. 质量门控决策（Gate Decision Engine）:
+     1) high_violation 函数定义与 hard gate 输入（仅认 high confidence）：
+        - high_violation(eval) := 任一 contract_verification.{l1,l2,l3}_checks 中存在 status="violation" 且 confidence="high"
+          或任一 contract_verification.ls_checks 中存在 status="violation" 且 confidence="high" 且（constraint_type 缺失或 == "hard"）
+        - has_high_confidence_violation：取自 Step 4 的计算结果（关键章=双裁判 OR 合并，普通章=单裁判）
+        > confidence=medium/low 仅记录警告，不触发 hard gate（避免误报疲劳）
+
+     2) 固化门控决策函数（输出 gate_decision）：
+        ```
+        if has_high_confidence_violation:
+          gate_decision = "revise"
+        else:
+          if overall_final >= 4.0: gate_decision = "pass"
+          elif overall_final >= 3.5: gate_decision = "polish"
+          elif overall_final >= 3.0: gate_decision = "revise"
+          elif overall_final >= 2.0: gate_decision = "pause_for_user"
+          else: gate_decision = "pause_for_user_force_rewrite"
+        ```
+
+     3) 自动修订闭环（max revisions = 2）：
+        - 若 gate_decision="revise" 且 revision_count < 2：
+          - 更新 checkpoint: orchestrator_state="CHAPTER_REWRITE", pipeline_stage="revising", revision_count += 1
+          - 调用 ChapterWriter 修订模式（Task(subagent_type="chapter-writer", model="opus")）：
+            - 输入: chapter_writer_revision_context
+            - 修订指令：以 eval.required_fixes 作为最小修订指令；若 required_fixes 为空，则用 high_confidence_violations 生成 3-5 条最小修订指令兜底；若两者均为空（score 3.0-3.4 无 violation 触发），则从 eval 的 8 维度中取最低分 2 个维度的 feedback 作为修订方向
+            - 约束：定向修改 required_fixes 指定段落，尽量保持其余内容不变
+          - 回到步骤 2 重新走 Summarizer → StyleRefiner → QualityJudge → 门控（保证摘要/state/crossref 与正文一致）
+
+        - 若 gate_decision="revise" 且 revision_count == 2（次数耗尽）：
+          - 若 has_high_confidence_violation=false 且 overall_final >= 3.0：
+            - 设置 force_passed=true，允许提交（避免无限循环）
+            - 记录：eval metadata + log 中标记 force_passed=true（门控被上限策略终止）
+            - 将 gate_decision 覆写为 "pass"
+          - 否则：
+            - 释放并发锁（rm -rf .novel.lock）并暂停，提示用户在 `/novel:start` 决策下一步（手动修订/重写/接受）
+
+     4) 其他决策的后续动作：
+        - gate_decision="pass"：直接进入 commit
+        - gate_decision="polish"：更新 checkpoint: pipeline_stage="revising" → StyleRefiner 二次润色后进入 commit（不再重复 QualityJudge 以控成本）
+        - gate_decision="pause_for_user" / "pause_for_user_force_rewrite"：释放并发锁（rm -rf .novel.lock）并暂停，等待用户通过 `/novel:start` 决策
+
+     5) 写入评估与门控元数据（可追溯）：
+        - 写入 staging/evaluations/chapter-{C:03d}-eval.json：
+          - 内容：eval_used（普通章=primary_eval；关键章=overall 更低的一次）+ metadata
+          - metadata 至少包含：
+            - judges: {primary:{model,overall}, secondary?:{model,overall}, used, overall_final}
+            - gate: {decision: gate_decision, revisions: revision_count, force_passed: bool}
 
   6. 事务提交（staging → 正式目录）:
      - 移动 staging/chapters/chapter-{C:03d}.md → chapters/chapter-{C:03d}.md
@@ -619,12 +687,12 @@ for chapter_num in range(start, start + remaining_N):
      - 状态转移：
        - 若 chapter_num == chapter_end：更新 `.checkpoint.json.orchestrator_state = "VOL_REVIEW"` 并提示用户运行 `/novel:start` 执行卷末回顾
        - 否则：更新 `.checkpoint.json.orchestrator_state = "WRITING"`（若本章来自 CHAPTER_REWRITE，则回到 WRITING）
-     - 写入 logs/chapter-{C:03d}-log.json（stages 耗时/模型、gate_decision、revisions；token/cost 为估算值或 null，见降级说明）
+     - 写入 logs/chapter-{C:03d}-log.json（stages 耗时/模型、gate_decision、revisions、force_passed；关键章额外记录 primary/secondary judge 的 model+overall 与 overall_final；token/cost 为估算值或 null，见降级说明）
      - 清空 staging/ 本章文件
      - 释放并发锁: rm -rf .novel.lock
 
   7. 输出本章结果:
-     > 第 {C} 章已生成（{word_count} 字），评分 {overall}/5.0 {pass_icon}
+     > 第 {C} 章已生成（{word_count} 字），评分 {overall_final}/5.0，门控 {gate_decision}，修订 {revision_count} 次 {pass_icon}
 ```
 
 ### Step 4: 定期检查触发

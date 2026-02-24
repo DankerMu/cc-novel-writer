@@ -117,7 +117,7 @@ overall = plot_logic × 0.18
 
 | 综合分范围 | 合规状态 | 行动 |
 |-----------|---------|------|
-| 任意 | 有 violation | 强制修订（无论分数多高） |
+| 任意 | 有 high-confidence violation | 强制修订（无论分数多高；仅 confidence="high" 触发，medium/low 记录警告不阻断） |
 | 4.0-5.0 | 无 violation | 直接通过 |
 | 3.5-3.9 | 无 violation | StyleRefiner 二次润色后通过 |
 | 3.0-3.4 | 无 violation | ChapterWriter（Opus）自动修订 |

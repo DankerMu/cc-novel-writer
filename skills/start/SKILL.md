@@ -254,10 +254,21 @@ Skill → 状态映射：
 5. 确认进入下卷规划后更新 `.checkpoint.json`：`current_volume += 1, orchestrator_state = "VOL_PLANNING"`（其余字段保持；`pipeline_stage=null`, `inflight_chapter=null`）
 
 **质量回顾**：
-1. 使用 Glob + Read 收集近 10 章 `evaluations/` 评分数据
-2. 计算均分、趋势、低分章节
-3. 检查伏笔状态（`foreshadowing/global.json`）
-4. 展示质量报告
+1. 使用 Glob + Read 收集近 10 章数据（按章节号排序取最新）：
+   - `evaluations/chapter-*-eval.json`（overall_final + contract_verification + gate metadata 如有）
+   - `logs/chapter-*-log.json`（gate_decision/revisions/force_passed + key chapter judges 如有）
+2. 生成质量报告（简洁但可追溯）：
+   - 均分与趋势：近 10 章均分 vs 全局均分
+   - 低分章节列表：overall_final < 3.5（按分数升序列出，展示 gate_decision + revisions）
+   - 强制修订统计：revisions > 0 的章节占比；并区分原因：
+     - `Spec/LS high-confidence violation`（contract_verification 中任一 violation 且 confidence="high"）
+     - `score 3.0-3.4`（无 high-confidence violation 但 overall 落入区间）
+   - force pass：force_passed=true 的章节列表（提示“已达修订上限后强制通过”）
+   - 关键章双裁判：存在 secondary judge 的章节，展示 primary/secondary/overall_final（取 min）与使用的裁判（used）
+3. 检查伏笔状态（Read `foreshadowing/global.json`）：未回收伏笔数量 + 超期（>10章）条目
+4. 输出建议动作（不强制）：
+   - 对低分/高风险章节：建议用户“回看/手动修订/接受并继续”
+   - 若存在多章连续低分：建议先暂停写作，回到“更新设定/调整方向”
 
 **更新设定**：
 1. 使用 AskUserQuestion 确认更新类型（世界观/新增角色/更新角色/退场角色/关系）
