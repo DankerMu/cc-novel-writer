@@ -32,6 +32,7 @@ hooks 是“非交互增强层”，用于在不改变三命令 UX 的前提下�
 
 - [Risk] hook 机制在不同宿主版本不可用 → Mitigation：Skills 仍能独立读取 checkpoint；hook 只是加速与增强。
 - [Risk] 路径审计误拦截导致流水线卡住 → Mitigation：白名单规则清晰、日志可追；并允许在开发阶段以配置开关临时关闭（后续）。
+- [Limitation] PreToolUse 不携带 agent_type/agent_id → Mitigation：通过 SubagentStart/Stop 写入 session 级 marker 文件间接判断。当 chapter-pipeline 子代理活跃时，同 session 所有 Write/Edit/MultiEdit 均受 staging 限制（含主代理或其他子代理）。入口 Skill 串行编排子代理（ChapterWriter → Summarizer → StyleRefiner → QualityJudge），并发重叠概率极低。此机制为 best-effort 外围防线，主写入边界由 staging→commit 事务模型保障。
 
 ## References
 

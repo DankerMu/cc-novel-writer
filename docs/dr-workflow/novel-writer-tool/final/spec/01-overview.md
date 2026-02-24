@@ -79,6 +79,7 @@ Phase 3: 入口 Skill 层
 ````markdown
 ```json
 {
+  "description": "Novel writer: SessionStart context injection + PreToolUse staging path audit",
   "hooks": {
     "SessionStart": [
       {
@@ -87,6 +88,11 @@ Phase 3: 入口 Skill 层
           {
             "type": "command",
             "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/inject-context.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/audit-staging-path.sh",
             "timeout": 5
           }
         ]
@@ -163,6 +169,8 @@ echo "=== 状态注入完毕 ==="
 
 > SessionStart hook 在每次新 session 进入项目目录时自动执行。输出内容注入到 Claude 的 system context，使后续 `/novel:continue` 可跳过 checkpoint 读取步骤。hook 超时 5 秒，无 checkpoint 文件时静默退出（非小说项目不触发）。JSON 解析优先使用 python3，降级至 jq；摘要截断至 2000 字符避免大文件浪费 token。
 >
-> **M2 写入边界审计（PreToolUse）**：当 chapter pipeline 子代理（ChapterWriter/Summarizer/StyleRefiner）尝试通过 Write/Edit/MultiEdit 写入非 `staging/**` 路径时，hook 将阻断该写入并追加记录到 `logs/audit.jsonl`。入口 Skill 的 commit 阶段写入不在该拦截范围内（由 SubagentStart/SubagentStop 跟踪子代理上下文）。
+> **M2 写入边界审计（PreToolUse）**：当 chapter pipeline 子代理（ChapterWriter/Summarizer/StyleRefiner）尝试通过 Write/Edit/MultiEdit 写入非 `staging/**` 路径时，hook 将阻断该写入并追加记录到 `logs/audit.jsonl`。入口 Skill 的 commit 阶段写入不在该拦截范围内（由 SubagentStart/SubagentStop 跟踪子代理上下文）。SessionStart 阶段同时清理上一次 session 残留的 marker 文件，防止 `--resume` 时误读旧状态。
+>
+> **局限性**：PreToolUse 不携带 agent_type，通过 session 级 marker 间接判断。当 chapter-pipeline 子代理活跃时，同 session 所有写操作均受限。此为 best-effort 外围防线，主写入边界由 staging→commit 事务模型保障。
 
 ---
