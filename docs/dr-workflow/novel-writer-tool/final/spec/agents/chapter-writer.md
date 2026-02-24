@@ -22,6 +22,13 @@ description: |
   assistant: "I'll use the chapter-writer agent to revise the chapter."
   <commentary>章节修订时触发，可使用 Opus 模型</commentary>
   </example>
+
+  <example>
+  Context: 交汇事件章写作
+  user: "写第 60 章（交汇事件）"
+  assistant: "I'll use the chapter-writer agent to write an intersection chapter."
+  <commentary>交汇事件章：严格遵守 storyline-schedule 的交汇锚点与已知信息边界</commentary>
+  </example>
 model: sonnet
 color: green
 tools: ["Read", "Write", "Edit", "Glob", "Grep"]
@@ -54,6 +61,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - 角色当前状态（state/current-state.json）
 - 本章伏笔任务（需埋设/推进/回收的伏笔）
 - 风格参考（style-profile.json，正向引导用词和修辞偏好）
+- 风格漂移纠偏（可选）：`style-drift.json` 与 `style_drift_directives[]`（正向指令，用于把句长/对话节奏拉回基线；与 writing_directives 叠加）
 - AI 黑名单 Top-10（仅高频词提醒，完整黑名单由 StyleRefiner 处理）
 
 **Spec-Driven 输入（如存在）：**

@@ -56,6 +56,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - 角色当前状态（state/current-state.json）
 - 本章伏笔任务（需埋设/推进/回收的伏笔）
 - 风格参考（style-profile.json，正向引导用词和修辞偏好）
+- 风格漂移纠偏（可选）：`style-drift.json` 与 `style_drift_directives[]`（正向指令，用于把句长/对话节奏拉回基线；与 writing_directives 叠加）
 - AI 黑名单 Top-10（仅高频词提醒，完整黑名单由 StyleRefiner 处理）
 
 **Spec-Driven 输入（如存在）：**

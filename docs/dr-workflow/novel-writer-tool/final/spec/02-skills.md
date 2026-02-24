@@ -264,6 +264,9 @@ Skill → 状态映射：
 1. 使用 Glob + Read 收集近 10 章数据（按章节号排序取最新）：
    - `evaluations/chapter-*-eval.json`（overall_final + contract_verification + gate metadata 如有）
    - `logs/chapter-*-log.json`（gate_decision/revisions/force_passed + key chapter judges 如有）
+   - `style-drift.json`（如存在：active + drifts + detected_chapter）
+   - `ai-blacklist.json`（version/last_updated/words/whitelist/update_log）
+   - `style-profile.json`（preferred_expressions；用于解释黑名单豁免）
 2. 生成质量报告（简洁但可追溯）：
    - 均分与趋势：近 10 章均分 vs 全局均分
    - 低分章节列表：overall_final < 3.5（按分数升序列出，展示 gate_decision + revisions）
@@ -272,6 +275,12 @@ Skill → 状态映射：
      - `score 3.0-3.4`（无 high-confidence violation 但 overall 落入区间）
    - force pass：force_passed=true 的章节列表（提示“已达修订上限后强制通过”）
    - 关键章双裁判：存在 secondary judge 的章节，展示 primary/secondary/overall_final（取 min）与使用的裁判（used）
+   - 风格漂移（每 5 章检测）：
+     - 若 `style-drift.json.active=true`：展示 detected_chapter/window + drifts[].directive，并提示“后续章节会自动注入纠偏指令”
+     - 否则：展示“未启用纠偏 / 已回归基线并清除”
+   - AI 黑名单维护：
+     - 展示 `ai-blacklist.json` 的 version/last_updated/words_count/whitelist_count
+     - 若存在 `update_log[]`：展示最近 3 条变更摘要（added/exempted/removed），提醒用户可手动编辑 words/whitelist
 3. 检查伏笔状态（Read `foreshadowing/global.json`）：未回收伏笔数量 + 超期（>10章）条目
 4. 输出建议动作（不强制）：
    - 对低分/高风险章节：建议用户“回看/手动修订/接受并继续”
@@ -522,7 +531,10 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 chapter_writer_context = {
   project_brief(<DATA world_doc>): brief.md,
   style_profile(json): style-profile.json,
-  ai_blacklist_top10(list): ai_blacklist.words[0:10],
+  style_drift(json, optional): style-drift.json,                         # active=true 时注入（用于纠偏）
+  style_drift_directives(list, optional): style_drift.drifts[].directive,
+  ai_blacklist_effective_words(list): ai_blacklist.words - (ai_blacklist.whitelist 或 ai_blacklist.exemptions.words),
+  ai_blacklist_top10(list): ai_blacklist_effective_words[0:10],
   current_volume_outline(<DATA summary>): volumes/vol-{V:02d}/outline.md,
   chapter_outline(<DATA summary>): 本章 outline 区块,
   storyline_id, storyline_context, concurrent_state, transition_hint,
@@ -555,6 +567,8 @@ summarizer_context = {
 style_refiner_context = {
   chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
   style_profile(json),
+  style_drift(json, optional): style-drift.json,
+  style_drift_directives(list, optional): style_drift.drifts[].directive,
   ai_blacklist(json): ai-blacklist.json,
   style_guide(<DATA reference>): style-guide.md
 }
@@ -566,6 +580,7 @@ quality_judge_context = {
   prev_summary(<DATA summary>): summaries/chapter-{C-1:03d}-summary.md,
   style_profile(json),
   ai_blacklist(json): ai-blacklist.json,       # style_naturalness 维度需要黑名单命中率
+  blacklist_lint(json, optional): scripts/lint-blacklist.sh 输出,
   chapter_contract(json),
   world_rules(json, optional), hard_rules_list(list),   # 逐条验收 L1 硬规则
   storyline_spec(json, optional),
@@ -574,6 +589,65 @@ quality_judge_context = {
   quality_rubric(<DATA reference>): quality-rubric.md
 }
 ```
+
+#### Step 2.7: M3 风格漂移与黑名单（文件协议）
+
+**1) `style-drift.json`（项目根目录，可选）**
+
+- 用途：当检测到风格漂移时写入，用于后续章节对 ChapterWriter/StyleRefiner 进行“正向纠偏”注入
+- 注入规则：仅当 `active=true` 时注入；`active=false` 视为历史记录，不再注入
+- 注入目标：当前固定为 `["ChapterWriter", "StyleRefiner"]`；若未来新增消费方，需扩展 `injected_to` 并同步 Step 2.6 context assembly
+
+最小格式：
+```json
+{
+  "active": true,
+  "detected_chapter": 25,
+  "window": [21, 25],
+  "drifts": [
+    {"metric": "avg_sentence_length", "baseline": 18, "current": 24, "directive": "句子过长，回归短句节奏"},
+    {"metric": "dialogue_ratio", "baseline": 0.4, "current": 0.28, "directive": "对话偏少，增加角色互动"}
+  ],
+  "injected_to": ["ChapterWriter", "StyleRefiner"],
+  "created_at": "2026-02-24T05:00:00Z",
+  "cleared_at": null,
+  "cleared_reason": null
+}
+```
+
+**2) `ai-blacklist.json`（项目根目录）**
+
+- `words[]`：生效黑名单（生成时禁止、润色时替换、评估时计入命中率）
+- `whitelist[]`（可选）：豁免词条（不替换、不计入命中率、不得自动加入 words）
+- `update_log[]`（可选，append-only）：记录每次自动/手动变更（added/exempted/removed）的 evidence 与时间戳，便于审计
+
+建议扩展（兼容模板；无则视为空）：
+```json
+{
+  "whitelist": [],
+  "update_log": [
+    {
+      "timestamp": "2026-02-24T05:00:00Z",
+      "chapter": 47,
+      "source": "auto",
+      "added": [
+        {"phrase": "值得一提的是", "count_in_chapter": 3, "examples": ["例句 1", "例句 2"]}
+      ],
+      "exempted": [
+        {"phrase": "老子", "reason": "style_profile.preferred_expressions", "examples": ["例句 1"]}
+      ],
+      "note": "本次变更摘要"
+    }
+  ]
+}
+```
+
+**3) `${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh`（可选）**
+
+- 输入：`<chapter.md> <ai-blacklist.json>`
+- 输出：stdout JSON（exit 0），至少包含：
+  - `total_hits`、`hits_per_kchars`（次/千字）、`hits[]`（word/count/lines/snippets）
+- 失败回退：脚本不存在 / 退出码非 0 / stdout 非 JSON → 不阻断，QualityJudge 改为启发式估计并标注“估计值”
 
 ### Step 3: 逐章流水线
 
@@ -607,6 +681,11 @@ for chapter_num in range(start, start + remaining_N):
      更新 checkpoint: pipeline_stage = "refined"
 
   4. QualityJudge Agent → 质量评估（双轨验收）
+     （可选确定性工具）黑名单精确命中统计：
+       - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh`：
+         - 执行：`bash ${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh staging/chapters/chapter-{C:03d}.md ai-blacklist.json`
+         - 若退出码为 0 且 stdout 为合法 JSON → 记为 `blacklist_lint_json`，注入到 quality_judge_context.blacklist_lint
+       - 若脚本不存在/失败/输出非 JSON → `blacklist_lint_json = null`，不得阻断流水线（回退 LLM 估计）
      输入: quality_judge_context（见 Step 2.6；cross_references 来自 staging/state/chapter-{C:03d}-crossref.json）
      返回: 结构化 eval JSON（QualityJudge 只读，不落盘）
      关键章双裁判:
@@ -687,6 +766,47 @@ for chapter_num in range(start, start + remaining_N):
      - 状态转移：
        - 若 chapter_num == chapter_end：更新 `.checkpoint.json.orchestrator_state = "VOL_REVIEW"` 并提示用户运行 `/novel:start` 执行卷末回顾
        - 否则：更新 `.checkpoint.json.orchestrator_state = "WRITING"`（若本章来自 CHAPTER_REWRITE，则回到 WRITING）
+     - M3：AI 黑名单动态维护（不阻断）：
+       - 从 eval_used.anti_ai.blacklist_update_suggestions[] 读取新增候选（必须包含：phrase + count_in_chapter + examples）
+       - 增长上限检查：若 `words[]` 长度 ≥ 80，跳过自动追加，仅记录到 `update_log[]`（source="auto_skipped_cap"），并在 `/novel:start` 质量回顾中提示用户审核黑名单规模
+       - 自动追加门槛（保守，避免误伤）：
+         - `confidence ∈ {medium, high}` 且 `count_in_chapter >= 3` → 才允许自动追加
+         - 其余仅记录为”候选建议”，不自动写入（可在 `/novel:start` 质量回顾中提示用户手动处理）
+         - 注意：当前门槛为单章统计；跨章高频但单章 < 3 的词不会自动追加，依赖用户在质量回顾中审核候选列表
+       - 更新 `ai-blacklist.json`（按 Step 2.7 协议；幂等、可追溯）：
+         - 确保存在 `whitelist[]` 与 `update_log[]`（不存在则创建为空）
+         - added：追加到 `words[]`（去重；若已存在于 words/whitelist 则跳过）
+         - exempted（误伤保护，自动豁免，不作为命中/不替换）：
+           - 若候选短语命中 `style-profile.json.preferred_expressions[]`（样本高频表达）或用户显式 `ai-blacklist.json.whitelist[]`：
+             - 将其加入 whitelist（若未存在）
+             - 记录为 exempted，并且**不得加入** words
+         - 更新 `last_updated`（YYYY-MM-DD）与 `version`（若存在且为合法 semver 则 patch bump；字段缺失或不可解析时仅更新 `last_updated`，不创建 `version`）
+         - 追加 `update_log[]`（append-only）：记录 timestamp/chapter/source="auto"/added/exempted + evidence（例句）
+       - 用户可控入口：
+         - 用户可手动编辑 `ai-blacklist.json` 的 `words[]/whitelist[]`
+         - 若用户删除某词但不希望未来被自动再加回，请将其加入 `whitelist[]`（系统不得自动加入 whitelist 内词条）
+     - M3：风格漂移检测与纠偏（每 5 章触发）：
+       - 触发条件：last_completed_chapter % 5 == 0
+       - 窗口：读取最近 5 章 `chapters/chapter-{C-4..C}.md`
+       - 调用 StyleAnalyzer 提取当前 metrics（仅需 avg_sentence_length / dialogue_ratio；其余字段可忽略）
+       - 与 `style-profile.json` 基线对比（相对偏移，确定性公式）：
+         - 前置检查：若 `base.avg_sentence_length` 为 null/0 或 `base.dialogue_ratio` 为 null/0，跳过对应维度的漂移检测（记录日志 "baseline metric unavailable, skipping drift check"）
+         - `sentence_dev = abs(curr.avg_sentence_length - base.avg_sentence_length) / base.avg_sentence_length`
+         - `dialogue_dev = abs(curr.dialogue_ratio - base.dialogue_ratio) / base.dialogue_ratio`
+       - 漂移判定：
+         - `sentence_dev > 0.20` 或 `dialogue_dev > 0.15` → drift=true
+         - 回归判定：`sentence_dev < 0.10` 且 `dialogue_dev < 0.10` → recovered=true
+       - drift=true：
+         - 写入/更新 `style-drift.json`（按 Step 2.7；active=true）
+         - drifts[].directive 生成规则（最多 3 条，短句可执行）：
+           - 句长偏长：强调短句/动作推进/拆句
+           - 句长偏短：允许适度长句与节奏变化（但仍以 style-profile 为准）
+           - 对话偏少：强调通过对话推进（交给 ChapterWriter；StyleRefiner 不得硬造新对白）
+           - 对话偏多：加强叙述性承接与内心活动（不删对白，仅调整段落与叙述衔接）
+       - recovered=true：
+         - 清除纠偏：删除 `style-drift.json` 或标记 `active=false`，并写入 `cleared_at/cleared_reason="metrics_recovered"`
+       - 超时清除：若当前章 - `style-drift.json.detected_chapter` > 15（即纠偏指令已注入超过 15 章仍未回归），自动标记 `active=false`，`cleared_reason="stale_timeout"`
+       - 其余情况：保持现状（不新增、不清除），避免频繁抖动
      - 写入 logs/chapter-{C:03d}-log.json（stages 耗时/模型、gate_decision、revisions、force_passed；关键章额外记录 primary/secondary judge 的 model+overall 与 overall_final；token/cost 为估算值或 null，见降级说明）
      - 清空 staging/ 本章文件
      - 释放并发锁: rm -rf .novel.lock
@@ -697,7 +817,7 @@ for chapter_num in range(start, start + remaining_N):
 
 ### Step 4: 定期检查触发
 
-- 每完成 5 章（last_completed_chapter % 5 == 0）：输出质量简报（均分 + 低分章节 + 主要风险），并提示用户可运行 `/novel:start` 进入“质量回顾/调整方向”
+- 每完成 5 章（last_completed_chapter % 5 == 0）：输出质量简报（均分 + 低分章节 + 主要风险）+ 风格漂移检测结果（是否生成/清除 style-drift.json），并提示用户可运行 `/novel:start` 进入“质量回顾/调整方向”
 - 每完成 10 章（last_completed_chapter % 10 == 0）：触发一致性检查提醒
 - 到达本卷末尾章节：提示用户执行 `/novel:start` 进行卷末回顾
 
