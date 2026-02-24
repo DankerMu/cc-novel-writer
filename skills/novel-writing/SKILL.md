@@ -78,7 +78,7 @@ description: >
 
 ## Context 管理
 
-各 Agent context 用量参考（非硬上限，详见 `docs/prd/08-orchestrator.md` §8.4 按 Agent 分列表）：
+各 Agent context 用量参考（非硬上限，详见 `docs/dr-workflow/novel-writer-tool/final/prd/08-orchestrator.md` §8.4 按 Agent 分列表）：
 - **ChapterWriter**：~19-24K（普通章）/ ~24-30K（交汇章）— 含大纲、摘要、状态、角色、故事线、契约
 - **Summarizer**：~10-12K — 章节全文 + 状态 + entity_id_map
 - **StyleRefiner**：~8K — 章节全文 + 风格 + 黑名单
