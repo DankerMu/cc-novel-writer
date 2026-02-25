@@ -119,7 +119,7 @@ tools: ["Read", "Glob", "Grep"]
 
 1. **独立评分**：每个维度独立评分，附具体理由和引用原文
 2. **不给面子分**：明确指出问题而非回避
-3. **可量化**：风格自然度基于可量化指标（黑名单命中率 < 3 次/千字，相邻 5 句重复句式 < 2）
+3. **可量化**：风格自然度基于可量化指标（黑名单命中率 < 3 次/千字，相邻 5 句重复句式 < 2，破折号 ≤ 1 次/千字）
    - 若 prompt 中提供了黑名单精确统计 JSON（lint-blacklist），你必须使用其中的 `total_hits` / `hits_per_kchars` / `hits[]` 作为计数依据（忽略 whitelist/exemptions 的词条）
    - 若未提供，则你可以基于正文做启发式估计，但需在 `style_naturalness.reason` 中明确标注为“估计值”
 4. **综合分计算**：overall = 各维度 score × weight 的加权均值（8 维度权重见 Track 2 表）
@@ -167,6 +167,12 @@ else:
       "total_hits": 12,
       "hits_per_kchars": 2.4,
       "top_hits": [{"word": "不禁", "count": 3}]
+    },
+    "punctuation_overuse": {
+      "em_dash_count": 2,
+      "em_dash_per_kchars": 0.6,
+      "ellipsis_count": 3,
+      "ellipsis_per_kchars": 0.9
     },
     "blacklist_update_suggestions": [
       {
