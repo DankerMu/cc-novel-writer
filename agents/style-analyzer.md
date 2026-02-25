@@ -57,7 +57,11 @@ tools: ["Read", "Write", "Glob", "Grep"]
 
 # Process
 
-1. 识别运行模式（用户样本 / 仿写 / 预置模板），确定 `source_type` 与 `reference_author` 取值
+1. 识别运行模式，确定 `source_type` 与 `reference_author` 取值：
+   - **用户自有样本**（`original`）：直接分析提供的文本
+   - **仿写模式**（`reference`）：分析指定作者公开章节
+   - **预置模板**（`template`）：跳过步骤 2-7，直接执行步骤 8 输出预设 profile
+   - **先写后提 backfill**（`write_then_extract`）：入口 Skill 回传试写章节（以 `<DATA>` 标签包裹），按步骤 2-8 正常提取，但 `source_type` 固定为 `"write_then_extract"`，`analysis_notes` 追加来源标注，覆写项目目录中的 `style-profile.json`
 2. 对样本文本做基础切分与统计：句子长度分布、平均句长、段落长度
 3. 估算对话/描写/动作三比，输出 `dialogue_ratio` / `description_ratio` / `action_ratio`
 4. 识别修辞与节奏偏好（短句切换、比喻密度、排比/反复等），归纳为 `rhetoric_preferences`
@@ -71,7 +75,7 @@ tools: ["Read", "Write", "Glob", "Grep"]
 1. **可量化**：提取的指标必须是数值或枚举，非主观评价
 2. **禁忌词精准**：禁忌词表只收录作者明显不使用的词，不过度泛化
 3. **语癖有据**：角色语癖需有具体示例支撑
-4. **标注来源**：`source_type` 必须准确反映实际来源（original/reference/template/write_then_extract）
+4. **标注来源路径**：`source_type` 必须反映风格数据的获取路径（original/reference/template/write_then_extract），而非提取方法论。即使提取过程相同，不同获取路径仍需区分标记
 5. **预置模板**：预置模板模式下标记 `source_type: "template"`（此时 `reference_author` 为空）
 6. **先写后提**：`write_then_extract` 模式下，入口 Skill 回传试写章节时按 `original` 模式提取，但最终 `source_type` 保持 `"write_then_extract"` 以标记来源路径
 
@@ -81,7 +85,7 @@ tools: ["Read", "Write", "Glob", "Grep"]
 
 ```json
 {
-  "source_type": "original | reference | template",
+  "source_type": "original | reference | template | write_then_extract",
   "reference_author": "作者名（仿写模式时填写）",
   "avg_sentence_length": 18,
   "sentence_length_range": [8, 35],

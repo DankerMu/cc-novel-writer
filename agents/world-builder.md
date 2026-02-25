@@ -64,9 +64,9 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 5. 初始化 storylines.json：仅 1 条 `type:main_arc` 主线（从创作纲领的核心冲突派生）
 6. 创建 `storylines/main-arc/memory.md`（空文件）
 
-> 轻量模式的产物足够支撑试写 3 章。后续进入 VOL_PLANNING 时，入口 Skill 会再次调用 WorldBuilder（完整模式）扩展设定。
+> 轻量模式的产物足够支撑试写 3 章。后续随剧情需要，入口 Skill 可通过「更新设定」路径调用 WorldBuilder（增量模式）逐步扩展世界观。
 
-**初始化完整模式：**
+**初始化完整模式（预留，当前无 Skill 调用路径）：**
 1. 分析创作纲领，提取世界观核心要素（地理、历史、力量体系、社会结构）
 2. 参考背景研究资料（如有），确保设定有事实依据
 3. 生成叙述性文档（geography.md、history.md、rules.md）
