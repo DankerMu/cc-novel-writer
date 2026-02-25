@@ -6,7 +6,6 @@
     "name": "DankerMu",
     "email": "mumzy@mail.ustc.edu.cn"
   },
-  "skills": "./skills/",
-  "agents": "./agents/",
+  "repository": "https://github.com/DankerMu/cc-novel-writer",
   "hooks": "./hooks/hooks.json"
 }
