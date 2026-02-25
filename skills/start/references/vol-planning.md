@@ -6,7 +6,7 @@
    - `V = current_volume`
    - `plan_start = last_completed_chapter + 1`
    - `plan_end = V * 30`（每卷 30 章约定；如 `plan_start > plan_end` 视为数据异常，提示用户先修复 `.checkpoint.json`）
-   - 创建目录（幂等）：`mkdir -p staging/volumes/vol-{V:02d}/chapter-contracts staging/foreshadowing`
+   - 创建目录（幂等）：`mkdir -p staging/volumes/vol-{V:02d}/chapter-contracts`
 1. 若 `.checkpoint.json.pending_actions` 存在与本卷有关的 `type == "spec_propagation"` 待办（例如世界规则/角色契约变更影响到 `plan_start..plan_end`）：
    - 展示待办摘要（变更项 + 受影响角色/章节契约）
    - AskUserQuestion 让用户选择：

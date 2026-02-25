@@ -406,33 +406,27 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
      - 若 `transition_hint.next_storyline` 存在 → 注入该线 memory（若不在 `dormant_storylines`）
      - 若当前章落在任一 `convergence_events.chapter_range` 内 → 注入 `involved_storylines` 中除当前线外的 memory（过滤 `dormant_storylines`）
    - 冻结线（`dormant_storylines`）：**不注入 memory**，仅保留 `concurrent_state` 一句话状态
-
-#### Step 2.5.6: `foreshadowing_tasks` 组装（确定性）
-
-数据来源：
-- 事实层：`foreshadowing/global.json`（如不存在则视为空）
-- 计划层：`volumes/vol-{V:02d}/foreshadowing.json`（如不存在则视为空）
-
-优先确定性脚本（M3+ 扩展点；见 `docs/dr-workflow/novel-writer-tool/final/spec/06-extensions.md`）：
-
-- 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh`：
-  - 执行（超时 10 秒）：`timeout 10 bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh {C}`
-  - 若退出码为 0 且 stdout 为合法 JSON 且 `.items` 为 list → `foreshadowing_tasks = .items`
-  - 否则（脚本缺失/失败/输出非 JSON）→ 回退规则过滤（不得阻断流水线）
-
-规则过滤回退（确定性；详见 `references/foreshadowing.md`）：
-
-1. 读取并解析 global 与本卷计划 JSON（允许 schema 为 object.foreshadowing[]；缺失则视为空）。
-2. 选取候选（按 `id` 去重；输出按 `id` 升序）：
-   - **计划命中**：本卷计划中满足以下任一条件的未回收条目：
-     - `planted_chapter == C`（本章计划埋设）
-     - `target_resolve_range` 覆盖 `C`（本章处于计划推进/回收窗口）
-   - **事实命中**：global 中满足以下任一条件的未回收条目：
-     - `target_resolve_range` 覆盖 `C`
-     - `scope=="short"` 且 `target_resolve_range` 存在且 `C > target_resolve_range[1]`（超期 short）
-3. 合并字段（不覆盖事实）：
-   - 若某 `id` 同时存在于 global 与 plan：以 global 为主，仅在 global 缺失时从 plan 回填 `description/scope/target_resolve_range`。
-4. 得到 `foreshadowing_tasks`（list；为空则 `[]`）。
+6. `foreshadowing_tasks` 组装（确定性）：
+   - 数据来源：
+     - 事实层：`foreshadowing/global.json`（如不存在则视为空）
+     - 计划层：`volumes/vol-{V:02d}/foreshadowing.json`（如不存在则视为空）
+   - 优先确定性脚本（M3+ 扩展点；见 `docs/dr-workflow/novel-writer-tool/final/spec/06-extensions.md`）：
+     - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh`：
+       - 执行（超时 10 秒）：`timeout 10 bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh {C}`
+       - 若退出码为 0 且 stdout 为合法 JSON 且 `.items` 为 list → `foreshadowing_tasks = .items`
+       - 否则（脚本缺失/失败/输出非 JSON）→ 回退规则过滤（不得阻断流水线）
+   - 规则过滤回退（确定性；详见 `references/foreshadowing.md`）：
+     a. 读取并解析 global 与本卷计划 JSON（允许 schema 为 object.foreshadowing[]；缺失则视为空）。
+     b. 选取候选（按 `id` 去重；输出按 `id` 升序）：
+        - **计划命中**：本卷计划中满足以下任一条件的未回收条目：
+          - `planted_chapter == C`（本章计划埋设）
+          - `target_resolve_range` 覆盖 `C`（本章处于计划推进/回收窗口）
+        - **事实命中**：global 中满足以下任一条件的未回收条目：
+          - `target_resolve_range` 覆盖 `C`
+          - `scope=="short"` 且 `target_resolve_range` 存在且 `C > target_resolve_range[1]`（超期 short）
+     c. 合并字段（不覆盖事实）：
+        - 若某 `id` 同时存在于 global 与 plan：以 global 为主，仅在 global 缺失时从 plan 回填 `description/scope/target_resolve_range`。
+     d. 得到 `foreshadowing_tasks`（list；为空则 `[]`）。
 
 #### Step 2.6: Agent Context 组装
 

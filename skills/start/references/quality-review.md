@@ -52,9 +52,10 @@
    - 统计（用于输出与落盘）：
      - active_count：`status!="resolved"` 的条目数
      - resolved_count：`status=="resolved"` 的条目数
-     - overdue_short：`scope=="short"` 且 `status!="resolved"` 且存在 `target_resolve_range=[start,end]` 且 `last_completed_chapter > end`
+     - overdue_short：`scope=="short"` 且 `status!="resolved"` 且存在 `target_resolve_range=[start,end]` 且 `last_completed_chapter > end`（规则定义见 `skills/continue/references/foreshadowing.md` §4）
      -（可选）plan 对照：若存在本卷 plan，则统计 planned_total / missing_in_global（plan 中 id 在 global 不存在）/ resolved_in_global（plan 中 id 在 global 且 status==resolved）
    - **桥梁检查**（`storylines/storylines.json.relationships[].bridges.shared_foreshadowing[]`）：
+     - 若 `relationships` 为空或不存在：跳过桥梁检查
      - 对每个 relationship 的每个 shared_foreshadowing id：
        - 若该 id 存在于 `foreshadowing/global.json.foreshadowing[].id` 或 `volumes/vol-{V:02d}/foreshadowing.json.foreshadowing[].id` → ok
        - 否则记为 broken（断链）

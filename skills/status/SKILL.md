@@ -65,7 +65,7 @@ description: >
 - 评分趋势（最近 10 章 vs 全局均值）
 - 各维度均值
 - 未回收伏笔数量和列表（planted/advanced）
-- 超期 short 伏笔数量与列表（`scope=="short"` 且 `status!="resolved"` 且 `last_completed_chapter > target_resolve_range[1]`）
+- 超期 short 伏笔数量与列表（`scope=="short"` 且 `status!="resolved"` 且 `last_completed_chapter > target_resolve_range[1]`）（规则定义见 `skills/continue/references/foreshadowing.md` §4）
 - 故事线节奏提示（基于 summaries 的 storyline_id + schedule 的 `secondary_min_appearance`）
 - 活跃角色数量
 - 累计成本（sum total_cost_usd）、平均每章成本、平均每章耗时

@@ -127,4 +127,4 @@
 
 - 输入：`<chapter_num>`
 - 输出：stdout JSON（exit 0），其中 `.items` 为“本章相关伏笔条目子集”（list of objects，字段建议与 global 条目一致：`id/description/scope/status/target_resolve_range/...`）
-- 失败回退：脚本不存在 / 退出码非 0 / stdout 非 JSON / JSON 缺 `.items` → 不阻断流水线，入口 Skill 必须回退规则过滤（见 `skills/continue/SKILL.md` Step 2.5.6）
+- 失败回退：脚本不存在 / 退出码非 0 / stdout 非 JSON / JSON 缺 `.items` → 不阻断流水线，入口 Skill 必须回退规则过滤（见 `skills/continue/SKILL.md` Step 2.5 第 6 项）

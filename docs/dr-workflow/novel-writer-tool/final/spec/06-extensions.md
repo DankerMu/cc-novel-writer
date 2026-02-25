@@ -9,7 +9,7 @@
 |--------|----------------|---------------------|---------|
 | 黑名单统计 | QualityJudge 评估时人工计数 | `bash ${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh <chapter.md> <blacklist.json>` → 精确命中数 + 行号 | pipeline Step 4 之前，结果注入 QualityJudge context |
 | 中文 NER | QualityJudge 从正文提取实体 | `bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh <chapter.md>` → JSON 实体列表 | pipeline Step 2（Summarizer）或 Step 4（QualityJudge）前 |
-| 伏笔索引查询 | QualityJudge 读 global.json 全文 | `bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh <chapter_num>` → 相关伏笔子集 | pipeline Step 1 context 组装时 |
+| 伏笔索引查询 | QualityJudge 读 global.json 全文 | `bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh <chapter_num>` → 相关伏笔子集 | pipeline Step 2.5 第 6 项（foreshadowing_tasks 组装） |
 | Schema 校验 | 无（信任 prompt 输出格式） | `bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-schema.sh <file> <schema>` → pass/fail | PostToolUse(Write) hook |
 
 ### 7.2 集成约定

@@ -20,9 +20,10 @@
      - resolved_in_global：plan 中 id 在 `foreshadowing/global.json` 存在且 status==resolved
      - pending_in_global：plan 中 id 在 global 存在且 status!=resolved
      - missing_in_global：plan 中 id 在 global 不存在（可能“计划未埋设”或“Summarizer 漏提取”）
-     - overdue_short：同质量回顾规则（`scope=="short"` 且未回收且超过 `target_resolve_range` 上限）
+     - overdue_short：同质量回顾规则（`scope=="short"` 且未回收且超过 `target_resolve_range` 上限）（规则定义见 `skills/continue/references/foreshadowing.md` §4）
      - 落盘：写入 `volumes/vol-{V:02d}/foreshadowing-report.json`
    - 桥梁检查（shared_foreshadowing traceable）：
+     - 若 `relationships` 为空或不存在：跳过桥梁检查
      - 对 `storylines/storylines.json.relationships[].bridges.shared_foreshadowing[]` 的每个 id：
        - 若存在于 global 或本卷 plan → ok，否则记为 broken（含 from/to/type + 建议动作）
      - 落盘：写入 `volumes/vol-{V:02d}/broken-bridges.json`

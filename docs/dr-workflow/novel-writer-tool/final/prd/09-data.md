@@ -62,9 +62,20 @@ novel-project/
 ├── evaluations/
 │   ├── chapter-001-eval.json
 │   └── ...
-└── logs/                          # 流水线执行日志（调试 + 成本追踪）
+└── logs/                          # 流水线日志 + 分析报告
     ├── chapter-001-log.json
-    └── ...
+    ├── unknown-entities.jsonl
+    ├── continuity/                 # 一致性检查报告（NER）
+    │   ├── latest.json
+    │   └── continuity-report-vol-01-ch001-ch010.json
+    ├── foreshadowing/              # 伏笔盘点报告
+    │   ├── latest.json
+    │   └── foreshadowing-check-vol-01-ch001-ch010.json
+    └── storylines/                 # 故事线分析报告
+        ├── rhythm-latest.json
+        ├── rhythm-vol-01-ch001-ch010.json
+        ├── broken-bridges-latest.json
+        └── broken-bridges-vol-01-ch001-ch010.json
 ```
 
 > **chapter_id 命名规范**：全局统一使用 3 位零填充格式 `chapter-{C:03d}`（如 `chapter-001`、`chapter-048`、`chapter-150`）。适用于所有章节相关文件：`chapters/chapter-{C:03d}.md`、`summaries/chapter-{C:03d}-summary.md`、`evaluations/chapter-{C:03d}-eval.json`、`staging/` 下对应文件、`logs/chapter-{C:03d}-log.json`、`chapter-contracts/chapter-{C:03d}.json`。hook 脚本使用 `printf '%03d'` 格式化。

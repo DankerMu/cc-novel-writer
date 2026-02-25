@@ -52,7 +52,7 @@ fi
 python3 - "$chapter_num" <<'PY'
 import json
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 def _die(msg: str, exit_code: int = 1) -> None:
@@ -98,6 +98,8 @@ def _as_range(value: Any) -> Optional[Tuple[int, int]]:
     if not isinstance(a, int) or not isinstance(b, int):
         return None
     if a > b:
+        return None
+    if a < 1:
         return None
     return (a, b)
 
@@ -184,7 +186,7 @@ def main() -> None:
     relevant_from_global = 0
     overdue_short = 0
 
-    seen: set[str] = set()
+    seen: Set[str] = set()
 
     for foreshadow_id, it in plan_by_id.items():
         if it.get("status") == "resolved":
@@ -220,7 +222,9 @@ def main() -> None:
         "schema_version": 1,
         "chapter": chapter,
         "volume": volume,
-        "items": items,
+        "items": items,  # sorted by id ascending (deterministic)
+        # stats.relevant_from_plan + stats.relevant_from_global may exceed stats.items
+        # because a single item can match relevance criteria from both sources.
         "stats": {
             "items": len(items),
             "relevant_from_plan": relevant_from_plan,
