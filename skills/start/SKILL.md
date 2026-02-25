@@ -188,11 +188,49 @@ Skill → 状态映射：
 4. 先写后提 — 跳过风格设定，试写 3 章后再提取
 ```
 
-根据用户选择，设置 `source_type`：
-- 选项 1 → `source_type: "original"`
-- 选项 2 → `source_type: "reference"`
-- 选项 3 → `source_type: "template"`
+根据用户选择，设置 `source_type` 并**立即收集该路径所需信息**：
+- 选项 1 → `source_type: "original"`，追问用户粘贴 1-3 章样本文本（存入临时变量，Step E 传给 StyleAnalyzer）
+- 选项 2 → `source_type: "reference"`，追问用户输入参考作者名（如"远瞳"、"猫腻"），存入 `reference_author` 变量
+- 选项 3 → `source_type: "template"`，展示预置模板列表让用户选择，存入 `style_template_id`
 - 选项 4 → `source_type: "write_then_extract"`（先跳过 StyleAnalyzer，试写后回填）
+
+> 关键：每条路径的补充信息必须在 Step B 内收齐，不得延迟到 Step E 再问。Step E 仅执行 StyleAnalyzer 派发，不再与用户交互。
+
+##### Step B.5: Brief 交互完善（1-2 轮交互）
+
+用 Step A/B 已收集的信息预填 `brief-template.md`，**将预填结果展示给用户**并请求补充：
+
+1. **自动填充字段**（从已收集信息推导）：
+   - `genre` ← Step A 题材
+   - `core_conflict` ← Step A 核心冲突
+   - `protagonist_identity` ← Step A 主角概念
+   - `style_source` ← Step B source_type
+   - `reference_works` ← Step B reference_author（若有）
+
+2. **使用 AskUserQuestion 请求用户补充关键字段**（1 轮，允许自由输入）：
+   - **书名**（可留空让系统生成）
+   - **基调**（轻松幽默 / 热血燃向 / 暗黑压抑 / 细腻温暖 / Other）
+   - **节奏**（快节奏爽文 / 慢热型 / 张弛交替 / Other）
+
+3. **展示预填 brief 预览**，询问用户确认或修改：
+   ```
+   以下是创作纲领预览（未填字段将由系统智能补全）：
+
+   - 书名：{已填或"待生成"}
+   - 题材：{genre}
+   - 主角：{protagonist_identity}
+   - 核心冲突：{core_conflict}
+   - 基调：{tone}
+   - 节奏：{pacing}
+   - 风格来源：{style_source}
+
+   选项：
+   1. 确认，继续 (Recommended) — 系统补全其余字段
+   2. 我要修改 — 告诉我要改什么
+   ```
+   选项 2 时进入自由输入修改轮，用户可补充书名、目标字数、读者画像等任意字段。
+
+> Brief 是整个创作流水线的基础输入。未经用户确认的 brief 不得传入后续 Agent。
 
 ##### Step C: 初始化项目结构
 
@@ -228,10 +266,10 @@ Skill → 状态映射：
 
 ##### Step E: 风格提取（或跳过）
 
-8. **按 Step B 选择的路径执行**：
-   - `original`：使用 AskUserQuestion 请求用户粘贴 1-3 章样本 → 派发 StyleAnalyzer
-   - `reference`：使用 AskUserQuestion 请求用户输入作者名 → 派发 StyleAnalyzer（仿写模式）
-   - `template`：使用 AskUserQuestion 让用户从预置模板列表中选择 → 派发 StyleAnalyzer（模板模式）
+8. **按 Step B 选择的路径执行**（所需信息已在 Step B 收集完毕，此处**不再与用户交互**，直接派发 Agent）：
+   - `original`：用 Step B 收集的样本文本 → 派发 StyleAnalyzer（原创分析模式）
+   - `reference`：用 Step B 收集的 `reference_author` → 派发 StyleAnalyzer（仿写模式）
+   - `template`：用 Step B 收集的 `style_template_id` → 派发 StyleAnalyzer（模板模式）
    - `write_then_extract`：跳过此步，使用默认 style-profile（`source_type: "write_then_extract"`，`writing_directives` 为空，统计字段为 null）。ChapterWriter 遇到 null 字段时应基于 brief 中的题材使用体裁默认值（如玄幻：`avg_sentence_length: 18, dialogue_ratio: 0.35, narrative_voice: "第三人称限制"`）
 9. 更新 `.checkpoint.json`：`quick_start_step = "E"`
 
@@ -270,7 +308,7 @@ Skill → 状态映射：
 - 每个 Step 开始前，先检查该步骤的产物是否已存在（例如 Step D 检查 `world/rules.json`），避免重复生成
 - quick start 完成后更新 `.checkpoint.json`：`current_volume = 1, last_completed_chapter = 3, orchestrator_state = “VOL_PLANNING”`，删除 `quick_start_step`
 
-> 注意：Step A/B 不持久化 checkpoint（仅收集用户输入，约 2 分钟）。若在 Step C 写入 checkpoint 之前中断，用户将回到 INIT 状态重新创建项目，这是可接受的重做成本。
+> 注意：Step A/B/B.5 不持久化 checkpoint（仅收集用户输入和确认 brief，约 3-5 分钟）。若在 Step C 写入 checkpoint 之前中断，用户将回到 INIT 状态重新创建项目，这是可接受的重做成本。
 
 #### 继续写作
 - 等同执行 `/novel:continue 1` 的逻辑
