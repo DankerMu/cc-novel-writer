@@ -2,7 +2,7 @@
   "_comment": "风格指纹模板 — 由 StyleAnalyzer Agent 填充，ChapterWriter 和 StyleRefiner 读取",
 
   "source_type": null,
-  "_source_type_comment": "original（用户原创样本）| reference（参考作者）| template（预置模板）",
+  "_source_type_comment": "original（用户原创样本）| reference（参考作者）| template（预置模板）| write_then_extract（先写后提）",
 
   "reference_author": null,
   "_reference_author_comment": "仿写模式时填写参考作者名，原创模式为 null",

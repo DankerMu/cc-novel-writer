@@ -147,30 +147,102 @@ Skill → 状态映射：
 ### Step 3: 根据用户选择执行
 
 #### 创建新项目
-1. 使用 AskUserQuestion 收集基本信息（题材、主角概念、核心冲突）— 单次最多问 2-3 个问题
-2. 创建项目目录结构（参考 `docs/dr-workflow/novel-writer-tool/final/prd/09-data.md` §9.1）
-3. 从 `${CLAUDE_PLUGIN_ROOT}/templates/` 复制模板文件到项目目录（至少生成以下文件）：
+
+##### Step A: 收集最少输入（1 轮交互）
+
+使用 **1 次** AskUserQuestion 收集基本信息。题材用选项（玄幻/都市/科幻/历史/悬疑），主角概念和核心冲突由用户自由输入：
+
+1. **题材**（选项：玄幻 / 都市 / 科幻 / 历史 / 悬疑）
+2. **主角概念**（自由输入：一句话描述谁 + 起始处境）
+3. **核心冲突**（自由输入：一句话描述主角要克服什么）
+
+> Step A 允许自由输入，是 2-4 选项约束的特例：此处收集创意信息，无法用预设选项穷尽。
+
+##### Step B: 风格来源（1 轮交互）
+
+使用 AskUserQuestion 询问风格来源（2-4 选项）：
+
+```
+选项：
+1. 提供原创样本 (Recommended) — 粘贴 1-3 章自己写的文字
+2. 指定参考作者 — 输入网文作者名，系统分析其公开风格
+3. 使用预置模板 — 从内置风格模板中选择
+4. 先写后提 — 跳过风格设定，试写 3 章后再提取
+```
+
+根据用户选择，设置 `source_type`：
+- 选项 1 → `source_type: "original"`
+- 选项 2 → `source_type: "reference"`
+- 选项 3 → `source_type: "template"`
+- 选项 4 → `source_type: "write_then_extract"`（先跳过 StyleAnalyzer，试写后回填）
+
+##### Step C: 初始化项目结构
+
+1. 创建项目目录结构（参考 `docs/dr-workflow/novel-writer-tool/final/prd/09-data.md` §9.1）
+2. 从 `${CLAUDE_PLUGIN_ROOT}/templates/` 复制模板文件到项目目录（至少生成以下文件）：
    - `brief.md`：从 `brief-template.md` 复制并用用户输入填充占位符
    - `style-profile.json`：从 `style-profile-template.json` 复制（后续由 StyleAnalyzer 填充）
    - `ai-blacklist.json`：从 `ai-blacklist.json` 复制
-4. **初始化最小可运行文件**（模板复制后立即创建，确保后续 Agent 可正常读取）：
-   - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "revision_count": 0, "pending_actions": [], "last_checkpoint_time": "<now>"}`
+3. **初始化最小可运行文件**（模板复制后立即创建，确保后续 Agent 可正常读取）：
+   - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "quick_start_step": "C", "revision_count": 0, "pending_actions": [], "last_checkpoint_time": "<now>"}`
    - `state/current-state.json`：`{"schema_version": 1, "state_version": 0, "last_updated_chapter": 0, "characters": {}, "world_state": {}, "active_foreshadowing": []}`
    - `foreshadowing/global.json`：`{"foreshadowing": []}`
    - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~005）
+   - `storylines/storylines.json`：`{"storylines": [], "relationships": [], "storyline_types": ["type:main_arc", "type:faction_conflict", "type:conspiracy", "type:mystery", "type:character_arc", "type:parallel_timeline"]}` （WorldBuilder 在 Step D 填充具体故事线）
    - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`staging/foreshadowing/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
-5. 使用 Task 派发 WorldBuilder Agent 生成核心设定
-6. 使用 Task 派发 CharacterWeaver Agent 创建主角和配角
-7. WorldBuilder 协助初始化 `storylines/storylines.json`（从设定派生初始故事线，默认 1 条 type 为 `main_arc` 的主线，活跃线建议 ≤4）
-8. 使用 AskUserQuestion 请求用户提供 1-3 章风格样本
-9. 使用 Task 派发 StyleAnalyzer Agent 提取风格指纹
+
+##### Step D: 世界观 + 角色 + 故事线
+
+4. 使用 Task 派发 WorldBuilder Agent（**轻量模式**）：仅输出 ≤3 条核心 L1 hard 规则 + 精简叙述文档
+5. 使用 Task 派发 CharacterWeaver Agent 创建主角和核心配角（≤3 个角色）
+6. WorldBuilder 协助初始化 `storylines/storylines.json`（默认仅 1 条 `type:main_arc` 主线，不创建额外故事线）
+7. 更新 `.checkpoint.json`：`quick_start_step = "D"`
+
+##### Step E: 风格提取（或跳过）
+
+8. **按 Step B 选择的路径执行**：
+   - `original`：使用 AskUserQuestion 请求用户粘贴 1-3 章样本 → 派发 StyleAnalyzer
+   - `reference`：使用 AskUserQuestion 请求用户输入作者名 → 派发 StyleAnalyzer（仿写模式）
+   - `template`：使用 AskUserQuestion 让用户从预置模板列表中选择 → 派发 StyleAnalyzer（模板模式）
+   - `write_then_extract`：跳过此步，使用默认 style-profile（`source_type: "write_then_extract"`，`writing_directives` 为空，统计字段为 null）。ChapterWriter 遇到 null 字段时应基于 brief 中的题材使用体裁默认值（如玄幻：`avg_sentence_length: 18, dialogue_ratio: 0.35, narrative_voice: "第三人称限制"`）
+9. 更新 `.checkpoint.json`：`quick_start_step = "E"`
+
+##### Step F: 试写 3 章
+
 10. 使用 Task 逐章派发试写流水线（共 3 章），每章按完整流水线执行：ChapterWriter → Summarizer → StyleRefiner → QualityJudge（**简化 context 模式**：无 volume_outline/chapter_outline/chapter_contract，仅使用 brief + world + characters + style_profile；ChapterWriter 根据 brief 自由发挥前 3 章情节。Summarizer 正常生成摘要 + state delta + memory，确保后续写作有 context 基础。QualityJudge 跳过 L3 章节契约检查和 LS 故事线检查）
-11. 展示试写结果和评分，写入 `.checkpoint.json`（`current_volume = 1, last_completed_chapter = 3, orchestrator_state = "VOL_PLANNING"`）
+11. 更新 `.checkpoint.json`：`quick_start_step = "F"`
+
+##### Step G: 展示结果 + 明确下一步
+
+12. 展示试写结果摘要：3 章标题 + 字数 + QualityJudge 评分
+13. **若 Step B 选择了 `write_then_extract`**：此时派发 StyleAnalyzer 从试写 3 章**提取并填充** `style-profile.json` 的分析字段（`avg_sentence_length`、`dialogue_ratio`、`rhetoric_preferences` 等），`source_type` 保持 `"write_then_extract"` 不变
+14. 使用 AskUserQuestion 给出明确下一步选项：
+
+```
+试写完成！3 章评分均值：{avg_score}/5.0
+
+选项：
+1. 进入卷规划 (Recommended) — 规划第 1 卷大纲，正式开始创作
+2. 调整风格设定 — 重新提供样本或修改风格参数
+3. 重新试写 — 清除试写结果，重新生成 3 章
+```
+
+15. **根据用户选择分支**：
+    - 选项 1（进入卷规划）：写入 `.checkpoint.json`（`current_volume = 1, last_completed_chapter = 3, orchestrator_state = "VOL_PLANNING"`），删除 `quick_start_step` 字段
+    - 选项 2（调整风格）：保持 `orchestrator_state = "QUICK_START"`，`quick_start_step = "D"`，清除 `style-profile.json` 中非模板字段（保留 `_*_comment` 和 `source_type`），回到 Step E
+    - 选项 3（重新试写）：保持 `orchestrator_state = "QUICK_START"`，`quick_start_step = "E"`，清除 `staging/` 下试写产物和 `chapters/chapter-00{1,2,3}.md`，回到 Step F
 
 #### 继续快速起步
-- 读取 `.checkpoint.json`，确认 `orchestrator_state == "QUICK_START"`
-- 按“创建新项目”中的 quick start 检查清单补齐缺失环节（world/、characters/、style-profile、试写章节与 summaries/state/evaluations）
-- quick start 完成后更新 `.checkpoint.json`：`current_volume = 1, last_completed_chapter = 3, orchestrator_state = "VOL_PLANNING"`
+- 读取 `.checkpoint.json`，确认 `orchestrator_state == “QUICK_START”`
+- 读取 `quick_start_step` 字段，从**中断处的下一步**继续执行：
+  - `”C”` → Step D（世界观 + 角色 + 故事线）
+  - `”D”` → Step E（风格提取）
+  - `”E”` → Step F（试写 3 章）
+  - `”F”` → Step G（展示结果 + 下一步）
+- 每个 Step 开始前，先检查该步骤的产物是否已存在（例如 Step D 检查 `world/rules.json`），避免重复生成
+- quick start 完成后更新 `.checkpoint.json`：`current_volume = 1, last_completed_chapter = 3, orchestrator_state = “VOL_PLANNING”`，删除 `quick_start_step`
+
+> 注意：Step A/B 不持久化 checkpoint（仅收集用户输入，约 2 分钟）。若在 Step C 写入 checkpoint 之前中断，用户将回到 INIT 状态重新创建项目，这是可接受的重做成本。
 
 #### 继续写作
 - 等同执行 `/novel:continue 1` 的逻辑
@@ -213,11 +285,12 @@ Skill → 状态映射：
 #### 重试上次操作
 - 若 `orchestrator_state == "ERROR_RETRY"`：
   - 输出上次中断的 `pipeline_stage` + `inflight_chapter` 信息
-  - 将 `.checkpoint.json.orchestrator_state` 恢复为 `WRITING`（或基于上下文恢复为 `CHAPTER_REWRITE`），然后执行 `/novel:continue 1`
+  - 将 `.checkpoint.json.orchestrator_state` 恢复为 `WRITING`（若 `revision_count > 0` 则恢复为 `CHAPTER_REWRITE`），然后执行 `/novel:continue 1`
 
 ## 约束
 
-- AskUserQuestion 每次 2-4 选项
-- 单次 `/novel:start` 会话建议 ≤5 个 AskUserQuestion（尽量合并问题减少交互轮次）
+- AskUserQuestion 每次 2-4 选项（Step A 的自由输入为特例）
+- 单次 `/novel:start` **每个动作**（创建项目、规划卷、回顾等）建议 ≤5 个 AskUserQuestion；若用户从创建流程直接进入卷规划，轮次计数重置
 - 推荐项始终标记 `(Recommended)`
 - 所有用户交互使用中文
+- 「查看帮助」选项：输出插件核心命令列表（`/novel:start`、`/novel:continue`、`/novel:status`）+ 用户文档路径（`docs/user/quick-start.md`）

@@ -30,7 +30,7 @@
 - **基调**：{tone}（如：轻松幽默、热血燃向、暗黑压抑、细腻温暖）
 - **节奏**：{pacing}（如：快节奏爽文、慢热型、张弛交替）
 - **参考作品**：{reference_works}
-- **风格样本来源**：{style_source}（original / reference / template）
+- **风格样本来源**：{style_source}（original / reference / template / write_then_extract）
 
 ## 读者画像
 

@@ -49,13 +49,19 @@ tools: ["Read", "Write", "Glob", "Grep"]
 - 参考作者名（仿写模式时提供）
 - 运行模式（用户自有样本 / 仿写模式 / 预置模板模式）
 
-**模式说明：**
-- **用户自有样本**：分析用户提供的 1-3 章原创文本
-- **仿写模式**：分析指定网文作者的公开章节，提取其风格特征
+**模式说明（4 条路径）：**
+- **用户自有样本**（`source_type: "original"`）：分析用户提供的 1-3 章原创文本，提取最精准的风格指纹
+- **仿写模式**（`source_type: "reference"`）：分析指定网文作者的公开章节，提取其风格特征
+- **预置模板**（`source_type: "template"`）：从内置风格模板中选择，填充预设参数（不做样本分析，直接输出预定义 profile）
+- **先写后提**（`source_type: "write_then_extract"`）：初始阶段跳过风格提取，使用空 profile + 默认 writing_directives；试写 3 章后由入口 Skill 将试写章节作为样本回传，再按「用户自有样本」模式提取
 
 # Process
 
-1. 识别运行模式（用户样本 / 仿写 / 预置模板），确定 `source_type` 与 `reference_author` 取值
+1. 识别运行模式，确定 `source_type` 与 `reference_author` 取值：
+   - **用户自有样本**（`original`）：直接分析提供的文本
+   - **仿写模式**（`reference`）：分析指定作者公开章节
+   - **预置模板**（`template`）：跳过步骤 2-7，直接执行步骤 8 输出预设 profile
+   - **先写后提 backfill**（`write_then_extract`）：入口 Skill 回传试写章节（以 `<DATA>` 标签包裹），按步骤 2-8 正常提取，但 `source_type` 固定为 `"write_then_extract"`，`analysis_notes` 追加来源标注，覆写项目目录中的 `style-profile.json`
 2. 对样本文本做基础切分与统计：句子长度分布、平均句长、段落长度
 3. 估算对话/描写/动作三比，输出 `dialogue_ratio` / `description_ratio` / `action_ratio`
 4. 识别修辞与节奏偏好（短句切换、比喻密度、排比/反复等），归纳为 `rhetoric_preferences`
@@ -69,8 +75,9 @@ tools: ["Read", "Write", "Glob", "Grep"]
 1. **可量化**：提取的指标必须是数值或枚举，非主观评价
 2. **禁忌词精准**：禁忌词表只收录作者明显不使用的词，不过度泛化
 3. **语癖有据**：角色语癖需有具体示例支撑
-4. **标注来源**：仿写模式下标记 `source_type: "reference"`
+4. **标注来源路径**：`source_type` 必须反映风格数据的获取路径（original/reference/template/write_then_extract），而非提取方法论。即使提取过程相同，不同获取路径仍需区分标记
 5. **预置模板**：预置模板模式下标记 `source_type: "template"`（此时 `reference_author` 为空）
+6. **先写后提**：`write_then_extract` 模式下，入口 Skill 回传试写章节时按 `original` 模式提取，但最终 `source_type` 保持 `"write_then_extract"` 以标记来源路径
 
 # Format
 
@@ -78,7 +85,7 @@ tools: ["Read", "Write", "Glob", "Grep"]
 
 ```json
 {
-  "source_type": "original | reference | template",
+  "source_type": "original | reference | template | write_then_extract",
   "reference_author": "作者名（仿写模式时填写）",
   "avg_sentence_length": 18,
   "sentence_length_range": [8, 35],
@@ -111,7 +118,8 @@ tools: ["Read", "Write", "Glob", "Grep"]
 
 # Edge Cases
 
-- **样本不足**：如样本长度不足以覆盖 1 章，仍输出结构，但在 `analysis_notes` 中标注“样本不足，指标保守估计”
+- **样本不足**：如样本长度不足以覆盖 1 章，仍输出结构，但在 `analysis_notes` 中标注”样本不足，指标保守估计”
 - **仿写样本不可得**：如参考作者公开章节无法获取，切换为预置模板模式并在 `analysis_notes` 说明原因
-- **风格混杂**：如样本跨多个时期/风格差异大，优先以“最近一章”的统计为主，并在 `analysis_notes` 标注漂移风险
+- **风格混杂**：如样本跨多个时期/风格差异大，优先以”最近一章”的统计为主，并在 `analysis_notes` 标注漂移风险
 - **禁忌词不确定**：如无法判断某词是否为禁忌词，不要加入 `forbidden_words`，仅在 `analysis_notes` 提及观察
+- **先写后提**：入口 Skill 在试写 3 章后回传章节内容时，按「用户自有样本」流程提取，但 `source_type` 固定为 `”write_then_extract”`，并在 `analysis_notes` 标注”基于系统试写章节提取，建议用户后续补充原创样本以提高精度”
