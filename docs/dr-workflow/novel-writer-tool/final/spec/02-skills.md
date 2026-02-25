@@ -165,7 +165,7 @@ Skill → 状态映射：
    - `state/current-state.json`：`{"schema_version": 1, "state_version": 0, "last_updated_chapter": 0, "characters": {}, "world_state": {}, "active_foreshadowing": []}`
    - `foreshadowing/global.json`：`{"foreshadowing": []}`
    - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~005）
-   - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
+   - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`staging/foreshadowing/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
 5. 使用 Task 派发 WorldBuilder Agent 生成核心设定
 6. 使用 Task 派发 CharacterWeaver Agent 创建主角和配角
 7. WorldBuilder 协助初始化 `storylines/storylines.json`（从设定派生初始故事线，默认 1 条 type 为 `main_arc` 的主线，活跃线建议 ≤4）
@@ -652,7 +652,7 @@ description: >
 - 评分趋势（最近 10 章 vs 全局均值）
 - 各维度均值
 - 未回收伏笔数量和列表（planted/advanced）
-- 超期 short 伏笔数量与列表（`scope=="short"` 且 `status!="resolved"` 且 `last_completed_chapter > target_resolve_range[1]`）
+- 超期 short 伏笔数量与列表（`scope=="short"` 且 `status!="resolved"` 且 `last_completed_chapter > target_resolve_range[1]`）（规则定义见 `skills/continue/references/foreshadowing.md` §4）
 - 故事线节奏提示（基于 summaries 的 storyline_id + schedule 的 `secondary_min_appearance`）
 - 活跃角色数量
 - 累计成本（sum total_cost_usd）、平均每章成本、平均每章耗时
