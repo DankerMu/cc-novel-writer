@@ -26,7 +26,7 @@ description: |
   </example>
 model: sonnet
 color: yellow
-tools: ["Read", "Write", "Glob", "Grep"]
+tools: ["Read", "Write", "Glob", "Grep", "WebFetch", "WebSearch"]
 ---
 
 # Role
