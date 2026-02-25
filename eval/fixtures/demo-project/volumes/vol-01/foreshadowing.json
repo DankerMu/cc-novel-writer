@@ -1,0 +1,8 @@
+{
+  "volume": 1,
+  "foreshadowing": [
+    { "id": "short-overdue", "description": "fixture", "scope": "short", "status": "planted", "target_resolve_range": [1, 1], "history": [] },
+    { "id": "plan-only", "description": "fixture", "scope": "short", "status": "planted", "target_resolve_range": [1, 2], "history": [] }
+  ]
+}
+

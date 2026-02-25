@@ -1,0 +1,13 @@
+{
+  "chapter": 2,
+  "storyline_id": "main-arc",
+  "stages": [
+    { "name": "draft", "model": "sonnet", "duration_ms": 900, "input_tokens": null, "output_tokens": null },
+    { "name": "judge", "model": "sonnet", "duration_ms": 450, "input_tokens": null, "output_tokens": null }
+  ],
+  "gate_decision": "pass",
+  "revisions": 0,
+  "force_passed": false,
+  "judges": { "primary": { "model": "sonnet", "overall": 4.1 }, "used": "primary", "overall_final": 4.1 }
+}
+

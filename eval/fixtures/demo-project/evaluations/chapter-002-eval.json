@@ -1,0 +1,55 @@
+{
+  "eval_used": {
+    "chapter": 2,
+    "contract_verification": {
+      "l1_checks": [
+        {
+          "rule_id": "W-002",
+          "status": "violation",
+          "confidence": "medium",
+          "detail": "Synthetic medium-confidence violation"
+        }
+      ],
+      "l2_checks": [
+        {
+          "contract_id": "C-protagonist-001",
+          "status": "violation_suspected",
+          "confidence": "low",
+          "detail": "Synthetic suspected violation"
+        }
+      ],
+      "l3_checks": [],
+      "ls_checks": [
+        {
+          "rule_id": "LS-003",
+          "status": "violation",
+          "constraint_type": "soft",
+          "confidence": "high",
+          "detail": "Synthetic soft violation (should not count as hard gate)"
+        }
+      ],
+      "has_violations": true
+    },
+    "scores": {
+      "plot_logic": { "score": 4, "weight": 0.18, "reason": "fixture", "evidence": "fixture" },
+      "character": { "score": 4, "weight": 0.18, "reason": "fixture", "evidence": "fixture" },
+      "immersion": { "score": 4, "weight": 0.15, "reason": "fixture", "evidence": "fixture" },
+      "foreshadowing": { "score": 4, "weight": 0.1, "reason": "fixture", "evidence": "fixture" },
+      "pacing": { "score": 4, "weight": 0.08, "reason": "fixture", "evidence": "fixture" },
+      "style_naturalness": { "score": 4, "weight": 0.15, "reason": "fixture", "evidence": "fixture" },
+      "emotional_impact": { "score": 4, "weight": 0.08, "reason": "fixture", "evidence": "fixture" },
+      "storyline_coherence": { "score": 4, "weight": 0.08, "reason": "fixture", "evidence": "fixture" }
+    },
+    "overall": 4.1,
+    "recommendation": "pass"
+  },
+  "metadata": {
+    "judges": {
+      "primary": { "model": "sonnet", "overall": 4.1 },
+      "used": "primary",
+      "overall_final": 4.1
+    },
+    "gate": { "decision": "pass", "revisions": 0, "force_passed": false }
+  }
+}
+

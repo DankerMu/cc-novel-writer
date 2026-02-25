@@ -1,0 +1,9 @@
+{
+  "active": true,
+  "detected_chapter": 2,
+  "window": [1, 2],
+  "drifts": [
+    { "metric": "avg_sentence_length", "direction": "up", "delta": 3, "directive": "fixture" }
+  ]
+}
+

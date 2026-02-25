@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": 1,
+  "title": "LabeledChapterRecord",
+  "type": "object",
+  "required": ["schema_version", "chapter", "labels", "human_scores"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": { "type": "integer", "enum": [1] },
+    "chapter": { "type": "integer", "minimum": 1 },
+    "labels": {
+      "type": "object",
+      "required": ["continuity_errors", "spec_violations", "storyline_issues"],
+      "properties": {
+        "continuity_errors": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/continuity_error" }
+        },
+        "spec_violations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/spec_violation" }
+        },
+        "storyline_issues": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/storyline_issue" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "human_scores": {
+      "type": "object",
+      "required": ["overall"],
+      "properties": {
+        "overall": { "type": "number", "minimum": 1.0, "maximum": 5.0 },
+        "plot_logic": { "type": "number", "minimum": 1.0, "maximum": 5.0 },
+        "character": { "type": "number", "minimum": 1.0, "maximum": 5.0 },
+        "immersion": { "type": "number", "minimum": 1.0, "maximum": 5.0 },
+        "foreshadowing": { "type": "number", "minimum": 1.0, "maximum": 5.0 },
+        "pacing": { "type": "number", "minimum": 1.0, "maximum": 5.0 },
+        "style_naturalness": { "type": "number", "minimum": 1.0, "maximum": 5.0 },
+        "emotional_impact": { "type": "number", "minimum": 1.0, "maximum": 5.0 },
+        "storyline_coherence": { "type": "number", "minimum": 1.0, "maximum": 5.0 }
+      },
+      "additionalProperties": true
+    },
+    "notes": { "type": "string" }
+  },
+  "definitions": {
+    "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+    "severity": { "type": "string", "enum": ["high", "medium", "low"] },
+    "evidence_item": {
+      "type": "object",
+      "required": ["source", "snippet"],
+      "properties": {
+        "source": { "type": "string", "enum": ["chapter", "summary", "contract", "log", "other"] },
+        "chapter": { "type": "integer", "minimum": 1 },
+        "path": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "snippet": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "continuity_error": {
+      "type": "object",
+      "required": ["type", "detail"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["character_mapping", "relationship_jump", "location_contradiction", "timeline_contradiction", "other"]
+        },
+        "severity": { "$ref": "#/definitions/severity" },
+        "confidence": { "$ref": "#/definitions/confidence" },
+        "entities": { "type": "object", "additionalProperties": true },
+        "detail": { "type": "string" },
+        "evidence": { "type": "array", "items": { "$ref": "#/definitions/evidence_item" } }
+      },
+      "additionalProperties": true
+    },
+    "spec_violation": {
+      "type": "object",
+      "required": ["layer", "rule_id", "detail"],
+      "properties": {
+        "layer": { "type": "string", "enum": ["L1", "L2", "L3", "LS"] },
+        "rule_id": { "type": "string" },
+        "constraint_type": { "type": "string", "enum": ["hard", "soft"] },
+        "confidence": { "$ref": "#/definitions/confidence" },
+        "detail": { "type": "string" },
+        "evidence": { "type": "array", "items": { "$ref": "#/definitions/evidence_item" } }
+      },
+      "additionalProperties": true
+    },
+    "storyline_issue": {
+      "type": "object",
+      "required": ["rule_id", "detail"],
+      "properties": {
+        "rule_id": { "type": "string" },
+        "severity": { "$ref": "#/definitions/severity" },
+        "detail": { "type": "string" },
+        "evidence": { "type": "array", "items": { "$ref": "#/definitions/evidence_item" } }
+      },
+      "additionalProperties": true
+    }
+  }
+}

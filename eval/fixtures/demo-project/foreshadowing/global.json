@@ -1,0 +1,23 @@
+{
+  "foreshadowing": [
+    {
+      "id": "short-overdue",
+      "description": "fixture",
+      "scope": "short",
+      "status": "planted",
+      "target_resolve_range": [1, 1],
+      "last_updated_chapter": 1,
+      "history": [{ "chapter": 1, "action": "planted", "detail": "fixture" }]
+    },
+    {
+      "id": "resolved-item",
+      "description": "fixture",
+      "scope": "short",
+      "status": "resolved",
+      "target_resolve_range": [1, 2],
+      "last_updated_chapter": 2,
+      "history": [{ "chapter": 2, "action": "resolved", "detail": "fixture" }]
+    }
+  ]
+}
+

@@ -1,0 +1,39 @@
+{
+  "chapter": 1,
+  "contract_verification": {
+    "l1_checks": [
+      {
+        "rule_id": "W-001",
+        "status": "pass",
+        "confidence": "high",
+        "detail": "OK"
+      }
+    ],
+    "l2_checks": [],
+    "l3_checks": [],
+    "ls_checks": [
+      {
+        "rule_id": "LS-001",
+        "status": "violation",
+        "constraint_type": "hard",
+        "confidence": "high",
+        "detail": "Synthetic violation for fixture"
+      }
+    ],
+    "has_violations": true
+  },
+  "scores": {
+    "plot_logic": { "score": 3, "weight": 0.18, "reason": "fixture", "evidence": "fixture" },
+    "character": { "score": 3, "weight": 0.18, "reason": "fixture", "evidence": "fixture" },
+    "immersion": { "score": 3, "weight": 0.15, "reason": "fixture", "evidence": "fixture" },
+    "foreshadowing": { "score": 3, "weight": 0.1, "reason": "fixture", "evidence": "fixture" },
+    "pacing": { "score": 3, "weight": 0.08, "reason": "fixture", "evidence": "fixture" },
+    "style_naturalness": { "score": 3, "weight": 0.15, "reason": "fixture", "evidence": "fixture" },
+    "emotional_impact": { "score": 3, "weight": 0.08, "reason": "fixture", "evidence": "fixture" },
+    "storyline_coherence": { "score": 3, "weight": 0.08, "reason": "fixture", "evidence": "fixture" }
+  },
+  "overall": 3.2,
+  "overall_final": 3.2,
+  "recommendation": "revise"
+}
+
