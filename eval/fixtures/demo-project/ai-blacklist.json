@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": "1.0.0",
   "last_updated": "2026-02-25",
   "words": ["不禁", "嘴角微微上扬"],
   "whitelist": { "words": ["不禁"] }

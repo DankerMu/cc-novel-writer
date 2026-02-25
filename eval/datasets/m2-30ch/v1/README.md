@@ -25,4 +25,3 @@ bash scripts/calibrate-quality-judge.sh --project <novel_project_dir> --labels e
 ```
 bash scripts/run-regression.sh --project <novel_project_dir> --labels eval/datasets/m2-30ch/v1/labels-YYYY-MM-DD.jsonl
 ```
-

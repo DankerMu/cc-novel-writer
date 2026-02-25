@@ -130,7 +130,7 @@
 
 评分参考材料：
 - `skills/novel-writing/references/quality-rubric.md`
-- `docs/dr-workflow/novel-writer-tool/final/spec/agents/quality-judge.md`（评分结构与权重）
+- `docs/dr-workflow/novel-writer-tool/final/spec/agents/quality-judge.md`（评分结构与权重；运行时 Agent 定义见 `agents/quality-judge.md`，两者应保持同步）
 
 ## 6) 试标注（前 10 章）
 

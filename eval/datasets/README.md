@@ -32,4 +32,3 @@ eval/datasets/<dataset_id>/v<schema_version>/
 详见：
 - `eval/schema/labeled-chapter.schema.json`
 - `eval/labeling-guide.md`
-

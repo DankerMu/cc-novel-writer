@@ -11,7 +11,11 @@
       "severity": "high",
       "confidence": "high",
       "description": "Synthetic continuity issue",
-      "evidence": [{ "chapter": 1, "source": "chapter", "line": 1, "snippet": "fixture" }]
+      "evidence": [{ "chapter": 1, "source": "chapter", "line": 1, "snippet": "fixture" }],
+      "entities": {
+        "characters": [],
+        "locations": []
+      }
     }
   ],
   "stats": {
@@ -20,4 +24,3 @@
     "issues_by_severity": { "high": 1, "medium": 0, "low": 0 }
   }
 }
-

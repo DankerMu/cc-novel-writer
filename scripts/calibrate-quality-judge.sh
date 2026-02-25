@@ -39,15 +39,18 @@ out_path=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --project)
-      project_dir="${2:-}"
+      [ "$#" -ge 2 ] || { echo "calibrate-quality-judge.sh: error: --project requires a value" >&2; exit 1; }
+      project_dir="$2"
       shift 2
       ;;
     --labels)
-      labels_path="${2:-}"
+      [ "$#" -ge 2 ] || { echo "calibrate-quality-judge.sh: error: --labels requires a value" >&2; exit 1; }
+      labels_path="$2"
       shift 2
       ;;
     --out)
-      out_path="${2:-}"
+      [ "$#" -ge 2 ] || { echo "calibrate-quality-judge.sh: error: --out requires a value" >&2; exit 1; }
+      out_path="$2"
       shift 2
       ;;
     -h|--help)
@@ -80,7 +83,7 @@ fi
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "calibrate-quality-judge.sh: python3 is required but not found" >&2
-  exit 2
+  exit 1
 fi
 
 python3 - "$project_dir" "$labels_path" "$out_path" <<'PY'
@@ -89,7 +92,6 @@ import math
 import os
 import re
 import sys
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -133,7 +135,8 @@ def _iter_jsonl(path: str) -> Iterable[Tuple[int, Dict[str, Any]]]:
 
 def _as_number(value: Any) -> Optional[float]:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
+        v = float(value)
+        return v if math.isfinite(v) else None
     return None
 
 
@@ -362,7 +365,7 @@ def main() -> None:
     rmse = math.sqrt(sum(e * e for e in errors) / len(errors))
     bias = sum(errors) / len(errors)
 
-    default_thresholds = {"pass": 4.0, "polish": 3.5, "revise": 3.0, "pause_for_user": 2.0}
+    default_thresholds = {"pass": 4.0, "polish": 3.5, "revise": 3.0, "pause_for_user": 2.0, "pause_for_user_force_rewrite": 0.0}
 
     suggestions: Dict[str, Any] = {"defaults": default_thresholds, "methods": {}}
 

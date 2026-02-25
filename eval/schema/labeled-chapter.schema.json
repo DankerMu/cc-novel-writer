@@ -14,15 +14,15 @@
       "properties": {
         "continuity_errors": {
           "type": "array",
-          "items": { "$ref": "#/definitions/continuity_error" }
+          "items": { "$ref": "#/$defs/continuity_error" }
         },
         "spec_violations": {
           "type": "array",
-          "items": { "$ref": "#/definitions/spec_violation" }
+          "items": { "$ref": "#/$defs/spec_violation" }
         },
         "storyline_issues": {
           "type": "array",
-          "items": { "$ref": "#/definitions/storyline_issue" }
+          "items": { "$ref": "#/$defs/storyline_issue" }
         }
       },
       "additionalProperties": true
@@ -45,7 +45,7 @@
     },
     "notes": { "type": "string" }
   },
-  "definitions": {
+  "$defs": {
     "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
     "severity": { "type": "string", "enum": ["high", "medium", "low"] },
     "evidence_item": {
@@ -68,11 +68,11 @@
           "type": "string",
           "enum": ["character_mapping", "relationship_jump", "location_contradiction", "timeline_contradiction", "other"]
         },
-        "severity": { "$ref": "#/definitions/severity" },
-        "confidence": { "$ref": "#/definitions/confidence" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "confidence": { "$ref": "#/$defs/confidence" },
         "entities": { "type": "object", "additionalProperties": true },
         "detail": { "type": "string" },
-        "evidence": { "type": "array", "items": { "$ref": "#/definitions/evidence_item" } }
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence_item" } }
       },
       "additionalProperties": true
     },
@@ -83,9 +83,9 @@
         "layer": { "type": "string", "enum": ["L1", "L2", "L3", "LS"] },
         "rule_id": { "type": "string" },
         "constraint_type": { "type": "string", "enum": ["hard", "soft"] },
-        "confidence": { "$ref": "#/definitions/confidence" },
+        "confidence": { "$ref": "#/$defs/confidence" },
         "detail": { "type": "string" },
-        "evidence": { "type": "array", "items": { "$ref": "#/definitions/evidence_item" } }
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence_item" } }
       },
       "additionalProperties": true
     },
@@ -94,9 +94,9 @@
       "required": ["rule_id", "detail"],
       "properties": {
         "rule_id": { "type": "string" },
-        "severity": { "$ref": "#/definitions/severity" },
+        "severity": { "$ref": "#/$defs/severity" },
         "detail": { "type": "string" },
-        "evidence": { "type": "array", "items": { "$ref": "#/definitions/evidence_item" } }
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence_item" } }
       },
       "additionalProperties": true
     }

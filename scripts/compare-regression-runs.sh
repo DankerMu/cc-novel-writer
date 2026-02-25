@@ -39,7 +39,8 @@ shift 2
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --out)
-      out_path="${2:-}"
+      [ "$#" -ge 2 ] || { echo "compare-regression-runs.sh: error: --out requires a value" >&2; exit 1; }
+      out_path="$2"
       shift 2
       ;;
     -h|--help)
@@ -77,11 +78,12 @@ fi
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "compare-regression-runs.sh: python3 is required but not found" >&2
-  exit 2
+  exit 1
 fi
 
 python3 - "$summary_a" "$summary_b" "$out_path" <<'PY'
 import json
+import math
 import os
 import sys
 from datetime import datetime, timezone
@@ -107,7 +109,8 @@ def _iso_utc_now() -> str:
 
 def _as_number(v: Any) -> Optional[float]:
     if isinstance(v, (int, float)) and not isinstance(v, bool):
-        return float(v)
+        val = float(v)
+        return val if math.isfinite(val) else None
     return None
 
 
@@ -119,19 +122,22 @@ def _delta_number(a: Any, b: Any) -> Optional[float]:
     return nb - na
 
 
-def _delta_map(a: Any, b: Any) -> Dict[str, float]:
+def _delta_map(a: Any, b: Any) -> Dict[str, Optional[float]]:
     if not isinstance(a, dict):
         a = {}
     if not isinstance(b, dict):
         b = {}
     keys = set([str(k) for k in a.keys()] + [str(k) for k in b.keys()])
-    out: Dict[str, float] = {}
+    out: Dict[str, Optional[float]] = {}
     for k in sorted(keys):
         da = _as_number(a.get(k))
         db = _as_number(b.get(k))
         if da is None and db is None:
             continue
-        out[k] = float((db or 0.0) - (da or 0.0))
+        if da is None or db is None:
+            out[k] = None
+        else:
+            out[k] = float(db - da)
     return out
 
 
@@ -169,11 +175,17 @@ def main() -> None:
             "violations_by_layer": _delta_map(a.get("violations_by_layer"), b.get("violations_by_layer")),
             "score_overall_mean": _delta_number(score_a.get("mean"), score_b.get("mean")),
         },
+        "score_dimensions": {},
         "notes": [],
     }
 
     if _as_number(a.get("chapters_total")) != _as_number(b.get("chapters_total")):
         out["notes"].append("chapters_total differs; compare deltas with caution.")
+
+    dims_a = a.get("score_dimensions", {})
+    dims_b = b.get("score_dimensions", {})
+    if dims_a or dims_b:
+        out["score_dimensions"] = _delta_map(dims_a, dims_b)
 
     out_json = json.dumps(out, ensure_ascii=False, sort_keys=True) + "\n"
     sys.stdout.write(out_json)

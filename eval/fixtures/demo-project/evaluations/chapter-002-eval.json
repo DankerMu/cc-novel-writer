@@ -34,22 +34,22 @@
       "plot_logic": { "score": 4, "weight": 0.18, "reason": "fixture", "evidence": "fixture" },
       "character": { "score": 4, "weight": 0.18, "reason": "fixture", "evidence": "fixture" },
       "immersion": { "score": 4, "weight": 0.15, "reason": "fixture", "evidence": "fixture" },
-      "foreshadowing": { "score": 4, "weight": 0.1, "reason": "fixture", "evidence": "fixture" },
+      "foreshadowing": { "score": 4, "weight": 0.10, "reason": "fixture", "evidence": "fixture" },
       "pacing": { "score": 4, "weight": 0.08, "reason": "fixture", "evidence": "fixture" },
       "style_naturalness": { "score": 4, "weight": 0.15, "reason": "fixture", "evidence": "fixture" },
       "emotional_impact": { "score": 4, "weight": 0.08, "reason": "fixture", "evidence": "fixture" },
       "storyline_coherence": { "score": 4, "weight": 0.08, "reason": "fixture", "evidence": "fixture" }
     },
-    "overall": 4.1,
-    "recommendation": "pass"
+    "overall": 4.0,
+    "overall_final": 4.0,
+    "recommendation": "revise"
   },
   "metadata": {
     "judges": {
-      "primary": { "model": "sonnet", "overall": 4.1 },
+      "primary": { "model": "sonnet", "overall": 4.0 },
       "used": "primary",
-      "overall_final": 4.1
+      "overall_final": 4.0
     },
     "gate": { "decision": "pass", "revisions": 0, "force_passed": false }
   }
 }
-

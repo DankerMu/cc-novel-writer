@@ -47,15 +47,18 @@ include_style=1
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --project)
-      project_dir="${2:-}"
+      [ "$#" -ge 2 ] || { echo "run-regression.sh: error: --project requires a value" >&2; exit 1; }
+      project_dir="$2"
       shift 2
       ;;
     --labels)
-      labels_path="${2:-}"
+      [ "$#" -ge 2 ] || { echo "run-regression.sh: error: --labels requires a value" >&2; exit 1; }
+      labels_path="$2"
       shift 2
       ;;
     --runs-dir)
-      runs_dir="${2:-}"
+      [ "$#" -ge 2 ] || { echo "run-regression.sh: error: --runs-dir requires a value" >&2; exit 1; }
+      runs_dir="$2"
       shift 2
       ;;
     --no-archive)
@@ -104,7 +107,7 @@ fi
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "run-regression.sh: python3 is required but not found" >&2
-  exit 2
+  exit 1
 fi
 
 python3 - \
@@ -120,7 +123,9 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
+import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -148,7 +153,10 @@ def _as_int(value: Any) -> Optional[int]:
 
 def _as_float(value: Any) -> Optional[float]:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
+        v = float(value)
+        if not math.isfinite(v):
+            return None
+        return v
     return None
 
 
@@ -163,7 +171,8 @@ def _iso_utc_now() -> str:
 
 
 def _timestamp_id() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    now = datetime.now(timezone.utc)
+    return now.strftime("%Y%m%dT%H%M%S") + f"_{now.strftime('%f')[:4]}Z"
 
 
 def _mkdir(path: str) -> None:
@@ -347,7 +356,7 @@ def _summarize_foreshadowing(project_dir: str, last_completed_chapter: int) -> O
     ck = _load_json(os.path.join(project_dir, ".checkpoint.json"))
     vol = ck.get("current_volume") if isinstance(ck, dict) else None
     vol_int = _as_int(vol)
-    if vol_int is not None and vol_int >= 0:
+    if vol_int is not None and vol_int >= 1:
         plan_path = os.path.join(project_dir, "volumes", f"vol-{vol_int:02d}", "foreshadowing.json")
         plan_obj = _load_json(plan_path)
         plan_items: List[Dict[str, Any]] = []
@@ -526,7 +535,8 @@ def _is_high_conf_violation(layer: str, item: Dict[str, Any]) -> bool:
     return False
 
 
-def _format_md_report(summary: Dict[str, Any]) -> str:
+def _format_md_report(data: Dict[str, Any]) -> str:
+    summary = data.get("metrics", {})
     lines: List[str] = []
     lines.append(f"# Regression Summary ({summary.get('run_id')})")
     lines.append("")
@@ -543,33 +553,33 @@ def _format_md_report(summary: Dict[str, Any]) -> str:
     lines.append(f"- Chapters w/ any violations: {comp.get('chapters_with_any_violation')}")
     lines.append("")
 
-    if isinstance(summary.get("top_rules"), list) and summary["top_rules"]:
+    if isinstance(data.get("top_rules"), list) and data["top_rules"]:
         lines.append("## Top Violated Rules (any confidence)")
         lines.append("")
-        for it in summary["top_rules"][:10]:
+        for it in data["top_rules"][:10]:
             lines.append(f"- {it.get('layer')} {it.get('rule_id')}: {it.get('count')}")
         lines.append("")
 
-    if summary.get("continuity") is not None:
+    if data.get("continuity") is not None:
         lines.append("## Continuity (logs/continuity/latest.json)")
         lines.append("")
-        stats = summary["continuity"].get("stats", {}) if isinstance(summary["continuity"], dict) else {}
+        stats = data["continuity"].get("stats", {}) if isinstance(data["continuity"], dict) else {}
         lines.append(f"- issues_total: {stats.get('issues_total')}")
         lines.append(f"- issues_by_severity: {stats.get('issues_by_severity')}")
         lines.append("")
 
-    if summary.get("foreshadowing") is not None:
+    if data.get("foreshadowing") is not None:
         lines.append("## Foreshadowing (foreshadowing/global.json)")
         lines.append("")
-        fs = summary["foreshadowing"]
+        fs = data["foreshadowing"]
         lines.append(f"- active: {fs.get('active_count')} / total: {fs.get('items_total')} / resolved: {fs.get('resolved_count')}")
         lines.append(f"- overdue_short: {fs.get('overdue_short_count')}")
         lines.append("")
 
-    if summary.get("style_drift") is not None:
+    if data.get("style_drift") is not None:
         lines.append("## Style Drift (style-drift.json)")
         lines.append("")
-        sd = summary["style_drift"]
+        sd = data["style_drift"]
         lines.append(f"- active: {sd.get('active')} / drifts_count: {sd.get('drifts_count')}")
         lines.append("")
 
@@ -728,7 +738,7 @@ def main() -> None:
             "foreshadowing_global_json": bool(include_foreshadowing),
             "style_drift_json": bool(include_style),
         },
-        "gate_thresholds_defaults": {"pass": 4.0, "polish": 3.5, "revise": 3.0, "pause_for_user": 2.0},
+        "gate_thresholds_defaults": {"pass": 4.0, "polish": 3.5, "revise": 3.0, "pause_for_user": 2.0, "pause_for_user_force_rewrite": 0.0},
     }
 
     summary_metrics = {
@@ -781,19 +791,30 @@ def main() -> None:
         return
 
     run_dir = os.path.join(os.path.abspath(runs_dir), run_id)
-    _mkdir(run_dir)
+    parent_dir = os.path.abspath(runs_dir)
+    _mkdir(parent_dir)
+    tmp_dir = tempfile.mkdtemp(dir=parent_dir)
 
     try:
-        with open(os.path.join(run_dir, "config.json"), "w", encoding="utf-8") as f:
+        with open(os.path.join(tmp_dir, "config.json"), "w", encoding="utf-8") as f:
             f.write(json.dumps(config_snapshot, ensure_ascii=False, sort_keys=True) + "\n")
-        with open(os.path.join(run_dir, "summary.json"), "w", encoding="utf-8") as f:
+        with open(os.path.join(tmp_dir, "summary.json"), "w", encoding="utf-8") as f:
             f.write(json.dumps(summary_metrics, ensure_ascii=False, sort_keys=True) + "\n")
-        with open(os.path.join(run_dir, "report.json"), "w", encoding="utf-8") as f:
+        with open(os.path.join(tmp_dir, "report.json"), "w", encoding="utf-8") as f:
             f.write(out_json)
-        with open(os.path.join(run_dir, "report.md"), "w", encoding="utf-8") as f:
-            f.write(_format_md_report({**summary_metrics, "top_rules": top_rules[:10], "continuity": continuity_summary, "foreshadowing": foreshadow_summary, "style_drift": style_summary}))
-    except Exception as e:
-        _die(f"run-regression.sh: failed to write run artifacts under {run_dir}: {e}", 1)
+        with open(os.path.join(tmp_dir, "report.md"), "w", encoding="utf-8") as f:
+            report_data = {
+                "metrics": summary_metrics,
+                "top_rules": top_rules[:10],
+                "continuity": continuity_summary,
+                "foreshadowing": foreshadow_summary,
+                "style_drift": style_summary,
+            }
+            f.write(_format_md_report(report_data))
+        os.rename(tmp_dir, run_dir)
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
 
 
 try:
