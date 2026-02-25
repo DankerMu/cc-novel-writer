@@ -44,7 +44,19 @@ claude --plugin-dir ~/cc-novel-writer
 | `/novel:continue` | 续写下一章 / 推进到下一卷 |
 | `/novel:status` | 查看当前项目进度、状态与统计 |
 
-**30 秒体验**：执行 `/novel:start`，按提示填写书名、题材和核心设定，系统自动创建项目结构并启动第一卷规划。
+**30 秒体验**：执行 `/novel:start`，按提示填写题材、主角和核心冲突，系统自动创建项目结构并试写 3 章。详见 [快速起步指南](docs/user/quick-start.md)。
+
+### 推荐配套
+
+以下技能非必须，但能显著提升创作质量：
+
+| 技能 | 用途 | 安装 |
+|------|------|------|
+| `doc-workflow` | 深度背景研究（历史/科幻/军事题材推荐） | 见 [CCskill 仓库](https://github.com/DankerMu/CCskill) |
+| `brainstorming` | 结构化脑暴（世界观/角色/情节设计） | 同上 |
+| `deep-research` | 多源信息综合研究 | 同上 |
+
+系统会在创建项目时自动检测题材，对需要事实查证的类型（历史、科幻、军事等）主动建议先做背景研究。
 
 ## 工作原理
 
@@ -150,6 +162,12 @@ eval/
   fixtures/                    脚本冒烟测试 fixture
   labeling-guide.md            标注指南
 docs/
+  user/                        用户文档
+    quick-start.md               30 分钟快速起步
+    ops.md                       常用操作
+    spec-system.md               四层规范体系
+    storylines.md                多线叙事指南
+  test/                        测试清单
   prd/                         产品需求文档（11 章）
   spec/                        技术规范（6 章 + 8 Agent 独立定义）
 ```
