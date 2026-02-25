@@ -46,7 +46,41 @@
    - AI 黑名单维护：
      - 展示 `ai-blacklist.json` 的 version/last_updated/words_count/whitelist_count
      - 若存在 `update_log[]`：展示最近 3 条变更摘要（added/exempted/removed），提醒用户可手动编辑 words/whitelist
-4. 检查伏笔状态（Read `foreshadowing/global.json`）：未回收伏笔数量 + 超期（>10章）条目
-5. 输出建议动作（不强制）：
+4. **伏笔盘点 + 跨线桥梁检查**（周期性每 10 章；不阻断写作）：
+   - Read `foreshadowing/global.json`（如不存在：跳过伏笔盘点区块）
+   - Read `volumes/vol-{V:02d}/foreshadowing.json`（如存在：用于计划对照与 bridge 校验）
+   - 统计（用于输出与落盘）：
+     - active_count：`status!="resolved"` 的条目数
+     - resolved_count：`status=="resolved"` 的条目数
+     - overdue_short：`scope=="short"` 且 `status!="resolved"` 且存在 `target_resolve_range=[start,end]` 且 `last_completed_chapter > end`（规则定义见 `skills/continue/references/foreshadowing.md` §4）
+     -（可选）plan 对照：若存在本卷 plan，则统计 planned_total / missing_in_global（plan 中 id 在 global 不存在）/ resolved_in_global（plan 中 id 在 global 且 status==resolved）
+   - **桥梁检查**（`storylines/storylines.json.relationships[].bridges.shared_foreshadowing[]`）：
+     - 若 `relationships` 为空或不存在：跳过桥梁检查
+     - 对每个 relationship 的每个 shared_foreshadowing id：
+       - 若该 id 存在于 `foreshadowing/global.json.foreshadowing[].id` 或 `volumes/vol-{V:02d}/foreshadowing.json.foreshadowing[].id` → ok
+       - 否则记为 broken（断链）
+     - broken 项需要包含：missing_id + relationship(from/to/type) + 建议动作（补 plan / 纠正 ID / 确认是否应在本章 planted）
+   - 报告落盘（回归友好）：
+     - 创建目录（幂等）：`mkdir -p logs/foreshadowing logs/storylines`
+     - 写入 `logs/foreshadowing/foreshadowing-check-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
+     - 同步写入/覆盖 `logs/foreshadowing/latest.json`
+     - 写入 `logs/storylines/broken-bridges-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
+     - 同步写入/覆盖 `logs/storylines/broken-bridges-latest.json`
+5. **故事线节奏分析（简报）**（周期性每 10 章；不阻断写作）：
+   - Read `volumes/vol-{V:02d}/storyline-schedule.json`（如不存在：跳过节奏分析区块）
+   - 在章节范围 `[start, end]`（同 Step 2）内，基于 `summaries/chapter-*-summary.md` 的 `- storyline_id: ...` 统计：
+     - appearances：每条 active storyline 的出场次数
+     - last_seen_chapter / chapters_since_last（以 end 为基准）
+     - dormant_flag（仅对 secondary 线）：
+       - 若 `interleaving_pattern.secondary_min_appearance` 匹配 `^every_(\\d+)_chapters$` 得到 `N`
+       - 当 `chapters_since_last > N` → 标记为疑似休眠，并建议“安排一次出场或通过回忆重建”
+   - 交汇达成率（convergence_events）：
+     - 对每个 event.chapter_range=[a,b]，检查 involved_storylines 在 `[a,b]` 内是否都至少出现 1 次
+     - 若未达成：列出 missing_storylines，并给出“最近一次出现章/下一次出现章”（在全 summaries 中搜最近）作为偏差提示
+   - 报告落盘（JSON）：
+     - 创建目录（幂等）：`mkdir -p logs/storylines`
+     - 写入 `logs/storylines/rhythm-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
+     - 同步写入/覆盖 `logs/storylines/rhythm-latest.json`
+6. 输出建议动作（不强制）：
    - 对低分/高风险章节：建议用户"回看/手动修订/接受并继续"
    - 若存在多章连续低分：建议先暂停写作，回到"更新设定/调整方向"

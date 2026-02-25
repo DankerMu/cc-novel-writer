@@ -67,6 +67,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 1. **核心冲突**：每章至少一个核心冲突
 2. **伏笔节奏**：按 scope 分层管理——`short`（卷内，3-10 章回收）、`medium`（跨卷，1-3 卷回收，标注目标卷）、`long`（全书级，无固定回收期限，每 1-2 卷至少 `advanced` 一次保持活性）。每条新伏笔必须指定 scope 和 `target_resolve_range`
+   - **事实层约束**：`foreshadowing/global.json` 是跨卷事实索引（由每章 commit 阶段从 `foreshadow` ops 更新）。PlotArchitect 在卷规划阶段**不得**直接修改/伪造 planted/advanced/resolved 事实，只输出本卷计划 `volumes/vol-{V:02d}/foreshadowing.json`。
 3. **承接上卷**：必须承接上卷未完结线索
 4. **卷末钩子**：最后 1-2 章必须预留悬念钩子（吸引读者追更）
 5. **角色弧线**：主要角色在本卷内应有可见的成长或变化
@@ -141,12 +142,11 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 2. `volumes/vol-{V:02d}/storyline-schedule.json` — 本卷故事线调度（active_storylines + interleaving_pattern + convergence_events）
 3. `volumes/vol-{V:02d}/foreshadowing.json` — 本卷伏笔计划（新增 + 上卷延续），每条伏笔含 `id`/`description`/`scope`(`short`|`medium`|`long`)/`status`/`planted_chapter`/`target_resolve_range`/`history`
 4. `volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json` — 每章契约（批量生成，含 storyline_id + storyline_context）
-5. 更新 `foreshadowing/global.json` — 全局伏笔状态
-6. `volumes/vol-{V:02d}/new-characters.json` — 本卷需要新建的角色清单（outline 中引用但 `characters/active/` 不存在的角色），格式：`[{"name": "角色名", "first_chapter": N, "role": "antagonist | supporting | minor", "brief": "一句话定位"}]`。`role` 描述角色在全书中的故事定位（区别于 primary/secondary/seasoning 的本卷叙事权重）。入口 Skill 据此批量调用 CharacterWeaver 创建角色档案 + L2 契约
+5. `volumes/vol-{V:02d}/new-characters.json` — 本卷需要新建的角色清单（outline 中引用但 `characters/active/` 不存在的角色），格式：`[{"name": "角色名", "first_chapter": N, "role": "antagonist | supporting | minor", "brief": "一句话定位"}]`。`role` 描述角色在全书中的故事定位（区别于 primary/secondary/seasoning 的本卷叙事权重）。入口 Skill 据此批量调用 CharacterWeaver 创建角色档案 + L2 契约
 
 # Edge Cases
 
 - **上卷无回顾**：首卷规划时，跳过上卷承接检查，从 brief 派生初始大纲
-- **伏笔过期**：short scope 伏笔超过 10 章未回收时，在伏笔计划中标记 `overdue` 并建议本卷安排回收
+- **伏笔过期**：short scope 伏笔超过 `target_resolve_range` 上限仍未回收时（若未提供 range，则以 >10 章作为经验阈值），在伏笔计划中标记 `overdue` 并建议本卷安排回收
 - **活跃线过多**：storylines.json 中活跃线 > 4 时，选择最高优先级的 4 条，其余标为 seasoning 或暂休眠
 ````

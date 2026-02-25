@@ -27,6 +27,7 @@ description: >
 - 若 `evaluations/` 为空或不存在：对应区块显示"暂无评估数据（尚未完成任何章节）"
 - 若 `logs/` 为空或不存在：跳过成本统计区块或显示"暂无日志数据"
 - 若 `foreshadowing/global.json` 不存在：跳过伏笔追踪区块或显示"暂无伏笔数据"
+- 若 `volumes/vol-{V:02d}/storyline-schedule.json` 不存在：跳过故事线节奏区块或显示"暂无故事线调度数据"
 - 若 `style-drift.json` 不存在：风格漂移区块显示"未生成纠偏文件（style-drift.json 不存在）"
 - 若 `ai-blacklist.json` 不存在：黑名单维护区块显示"未配置 AI 黑名单"
 
@@ -35,9 +36,11 @@ description: >
 2. brief.md → 项目名称和题材
 3. state/current-state.json → 角色位置、情绪、关系
 4. foreshadowing/global.json → 伏笔状态
-5. Glob("evaluations/chapter-*-eval.json") → 所有评分
-6. Glob("chapters/chapter-*.md") → 章节文件列表（统计字数）
-7. Glob("logs/chapter-*-log.json") → 流水线日志（成本、耗时、修订次数）
+5. volumes/vol-{V:02d}/storyline-schedule.json → 本卷故事线调度（节奏提示用）
+6. Glob("summaries/chapter-*-summary.md") → 提取 storyline_id（节奏提示用）
+7. Glob("evaluations/chapter-*-eval.json") → 所有评分
+8. Glob("chapters/chapter-*.md") → 章节文件列表（统计字数）
+9. Glob("logs/chapter-*-log.json") → 流水线日志（成本、耗时、修订次数）
 ```
 
 ### Step 2: 计算统计
@@ -61,11 +64,28 @@ description: >
 - 评分均值（overall 字段平均）
 - 评分趋势（最近 10 章 vs 全局均值）
 - 各维度均值
-- 未回收伏笔数量和列表
+- 未回收伏笔数量和列表（planted/advanced）
+- 超期 short 伏笔数量与列表（`scope=="short"` 且 `status!="resolved"` 且 `last_completed_chapter > target_resolve_range[1]`）（规则定义见 `skills/continue/references/foreshadowing.md` §4）
+- 故事线节奏提示（基于 summaries 的 storyline_id + schedule 的 `secondary_min_appearance`）
 - 活跃角色数量
 - 累计成本（sum total_cost_usd）、平均每章成本、平均每章耗时
 - 修订率（revisions > 0 的章节占比）
 ```
+
+#### 故事线节奏提示（轻量、只读）
+
+1. 读取并解析 `volumes/vol-{V:02d}/storyline-schedule.json`（如存在）：
+   - `active_storylines[]`（storyline_id + volume_role）
+   - `interleaving_pattern.secondary_min_appearance`（形如 `"every_8_chapters"`）
+2. 从 `secondary_min_appearance` 解析最小出场频率窗口：
+   - 若匹配 `^every_(\\d+)_chapters$` → `N = int(...)`
+   - 否则 `N = null`（仅展示 last_seen，不做“疑似休眠”判断）
+3. 从 `summaries/chapter-*-summary.md` 提取每章 `storyline_id`：
+   - 建议只扫描最近 60 章 summaries（从新到旧），用正则 `^- storyline_id:\\s*(.+)$` 抽取
+   - 得到 `last_seen_chapter_by_storyline`
+4. 对每个 `active_storylines[]`：
+   - `chapters_since_last = last_completed_chapter - last_seen_chapter`（未出现过则显示“未出现”）
+   - 若 `volume_role=="secondary"` 且 `N!=null` 且 `chapters_since_last > N` → 记为“疑似休眠”（提示用户在后续章节/大纲中安排一次出场或通过回忆重建）
 
 ### Step 3: 格式化输出
 
@@ -84,7 +104,11 @@ description: >
 伏笔追踪：
   活跃：{active_count} 个
   已回收：{resolved_count} 个
-  超期未回收（>10章）：{overdue}
+  超期 short（超过 target_resolve_range 上限）：{overdue_short}
+
+故事线节奏：
+  本卷活跃线：{active_storylines_brief}
+  疑似休眠：{dormant_hints}
 
 活跃角色：{character_count} 个
 

@@ -158,7 +158,7 @@ Skill → 状态映射：
    - `state/current-state.json`：`{"schema_version": 1, "state_version": 0, "last_updated_chapter": 0, "characters": {}, "world_state": {}, "active_foreshadowing": []}`
    - `foreshadowing/global.json`：`{"foreshadowing": []}`
    - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~005）
-   - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
+   - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`staging/foreshadowing/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
 5. 使用 Task 派发 WorldBuilder Agent 生成核心设定
 6. 使用 Task 派发 CharacterWeaver Agent 创建主角和配角
 7. WorldBuilder 协助初始化 `storylines/storylines.json`（从设定派生初始故事线，默认 1 条 type 为 `main_arc` 的主线，活跃线建议 ≤4）

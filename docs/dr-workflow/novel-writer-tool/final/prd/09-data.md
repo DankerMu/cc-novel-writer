@@ -48,7 +48,7 @@ novel-project/
 │   ├── storylines/                 # 故事线记忆更新（Summarizer 产出，commit 时覆盖 storylines/*/memory.md）
 │   ├── evaluations/                # 评估结果
 │   ├── volumes/                    # 卷规划产物（PlotArchitect 产出，用户批准后 commit 至 volumes/）
-│   └── foreshadowing/              # 伏笔计划更新（PlotArchitect 产出，commit 时覆盖 foreshadowing/）
+│   └── foreshadowing/              # 预留：伏笔相关中间产物/报告（global.json 由每章 commit 阶段从 foreshadow ops 更新）
 ├── summaries/                      # 章节摘要（context 压缩核心）
 │   ├── chapter-001-summary.md
 │   └── ...
@@ -62,9 +62,20 @@ novel-project/
 ├── evaluations/
 │   ├── chapter-001-eval.json
 │   └── ...
-└── logs/                          # 流水线执行日志（调试 + 成本追踪）
+└── logs/                          # 流水线日志 + 分析报告
     ├── chapter-001-log.json
-    └── ...
+    ├── unknown-entities.jsonl
+    ├── continuity/                 # 一致性检查报告（NER）
+    │   ├── latest.json
+    │   └── continuity-report-vol-01-ch001-ch010.json
+    ├── foreshadowing/              # 伏笔盘点报告
+    │   ├── latest.json
+    │   └── foreshadowing-check-vol-01-ch001-ch010.json
+    └── storylines/                 # 故事线分析报告
+        ├── rhythm-latest.json
+        ├── rhythm-vol-01-ch001-ch010.json
+        ├── broken-bridges-latest.json
+        └── broken-bridges-vol-01-ch001-ch010.json
 ```
 
 > **chapter_id 命名规范**：全局统一使用 3 位零填充格式 `chapter-{C:03d}`（如 `chapter-001`、`chapter-048`、`chapter-150`）。适用于所有章节相关文件：`chapters/chapter-{C:03d}.md`、`summaries/chapter-{C:03d}-summary.md`、`evaluations/chapter-{C:03d}-eval.json`、`staging/` 下对应文件、`logs/chapter-{C:03d}-log.json`、`chapter-contracts/chapter-{C:03d}.json`。hook 脚本使用 `printf '%03d'` 格式化。
