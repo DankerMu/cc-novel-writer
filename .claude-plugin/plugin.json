@@ -6,6 +6,5 @@
     "name": "DankerMu",
     "email": "mumzy@mail.ustc.edu.cn"
   },
-  "repository": "https://github.com/DankerMu/cc-novel-writer",
-  "hooks": "./hooks/hooks.json"
+  "repository": "https://github.com/DankerMu/cc-novel-writer"
 }
