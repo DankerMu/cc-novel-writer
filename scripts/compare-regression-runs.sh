@@ -122,6 +122,28 @@ def _delta_number(a: Any, b: Any) -> Optional[float]:
     return nb - na
 
 
+def _delta_dim_means(a: Any, b: Any) -> Dict[str, Optional[float]]:
+    """Delta on score_dimensions: extract 'mean' from {n, mean} objects."""
+    if not isinstance(a, dict):
+        a = {}
+    if not isinstance(b, dict):
+        b = {}
+    keys = sorted(set(list(a.keys()) + list(b.keys())))
+    out: Dict[str, Optional[float]] = {}
+    for k in keys:
+        va = a.get(k)
+        vb = b.get(k)
+        ma = _as_number(va.get("mean")) if isinstance(va, dict) else None
+        mb = _as_number(vb.get("mean")) if isinstance(vb, dict) else None
+        if ma is None and mb is None:
+            continue
+        if ma is None or mb is None:
+            out[k] = None
+        else:
+            out[k] = round(float(mb - ma), 6)
+    return out
+
+
 def _delta_map(a: Any, b: Any) -> Dict[str, Optional[float]]:
     if not isinstance(a, dict):
         a = {}
@@ -185,7 +207,7 @@ def main() -> None:
     dims_a = a.get("score_dimensions", {})
     dims_b = b.get("score_dimensions", {})
     if dims_a or dims_b:
-        out["score_dimensions"] = _delta_map(dims_a, dims_b)
+        out["score_dimensions"] = _delta_dim_means(dims_a, dims_b)
 
     out_json = json.dumps(out, ensure_ascii=False, sort_keys=True) + "\n"
     sys.stdout.write(out_json)

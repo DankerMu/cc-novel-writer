@@ -365,7 +365,8 @@ def main() -> None:
     rmse = math.sqrt(sum(e * e for e in errors) / len(errors))
     bias = sum(errors) / len(errors)
 
-    default_thresholds = {"pass": 4.0, "polish": 3.5, "revise": 3.0, "pause_for_user": 2.0, "pause_for_user_force_rewrite": 0.0}
+    # pause_for_user_force_rewrite is implicit (<2.0), no threshold to calibrate
+    default_thresholds = {"pass": 4.0, "polish": 3.5, "revise": 3.0, "pause_for_user": 2.0}
 
     suggestions: Dict[str, Any] = {"defaults": default_thresholds, "methods": {}}
 

@@ -1,5 +1,5 @@
 {
-  "chapter": "chapter-001",
+  "chapter": 1,
   "eval_used": {
     "contract_verification": {
       "l1_checks": [

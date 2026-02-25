@@ -738,7 +738,8 @@ def main() -> None:
             "foreshadowing_global_json": bool(include_foreshadowing),
             "style_drift_json": bool(include_style),
         },
-        "gate_thresholds_defaults": {"pass": 4.0, "polish": 3.5, "revise": 3.0, "pause_for_user": 2.0, "pause_for_user_force_rewrite": 0.0},
+        # pause_for_user_force_rewrite is implicit (<2.0), no threshold to calibrate
+        "gate_thresholds_defaults": {"pass": 4.0, "polish": 3.5, "revise": 3.0, "pause_for_user": 2.0},
     }
 
     summary_metrics = {
