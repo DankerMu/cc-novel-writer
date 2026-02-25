@@ -59,7 +59,7 @@ tools: ["Read", "Write", "Glob", "Grep", "WebFetch", "WebSearch"]
 
 1. 识别运行模式，确定 `source_type` 与 `reference_author` 取值：
    - **用户自有样本**（`original`）：直接分析提供的文本
-   - **仿写模式**（`reference`）：分析指定作者公开章节
+   - **仿写模式**（`reference`）：使用 WebSearch / WebFetch / Exa（`web_search_exa`）搜索指定作者的公开章节或书评，获取 2-3 章文本后按步骤 2-8 分析。搜索策略：先用 Exa 搜索「{作者名} 小说 正文 章节」获取高质量结果；若不足则用 WebSearch 补充；最后用 WebFetch 抓取正文页面。搜索失败时降级为 template 模式并在 `analysis_notes` 说明原因
    - **预置模板**（`template`）：跳过步骤 2-7，直接执行步骤 8 输出预设 profile
    - **先写后提 backfill**（`write_then_extract`）：入口 Skill 回传试写章节（以 `<DATA>` 标签包裹），按步骤 2-8 正常提取，但 `source_type` 固定为 `"write_then_extract"`，`analysis_notes` 追加来源标注，覆写项目目录中的 `style-profile.json`
 2. 对样本文本做基础切分与统计：句子长度分布、平均句长、段落长度
