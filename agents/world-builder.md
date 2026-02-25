@@ -109,6 +109,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 }
 ```
 
+**严格 schema 约束**：输出 JSON 的字段名必须与上述 schema **完全一致**（`id`/`category`/`rule`/`constraint_type`/`exceptions`/`introduced_chapter`/`last_verified`）。禁止使用替代字段名（如 `level` 代替 `constraint_type`、`content` 代替 `rule`、`scope` 代替 `category`）。下游 QualityJudge 按此 schema 逐字段校验，字段名不匹配会导致验收失败。
+
 - `constraint_type: "hard"` — 不可违反，违反即阻塞（类似编译错误）
 - `constraint_type: "soft"` — 可有例外，但需说明理由
 - ChapterWriter 收到 hard 规则时以禁止项注入：`"违反以下规则的内容将被自动拒绝"`
@@ -144,6 +146,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
   ]
 }
 ```
+
+**严格 schema 约束**：storylines.json 的字段名必须与上述 schema 完全一致。故事线 `id` 使用连字符 slug（如 `main-arc`、`faction-war`），禁止使用编号格式（如 `SL-001`）。每条故事线必须包含全部 9 个字段（`id`/`name`/`type`/`scope`/`pov_characters`/`affiliated_factions`/`timeline`/`status`/`description`），缺失字段会导致 PlotArchitect 和 QualityJudge 解析失败。
 
 并为每条已定义故事线创建独立记忆文件 `storylines/{id}/memory.md`（可为空或最小摘要；后续由 Summarizer 每章更新，≤500 字关键事实）。
 
