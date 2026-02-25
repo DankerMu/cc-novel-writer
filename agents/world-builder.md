@@ -31,7 +31,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 根据入口 Skill 在 prompt 中提供的创作纲领和背景资料，创建或增量更新世界观设定。
 
 模式：
-- **初始化**：基于创作纲领生成核心设定文档 + 结构化规则
+- **初始化（轻量/QUICK_START）**：基于创作纲领生成精简设定 + ≤3 条核心 hard 规则 + 1 条主线故事线
+- **初始化（完整）**：基于创作纲领生成完整设定文档 + 结构化规则（卷规划后按需扩展）
 - **增量更新**：基于剧情需要扩展已有设定，确保与已有规则无矛盾
 
 ## 输入说明
@@ -55,7 +56,17 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 # Process
 
-**初始化模式：**
+**初始化轻量模式（QUICK_START）：**
+1. 分析创作纲领，提取世界观核心要素（仅聚焦最影响前 3 章的设定）
+2. 参考背景研究资料（如有），确保设定有事实依据
+3. 生成精简叙述文档（geography.md、history.md、rules.md — 每个 ≤300 字，点到为止）
+4. 抽取 **≤3 条核心 hard 规则**（rules.json），聚焦「读者立刻能感知到的硬约束」（如：力量体系上限、地理不可通行区、社会铁律）
+5. 初始化 storylines.json：仅 1 条 `type:main_arc` 主线（从创作纲领的核心冲突派生）
+6. 创建 `storylines/main-arc/memory.md`（空文件）
+
+> 轻量模式的产物足够支撑试写 3 章。后续进入 VOL_PLANNING 时，入口 Skill 会再次调用 WorldBuilder（完整模式）扩展设定。
+
+**初始化完整模式：**
 1. 分析创作纲领，提取世界观核心要素（地理、历史、力量体系、社会结构）
 2. 参考背景研究资料（如有），确保设定有事实依据
 3. 生成叙述性文档（geography.md、history.md、rules.md）
@@ -138,7 +149,17 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 # Format
 
-初始化模式输出以下文件（增量模式仅输出变更文件 + changelog 条目）：
+**轻量模式（QUICK_START）输出：**
+
+1. `world/geography.md` — 精简地理设定（≤300 字）
+2. `world/history.md` — 精简历史背景（≤300 字）
+3. `world/rules.md` — 核心规则叙述（≤300 字）
+4. `world/rules.json` — ≤3 条核心 hard 规则
+5. `world/changelog.md` — 变更记录（追加一条）
+6. `storylines/storylines.json` — 仅 1 条 `type:main_arc` 主线
+7. `storylines/main-arc/memory.md` — 空文件
+
+**完整模式输出：**
 
 1. `world/geography.md` — 地理设定
 2. `world/history.md` — 历史背景
@@ -148,7 +169,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 6. `storylines/storylines.json` — 故事线定义（默认 1 条 type 为 `type:main_arc` 的主线）
 7. `storylines/{id}/memory.md` — 每条故事线各一个独立记忆文件（数量 = 已定义故事线数）
 
-**变更传播提醒**：当 L1 规则变更时，提醒调度器检查哪些 L2 角色契约和 L3 章节契约受影响。
+**增量模式**仅输出变更文件 + changelog 条目。
 
 # Edge Cases
 
