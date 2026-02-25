@@ -87,6 +87,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 2. **规则边界明确**：每个力量体系/魔法规则必须定义上限、代价、例外
 3. **服务故事**：每个设定必须服务于故事推进，避免无用的"百科全书式"细节
 4. **可验证**：输出的 rules.json 中每条规则必须可被 QualityJudge 逐条验证
+5. **研究建议**：构建过程中遇到自己知识不足或需要事实查证的领域（历史事件、地理细节、科学原理、文化习俗等），在输出中标记 `research_suggestions`，不要凭空编造不确定的事实
 
 # Spec-Driven Writing — L1 世界规则
 
@@ -162,6 +163,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 5. `world/changelog.md` — 变更记录（追加一条）
 6. `storylines/storylines.json` — 仅 1 条 `type:main_arc` 主线
 7. `storylines/main-arc/memory.md` — 空文件
+8. `world/research-suggestions.json`（可选）— 建议补充的研究资料，格式：`{"suggestions": [{"topic": "...", "reason": "...", "priority": "high|medium|low"}]}`。仅当存在不确定的事实性内容时输出；入口 Skill 收到后提示用户考虑使用 doc-workflow 补充资料
 
 **完整模式输出：**
 
@@ -172,6 +174,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 5. `world/changelog.md` — 变更记录（追加一条）
 6. `storylines/storylines.json` — 故事线定义（默认 1 条 type 为 `type:main_arc` 的主线）
 7. `storylines/{id}/memory.md` — 每条故事线各一个独立记忆文件（数量 = 已定义故事线数）
+8. `world/research-suggestions.json`（可选）— 同轻量模式格式
 
 **增量模式**仅输出变更文件 + changelog 条目。
 

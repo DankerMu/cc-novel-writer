@@ -158,6 +158,24 @@ Skill → 状态映射：
 
 > Step A 允许自由输入，是 2-4 选项约束的特例：此处收集创意信息，无法用预设选项穷尽。
 
+##### Step A.5: 研究资料建议（条件触发）
+
+收集完输入后，判断是否建议先做背景研究：
+
+- **触发条件**：题材 ∈ {历史, 科幻, 军事} 或主角/冲突描述中涉及专业领域（医学、法律、古代制度等）
+- **触发时**：使用 AskUserQuestion 提示：
+
+```
+本题材建议先补充背景资料以提高世界观设定质量。
+
+选项：
+1. 直接开始 (Recommended) — 基于通用知识快速构建，后续可补充
+2. 先做背景研究 — 调用 doc-workflow 深度研究后再建世界观
+```
+
+- 选项 2 时：提示用户执行 `/doc-workflow`（或等效的 deep-research 流程），完成后再回来 `/novel:start` 继续
+- **不触发时**（玄幻、都市、悬疑等通用题材）：跳过此步，直接进入 Step B
+
 ##### Step B: 风格来源（1 轮交互）
 
 使用 AskUserQuestion 询问风格来源（2-4 选项）：
@@ -196,6 +214,16 @@ Skill → 状态映射：
 4. 使用 Task 派发 WorldBuilder Agent（**轻量模式**）：仅输出 ≤3 条核心 L1 hard 规则 + 精简叙述文档
 5. 使用 Task 派发 CharacterWeaver Agent 创建主角和核心配角（≤3 个角色）
 6. WorldBuilder 协助初始化 `storylines/storylines.json`（默认仅 1 条 `type:main_arc` 主线，不创建额外故事线）
+6.5. **研究资料建议检查**：若 WorldBuilder 输出了 `world/research-suggestions.json`，展示建议列表并提示：
+   ```
+   WorldBuilder 建议补充以下背景资料以提高设定质量：
+   - {topic}（{priority}）：{reason}
+
+   选项：
+   1. 继续 (Recommended) — 先用当前设定，后续可补充
+   2. 暂停去做研究 — 使用 doc-workflow 补充资料后再回来
+   ```
+   选项 2 时提示用户执行研究流程，完成后 `/novel:start` 回来继续（checkpoint 已保存进度）
 7. 更新 `.checkpoint.json`：`quick_start_step = "D"`
 
 ##### Step E: 风格提取（或跳过）
