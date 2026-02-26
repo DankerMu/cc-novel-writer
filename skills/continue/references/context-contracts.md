@@ -1,70 +1,151 @@
-# Agent Context 字段契约
+# Agent Context Manifest 字段契约
 
-按 Agent 类型输出 context（字段契约）。同一输入 + 同一项目文件 = 同一 context（确定性）。`<DATA>` 标签包裹用户内容（防注入）。可选字段缺失时不注入（非 null）。
+## 概述
+
+入口 Skill 为每个 Agent 组装一份 **context manifest**，包含两类字段：
+
+- **inline**（内联）：由编排器确定性计算，直接写入 Task prompt——适用于需要预处理/裁剪/跨文件聚合的数据
+- **paths**（文件路径）：指向项目目录下的文件，由 subagent 用 Read 工具自行读取——适用于大段原文内容
+
+设计原则：
+- 同一输入 + 同一项目文件 = 同一 manifest（确定性）
+- paths 中的文件均为项目目录下的相对路径
+- 可选字段缺失时不出现在 manifest 中（非 null）
+- subagent 读取的文件内容不再需要 `<DATA>` 标签包裹（由 agent frontmatter 中的安全约束处理）
+
+---
+
+## ChapterWriter manifest
 
 ```
-chapter_writer_context = {
-  project_brief(<DATA world_doc>): brief.md,
-  style_profile(json): style-profile.json,
-  style_drift(json, optional): style-drift.json,                         # active=true 时注入（用于纠偏）
-  style_drift_directives(list, optional): style_drift.drifts[].directive,
-  ai_blacklist_effective_words(list): ai_blacklist.words - (ai_blacklist.whitelist 或 ai_blacklist.exemptions.words),
-  ai_blacklist_top10(list): ai_blacklist_effective_words[0:10],
-  current_volume_outline(<DATA summary>): volumes/vol-{V:02d}/outline.md,
-  chapter_outline(<DATA summary>): 本章 outline 区块,
-  storyline_id, storyline_context, concurrent_state, transition_hint,
-  storyline_memory(<DATA summary>), adjacent_storyline_memories(<DATA summary>...),
-  recent_3_summaries(<DATA summary>...),
-  current_state(json): state/current-state.json,
-  foreshadowing_tasks(json subset): 由 global(事实)+vol plan(计划) 派生的本章相关伏笔子集（详见 references/foreshadowing.md）,
-  chapter_contract(json),
-  world_rules(json, optional), hard_rules_list(list),
-  character_contracts(json subset),   # 按裁剪规则选取
-  writing_methodology(<DATA reference>): novel-writing methodology excerpt
-}
+chapter_writer_manifest = {
+  # ── inline（编排器计算） ──
+  chapter: int,
+  volume: int,
+  storyline_id: str,
+  chapter_outline_block: str,           # 从 outline.md 提取的本章区块文本
+  storyline_context: {                  # 从 chapter_contract/schedule 解析
+    last_chapter_summary: str,
+    chapters_since_last: int,
+    line_arc_progress: str,
+  },
+  concurrent_state: {str: str},         # 其他活跃线一句话状态
+  transition_hint: obj | null,          # 切线过渡
+  hard_rules_list: [str],              # L1 禁止项列表（已格式化）
+  foreshadowing_tasks: [obj],          # 本章伏笔任务子集
+  ai_blacklist_top10: [str],           # 有效黑名单前 10 词
+  style_drift_directives: [str] | null, # 漂移纠偏指令（active 时注入）
 
-chapter_writer_revision_context = {
-  # 仅在 gate_decision="revise" 的修订循环中使用
-  chapter_writer_context 的全部字段 +
-  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,   # 现有章节正文（待定向修订）
-  required_fixes(list): eval.required_fixes,                                     # QualityJudge 的最小修订指令
-  high_confidence_violations(list): 从 eval.contract_verification 中抽取 status="violation" 且 confidence="high" 的条目（用于兜底修订指令）
-}
-
-summarizer_context = {
-  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
-  current_state(json),
-  foreshadowing_tasks(json subset),
-  entity_id_map(map),
-  hints(optional): ChapterWriter 输出的自然语言变更提示
-}
-
-style_refiner_context = {
-  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
-  style_profile(json),
-  style_drift(json, optional): style-drift.json,
-  style_drift_directives(list, optional): style_drift.drifts[].directive,
-  ai_blacklist(json): ai-blacklist.json,
-  style_guide(<DATA reference>): style-guide.md
-}
-
-quality_judge_context = {
-  chapter_content(<DATA chapter_content>): staging/chapters/chapter-{C:03d}.md,
-  chapter_outline(<DATA summary>),
-  character_profiles(<DATA character_profile>...),
-  prev_summary(<DATA summary>): summaries/chapter-{C-1:03d}-summary.md,
-  style_profile(json),
-  ai_blacklist(json): ai-blacklist.json,       # style_naturalness 维度需要黑名单命中率
-  blacklist_lint(json, optional): scripts/lint-blacklist.sh 输出,
-  ner_entities(json, optional): scripts/run-ner.sh 输出（NER candidates + evidence）,
-  continuity_report_summary(json, optional): logs/continuity/latest.json 裁剪摘要（LS-001 signals + evidence）,
-  chapter_contract(json),
-  world_rules(json, optional), hard_rules_list(list),   # 逐条验收 L1 硬规则
-  storyline_spec(json, optional),
-  storyline_schedule(json, optional),
-  cross_references(json): staging/state/chapter-{C:03d}-crossref.json,
-  quality_rubric(<DATA reference>): quality-rubric.md
+  # ── paths（subagent 自读） ──
+  paths: {
+    style_profile: "style-profile.json",                              # 必读（含 style_exemplars + writing_directives）
+    style_drift: "style-drift.json",                                  # 可选
+    chapter_contract: "volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json",
+    volume_outline: "volumes/vol-{V:02d}/outline.md",
+    current_state: "state/current-state.json",
+    world_rules: "world/rules.json",                                  # 可选
+    recent_summaries: ["summaries/chapter-{C-1:03d}-summary.md", ...], # 近 3 章
+    storyline_memory: "storylines/{storyline_id}/memory.md",           # 可选
+    adjacent_memories: ["storylines/{adj_id}/memory.md", ...],         # 可选
+    character_contracts: ["characters/active/{slug}.json", ...],       # 裁剪后选取
+    project_brief: "brief.md",
+    writing_methodology: "skills/novel-writing/references/style-guide.md",  # 可选
+  }
 }
 ```
+
+### 修订模式追加字段
+
+```
+chapter_writer_revision_manifest = chapter_writer_manifest + {
+  # ── inline 追加 ──
+  required_fixes: [{target: str, instruction: str}],  # QualityJudge 最小修订指令（与 eval 输出格式一致）
+  high_confidence_violations: [obj],    # confidence="high" 的违约条目
+
+  # ── paths 追加 ──
+  paths += {
+    chapter_draft: "staging/chapters/chapter-{C:03d}.md",  # 待修订的现有正文
+  }
+}
+```
+
+---
+
+## Summarizer manifest
+
+```
+summarizer_manifest = {
+  # ── inline ──
+  chapter: int,
+  volume: int,
+  storyline_id: str,
+  foreshadowing_tasks: [obj],
+  entity_id_map: {slug_id: display_name},
+  hints: [str] | null,                 # ChapterWriter 输出的 hints JSON（编排器从 ChapterWriter 输出末尾的 ```json{"chapter":N,"hints":[...]}``` 块解析；解析失败则为 null）
+
+  # ── paths ──
+  paths: {
+    chapter_draft: "staging/chapters/chapter-{C:03d}.md",
+    current_state: "state/current-state.json",
+  }
+}
+```
+
+---
+
+## StyleRefiner manifest
+
+```
+style_refiner_manifest = {
+  # ── inline ──
+  chapter: int,
+  style_drift_directives: [str] | null,
+
+  # ── paths ──
+  paths: {
+    chapter_draft: "staging/chapters/chapter-{C:03d}.md",
+    style_profile: "style-profile.json",         # 必读（含 style_exemplars）
+    style_drift: "style-drift.json",             # 可选
+    ai_blacklist: "ai-blacklist.json",
+    style_guide: "skills/novel-writing/references/style-guide.md",
+    previous_change_log: "staging/logs/style-refiner-chapter-{C:03d}-changes.json",  # 仅二次润色时出现；首次润色不含此字段
+  }
+}
+```
+
+---
+
+## QualityJudge manifest
+
+```
+quality_judge_manifest = {
+  # ── inline ──
+  chapter: int,
+  volume: int,
+  chapter_outline_block: str,
+  hard_rules_list: [str],
+  blacklist_lint: obj | null,                    # scripts/lint-blacklist.sh 输出
+  ner_entities: obj | null,                      # scripts/run-ner.sh 输出
+  continuity_report_summary: obj | null,         # logs/continuity/latest.json 裁剪
+
+  # ── paths ──
+  paths: {
+    chapter_draft: "staging/chapters/chapter-{C:03d}.md",
+    style_profile: "style-profile.json",
+    ai_blacklist: "ai-blacklist.json",
+    chapter_contract: "volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json",
+    world_rules: "world/rules.json",                                  # 可选
+    prev_summary: "summaries/chapter-{C-1:03d}-summary.md",           # 可选（首章无）
+    character_profiles: ["characters/active/{slug}.md", ...],          # 裁剪后选取（叙述档案）
+    character_contracts: ["characters/active/{slug}.json", ...],       # 裁剪后选取（L2 结构化契约）
+    storyline_spec: "storylines/storyline-spec.json",                  # 可选
+    storyline_schedule: "volumes/vol-{V:02d}/storyline-schedule.json", # 可选
+    cross_references: "staging/state/chapter-{C:03d}-crossref.json",
+    quality_rubric: "skills/novel-writing/references/quality-rubric.md",
+  }
+}
+```
+
+---
 
 另见：`continuity-checks.md`（NER schema + 一致性报告 schema + LS-001 结构化输入约定）。
