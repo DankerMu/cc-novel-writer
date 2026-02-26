@@ -146,8 +146,8 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
   - 排序规则：`last_seen_chapter` 降序 → `slug_id` 升序（保证确定性）
 
 加载内容：
-- `character_contracts`：读取 `characters/active/{slug_id}.json` 的 `contracts`（注入给 ChapterWriter / QualityJudge）
-- `character_profiles`：读取 `characters/active/{slug_id}.md`（如存在，用 `<DATA type="character_profile" ...>` 注入给 QualityJudge）
+- `character_contracts`：记录 `characters/active/{slug_id}.json` 路径列表（写入 manifest.paths.character_contracts）
+- `character_profiles`：记录 `characters/active/{slug_id}.md` 路径列表（如存在；写入 QualityJudge manifest.paths.character_profiles）
 
 #### Step 2.5: storylines context + memory 注入（确定性）
 
@@ -161,12 +161,12 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
    - `storyline_id`（本章所属线）
    - `storyline_context`（含 `last_chapter_summary` / `chapters_since_last` / `line_arc_progress` / `concurrent_state`）
    - `transition_hint`（如存在）
-5. memory 注入策略：
-   - 当前线 `storylines/{storyline_id}/memory.md`：如存在，必注入（`<DATA type="summary" source=".../memory.md" readonly="true">`）
+5. memory 路径策略：
+   - 当前线 `storylines/{storyline_id}/memory.md`：如存在，写入 manifest.paths.storyline_memory
    - 相邻线：
-     - 若 `transition_hint.next_storyline` 存在 → 注入该线 memory（若不在 `dormant_storylines`）
-   - 若当前章落在任一 `convergence_events.chapter_range` 内 → 注入 `involved_storylines` 中除当前线外的 memory（过滤 `dormant_storylines`）
-   - 冻结线（`dormant_storylines`）：**不注入 memory**，仅保留 `concurrent_state` 一句话状态
+     - 若 `transition_hint.next_storyline` 存在 → 将该线 memory 路径加入 manifest.paths.adjacent_memories（若不在 `dormant_storylines`）
+   - 若当前章落在任一 `convergence_events.chapter_range` 内 → 将 `involved_storylines` 中除当前线外的 memory 路径加入 manifest.paths.adjacent_memories（过滤 `dormant_storylines`）
+   - 冻结线（`dormant_storylines`）：**不加入 memory 路径**，仅保留 `concurrent_state` 一句话状态（inline）
 6. `foreshadowing_tasks` 组装（确定性）：
    - 数据来源：
      - 事实层：`foreshadowing/global.json`（如不存在则视为空）
