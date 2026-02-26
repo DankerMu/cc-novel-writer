@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { NovelCliError } from "./errors.js";
 import type { Checkpoint } from "./checkpoint.js";
 import { pathExists, readJsonFile, readTextFile } from "./fs-utils.js";
+import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, formatStepId, type Step } from "./steps.js";
 
 export type ValidateReport = {
@@ -62,6 +63,7 @@ export async function validateStep(args: { rootDir: string; checkpoint: Checkpoi
     const chapter = requireNumberField(delta, "chapter", rel.staging.deltaJson);
     if (chapter !== args.step.chapter) warnings.push(`Delta.chapter is ${chapter}, expected ${args.step.chapter}.`);
     const storylineId = requireStringField(delta, "storyline_id", rel.staging.deltaJson);
+    rejectPathTraversalInput(storylineId, "delta.storyline_id");
     const memoryRel = chapterRelPaths(args.step.chapter, storylineId).staging.storylineMemoryMd;
     if (!memoryRel) throw new NovelCliError(`Internal error: storyline memory path is null`, 2);
     requireFile(await pathExists(join(args.rootDir, memoryRel)), memoryRel);
@@ -98,4 +100,3 @@ export async function validateStep(args: { rootDir: string; checkpoint: Checkpoi
 
   throw new NovelCliError(`Unsupported step: ${stepId}`, 2);
 }
-

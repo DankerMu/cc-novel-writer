@@ -5,6 +5,7 @@ import { readCheckpoint, type Checkpoint, writeCheckpoint } from "./checkpoint.j
 import { NovelCliError } from "./errors.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { withWriteLock } from "./lock.js";
+import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, pad2 } from "./steps.js";
 
 type CommitArgs = {
@@ -344,6 +345,13 @@ async function doRename(rootDir: string, fromRel: string, toRel: string): Promis
   }
 }
 
+async function rollbackRename(rootDir: string, fromRel: string, toRel: string): Promise<void> {
+  const fromAbs = join(rootDir, fromRel);
+  const toAbs = join(rootDir, toRel);
+  await ensureDir(dirname(toAbs));
+  await rename(fromAbs, toAbs);
+}
+
 async function ensureFilePresent(rootDir: string, relPath: string): Promise<void> {
   const abs = join(rootDir, relPath);
   if (!(await pathExists(abs))) throw new NovelCliError(`Missing required file: ${relPath}`, 2);
@@ -382,6 +390,8 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   if (delta.chapter !== args.chapter) {
     warnings.push(`Delta.chapter is ${delta.chapter}, expected ${args.chapter}.`);
   }
+
+  rejectPathTraversalInput(delta.storyline_id, "delta.storyline_id");
 
   const memoryRel = chapterRelPaths(args.chapter, delta.storyline_id).staging.storylineMemoryMd;
   if (!memoryRel) throw new NovelCliError(`Internal error: storyline memory path is null`, 2);
@@ -434,7 +444,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       // Roll back moved files (best-effort).
       for (const m of moved.slice().reverse()) {
         try {
-          await doRename(args.rootDir, m.to, m.from);
+          await rollbackRename(args.rootDir, m.to, m.from);
         } catch {
           // ignore
         }

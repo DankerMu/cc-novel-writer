@@ -1,5 +1,5 @@
 import type { Checkpoint, PipelineStage } from "./checkpoint.js";
-import { writeCheckpoint } from "./checkpoint.js";
+import { readCheckpoint, writeCheckpoint } from "./checkpoint.js";
 import { NovelCliError } from "./errors.js";
 import { withWriteLock } from "./lock.js";
 import type { Step } from "./steps.js";
@@ -21,30 +21,30 @@ function stageForStep(step: Step): PipelineStage {
   }
 }
 
-export async function advanceCheckpointForStep(args: { rootDir: string; checkpoint: Checkpoint; step: Step }): Promise<Checkpoint> {
-  // Enforce validate-before-advance to keep deterministic semantics.
-  await validateStep({ rootDir: args.rootDir, checkpoint: args.checkpoint, step: args.step });
-
+export async function advanceCheckpointForStep(args: { rootDir: string; step: Step }): Promise<Checkpoint> {
   if (args.step.kind !== "chapter") throw new NovelCliError(`Unsupported step kind: ${args.step.kind}`, 2);
   if (args.step.stage === "commit") throw new NovelCliError(`Use 'novel commit' for commit.`, 2);
 
-  const updated: Checkpoint = { ...args.checkpoint };
-  const nextStage = stageForStep(args.step);
+  return await withWriteLock(args.rootDir, { chapter: args.step.chapter }, async () => {
+    const checkpoint = await readCheckpoint(args.rootDir);
 
-  updated.pipeline_stage = nextStage;
-  updated.inflight_chapter = args.step.chapter;
+    // Enforce validate-before-advance to keep deterministic semantics.
+    await validateStep({ rootDir: args.rootDir, checkpoint, step: args.step });
 
-  // Reset revision counter when (re)starting a chapter from draft.
-  if (args.step.stage === "draft") {
-    if (typeof updated.revision_count !== "number") updated.revision_count = 0;
-  }
+    const updated: Checkpoint = { ...checkpoint };
+    const nextStage = stageForStep(args.step);
 
-  updated.last_checkpoint_time = new Date().toISOString();
+    updated.pipeline_stage = nextStage;
+    updated.inflight_chapter = args.step.chapter;
 
-  await withWriteLock(args.rootDir, { chapter: args.step.chapter }, async () => {
+    // Reset revision counter when (re)starting a chapter from draft.
+    if (args.step.stage === "draft") {
+      if (typeof updated.revision_count !== "number") updated.revision_count = 0;
+    }
+
+    updated.last_checkpoint_time = new Date().toISOString();
+
     await writeCheckpoint(args.rootDir, updated);
+    return updated;
   });
-
-  return updated;
 }
-

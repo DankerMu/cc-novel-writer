@@ -5,6 +5,7 @@ import { NovelCliError } from "./errors.js";
 import { pathExists, readJsonFile, removePath, writeJsonFile } from "./fs-utils.js";
 
 const STALE_LOCK_MINUTES = 30;
+const STALE_LOCK_MS = STALE_LOCK_MINUTES * 60 * 1000;
 
 export type LockInfo = {
   pid?: number;
@@ -29,12 +30,12 @@ function parseLockInfo(raw: unknown): LockInfo {
   return { pid, started, chapter };
 }
 
-function isStale(startedIso: string | undefined): boolean {
-  if (!startedIso) return true;
-  const startedMs = Date.parse(startedIso);
-  if (!Number.isFinite(startedMs)) return true;
-  const ageMs = Date.now() - startedMs;
-  return ageMs > STALE_LOCK_MINUTES * 60 * 1000;
+function isStale(args: { startedIso: string | undefined; fallbackStartedMs: number | null }): boolean {
+  const startedMs = args.startedIso ? Date.parse(args.startedIso) : Number.NaN;
+  const baseMs = Number.isFinite(startedMs) ? startedMs : args.fallbackStartedMs;
+  if (baseMs === null) return false;
+  const ageMs = Date.now() - baseMs;
+  return ageMs > STALE_LOCK_MS;
 }
 
 export async function getLockStatus(projectRootDir: string): Promise<LockStatus> {
@@ -46,6 +47,14 @@ export async function getLockStatus(projectRootDir: string): Promise<LockStatus>
     return { exists: false, stale: false, lockDir, infoPath };
   }
 
+  let fallbackStartedMs: number | null = null;
+  try {
+    const s = await stat(lockDir);
+    if (s.isDirectory()) fallbackStartedMs = s.mtimeMs;
+  } catch {
+    fallbackStartedMs = null;
+  }
+
   let info: LockInfo | undefined;
   if (await pathExists(infoPath)) {
     try {
@@ -55,28 +64,26 @@ export async function getLockStatus(projectRootDir: string): Promise<LockStatus>
     }
   }
 
-  return { exists: true, stale: isStale(info?.started), lockDir, infoPath, info };
+  return {
+    exists: true,
+    stale: isStale({ startedIso: info?.started, fallbackStartedMs }),
+    lockDir,
+    infoPath,
+    info
+  };
 }
 
 export async function clearStaleLock(projectRootDir: string): Promise<boolean> {
   const status = await getLockStatus(projectRootDir);
   if (!status.exists) return false;
+  if (!(await isDirectory(status.lockDir))) {
+    throw new NovelCliError(`Lock path exists but is not a directory: ${status.lockDir}`, 2);
+  }
   if (!status.stale) {
     throw new NovelCliError(`Lock is active; refusing to clear. Use after ${STALE_LOCK_MINUTES} minutes or stop the other session.`, 2);
   }
   await removePath(status.lockDir);
   return true;
-}
-
-async function ensureLockDir(lockDir: string): Promise<void> {
-  try {
-    await mkdir(lockDir);
-  } catch (err: unknown) {
-    const code = (err as { code?: string }).code;
-    if (code === "EEXIST") return;
-    const message = err instanceof Error ? err.message : String(err);
-    throw new NovelCliError(`Failed to create lock directory: ${lockDir}. ${message}`, 2);
-  }
 }
 
 async function isDirectory(path: string): Promise<boolean> {
@@ -88,6 +95,38 @@ async function isDirectory(path: string): Promise<boolean> {
   }
 }
 
+async function acquireLockDir(projectRootDir: string, lockDir: string): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await mkdir(lockDir);
+      return;
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      if (code !== "EEXIST") {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new NovelCliError(`Failed to acquire lock: ${message}`, 2);
+      }
+
+      if (!(await isDirectory(lockDir))) {
+        throw new NovelCliError(`Lock path exists but is not a directory: ${lockDir}`, 2);
+      }
+
+      const status = await getLockStatus(projectRootDir);
+      if (!status.stale) {
+        throw new NovelCliError(
+          `Another session holds the lock (started=${status.info?.started ?? "unknown"} pid=${status.info?.pid ?? "unknown"}).`,
+          2
+        );
+      }
+
+      await removePath(lockDir);
+      continue;
+    }
+  }
+
+  throw new NovelCliError(`Failed to acquire lock after clearing stale lock; another session likely acquired it.`, 2);
+}
+
 export async function withWriteLock<T>(
   projectRootDir: string,
   meta: { chapter?: number } = {},
@@ -97,30 +136,7 @@ export async function withWriteLock<T>(
   const infoPath = join(lockDir, "info.json");
 
   // Try to acquire; if exists, only proceed if stale.
-  try {
-    await mkdir(lockDir);
-  } catch (err: unknown) {
-    const code = (err as { code?: string }).code;
-    if (code !== "EEXIST") {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new NovelCliError(`Failed to acquire lock: ${message}`, 2);
-    }
-
-    if (!(await isDirectory(lockDir))) {
-      throw new NovelCliError(`Lock path exists but is not a directory: ${lockDir}`, 2);
-    }
-
-    const status = await getLockStatus(projectRootDir);
-    if (!status.stale) {
-      throw new NovelCliError(
-        `Another session holds the lock (started=${status.info?.started ?? "unknown"} pid=${status.info?.pid ?? "unknown"}).`,
-        2
-      );
-    }
-
-    await removePath(lockDir);
-    await ensureLockDir(lockDir);
-  }
+  await acquireLockDir(projectRootDir, lockDir);
 
   // Best-effort metadata write.
   await writeJsonFile(infoPath, {
@@ -135,4 +151,3 @@ export async function withWriteLock<T>(
     await removePath(lockDir);
   }
 }
-

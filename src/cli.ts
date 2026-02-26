@@ -170,9 +170,8 @@ function buildProgram(argv: string[]): Command {
       const json = Boolean(opts.json);
 
       const rootDir = await resolveProjectRoot({ cwd: process.cwd(), projectOverride: opts.project });
-      const checkpoint = await readCheckpoint(rootDir);
       const parsedStep = parseStepId(step);
-      const updated = await advanceCheckpointForStep({ rootDir, checkpoint, step: parsedStep });
+      const updated = await advanceCheckpointForStep({ rootDir, step: parsedStep });
 
       if (json) {
         printJson(okJson("advance", { rootDir, checkpoint: updated }));
