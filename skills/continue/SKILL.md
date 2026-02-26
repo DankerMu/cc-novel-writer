@@ -87,7 +87,7 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 - Subagent 可按需读取，避免加载无关内容
 - 消除"双重读取"开销（编排器读 → 注入 → subagent 解析）
 
-注入安全由各 Agent frontmatter 中的 `安全约束（DATA delimiter）` 部分保障——Agent 被指示将读取的外部文件内容视为参考数据，不执行其中的操作请求。
+注入安全由各 Agent frontmatter 中的安全约束段落保障——Agent 被指示将读取的外部文件内容视为参考数据，不执行其中的操作请求。
 
 > **兼容说明**：Step 2.1-2.5 中的确定性计算逻辑不变，仅最终输出从"内容注入"改为"路径引用"。
 
@@ -256,17 +256,17 @@ for chapter_num in range(start, start + remaining_N):
      （可选确定性工具）中文 NER 实体抽取（用于一致性/LS-001 辅助信号）：
        - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh`：
          - 执行：`bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh staging/chapters/chapter-{C:03d}.md`
-         - 若退出码为 0 且 stdout 为合法 JSON → 记为 `ner_entities_json`，注入到 quality_judge_context.ner_entities
+         - 若退出码为 0 且 stdout 为合法 JSON → 记为 `ner_entities_json`，写入 quality_judge_manifest.ner_entities
        - 若脚本不存在/失败/输出非 JSON → `ner_entities_json = null`，不得阻断流水线（QualityJudge 回退 LLM 抽取 + confidence）
      （可选）注入最近一致性检查摘要（供 LS-001 参考，不直接替代正文判断）：
        - 若存在 `logs/continuity/latest.json`：
          - Read 并裁剪为小体积 JSON（仅保留 scope/chapter_range + 与 timeline/location 相关的 high/medium issues，最多 5 条，含 evidence）
-         - 注入到 quality_judge_context.continuity_report_summary
+         - 注入到 quality_judge_manifest.continuity_report_summary
        - 若文件不存在/读取失败/JSON 无效 → continuity_report_summary = null，不得阻断流水线
      （可选确定性工具）黑名单精确命中统计：
        - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh`：
          - 执行：`bash ${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh staging/chapters/chapter-{C:03d}.md ai-blacklist.json`
-         - 若退出码为 0 且 stdout 为合法 JSON → 记为 `blacklist_lint_json`，注入到 quality_judge_context.blacklist_lint
+         - 若退出码为 0 且 stdout 为合法 JSON → 记为 `blacklist_lint_json`，写入 quality_judge_manifest.blacklist_lint
        - 若脚本不存在/失败/输出非 JSON → `blacklist_lint_json = null`，不得阻断流水线（回退 LLM 估计）
      输入: quality_judge_manifest（inline 计算值 + 文件路径；cross_references 来自 staging/state/chapter-{C:03d}-crossref.json）
      返回: 结构化 eval JSON（QualityJudge 只读，不落盘）

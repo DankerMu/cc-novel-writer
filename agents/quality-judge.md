@@ -60,7 +60,8 @@ tools: ["Read", "Glob", "Grep"]
 - `paths.chapter_contract` → L3 章节契约 JSON
 - `paths.world_rules` → L1 世界规则（可选）
 - `paths.prev_summary` → 前一章摘要（可选，首章无）
-- `paths.character_profiles[]` → 相关角色档案（.md）
+- `paths.character_profiles[]` → 相关角色叙述档案（.md，用于角色一致性评估）
+- `paths.character_contracts[]` → 相关角色结构化契约（.json，含 L2 能力边界和行为模式）
 - `paths.storyline_spec` → 故事线规范（可选）
 - `paths.storyline_schedule` → 本卷故事线调度（可选）
 - `paths.cross_references` → Summarizer 串线检测输出
@@ -71,7 +72,7 @@ tools: ["Read", "Glob", "Grep"]
 **Spec-Driven 输入**（通过 paths 读取，如存在）：
 - 章节契约（L3，含 preconditions / objectives / postconditions / acceptance_criteria）
 - 世界规则（L1，hard 规则另见 inline 的 hard_rules_list）
-- 角色契约（L2，从 character_profiles 中的 .json 读取 contracts 部分）
+- 角色契约（L2，从 `paths.character_contracts[]` 的 .json 中读取 contracts 部分）
 
 # 双轨验收流程
 

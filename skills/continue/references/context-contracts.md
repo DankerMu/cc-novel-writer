@@ -59,7 +59,7 @@ chapter_writer_manifest = {
 ```
 chapter_writer_revision_manifest = chapter_writer_manifest + {
   # ── inline 追加 ──
-  required_fixes: [str],                # QualityJudge 最小修订指令
+  required_fixes: [{target: str, instruction: str}],  # QualityJudge 最小修订指令（与 eval 输出格式一致）
   high_confidence_violations: [obj],    # confidence="high" 的违约条目
 
   # ── paths 追加 ──
@@ -81,7 +81,7 @@ summarizer_manifest = {
   storyline_id: str,
   foreshadowing_tasks: [obj],
   entity_id_map: {slug_id: display_name},
-  hints: [str] | null,                 # ChapterWriter 输出的变更提示
+  hints: [str] | null,                 # ChapterWriter 输出的 hints JSON（编排器从 ChapterWriter 输出末尾的 ```json{"chapter":N,"hints":[...]}``` 块解析；解析失败则为 null）
 
   # ── paths ──
   paths: {
@@ -108,7 +108,7 @@ style_refiner_manifest = {
     style_drift: "style-drift.json",             # 可选
     ai_blacklist: "ai-blacklist.json",
     style_guide: "skills/novel-writing/references/style-guide.md",
-    previous_change_log: null,                   # 二次润色时填入上次日志路径
+    previous_change_log: "staging/logs/style-refiner-chapter-{C:03d}-changes.json",  # 仅二次润色时出现；首次润色不含此字段
   }
 }
 ```
@@ -136,7 +136,8 @@ quality_judge_manifest = {
     chapter_contract: "volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json",
     world_rules: "world/rules.json",                                  # 可选
     prev_summary: "summaries/chapter-{C-1:03d}-summary.md",           # 可选（首章无）
-    character_profiles: ["characters/active/{slug}.md", ...],          # 裁剪后选取
+    character_profiles: ["characters/active/{slug}.md", ...],          # 裁剪后选取（叙述档案）
+    character_contracts: ["characters/active/{slug}.json", ...],       # 裁剪后选取（L2 结构化契约）
     storyline_spec: "storylines/storyline-spec.json",                  # 可选
     storyline_schedule: "volumes/vol-{V:02d}/storyline-schedule.json", # 可选
     cross_references: "staging/state/chapter-{C:03d}-crossref.json",

@@ -275,7 +275,16 @@ Skill → 状态映射：
 
 ##### Step F: 试写 3 章
 
-10. 使用 Task 逐章派发试写流水线（共 3 章），每章按完整流水线执行：ChapterWriter → Summarizer → StyleRefiner → QualityJudge（**简化 context 模式**：无 volume_outline/chapter_outline/chapter_contract，仅使用 brief + world + characters + style_profile；ChapterWriter 根据 brief 自由发挥前 3 章情节。Summarizer 正常生成摘要 + state delta + memory，确保后续写作有 context 基础。QualityJudge 跳过 L3 章节契约检查和 LS 故事线检查）
+10. 使用 Task 逐章派发试写流水线（共 3 章），每章按完整流水线执行：ChapterWriter → Summarizer → StyleRefiner → QualityJudge。采用 **context manifest 模式**（与 `/novel:continue` 一致），但以下字段缺省处理：
+    - `chapter_outline_block`：无 outline，传空字符串（ChapterWriter 根据 brief 自由发挥）
+    - `paths.chapter_contract`：不传（试写无 L3 契约）
+    - `paths.volume_outline`：不传
+    - `hard_rules_list`：从 `world/rules.json` 正常提取（若已创建）
+    - `foreshadowing_tasks`：空数组
+    - `storyline_context`：使用默认值（`last_chapter_summary: "", chapters_since_last: 0, line_arc_progress: "开篇"`）
+    - 其余 manifest 字段正常组装（style_profile, character_contracts, current_state 等）
+    - QualityJudge 跳过 L3 章节契约检查和 LS 故事线检查
+    - Summarizer 正常生成摘要 + state delta + memory，确保后续写作有 context 基础
 11. 更新 `.checkpoint.json`：`quick_start_step = "F"`
 
 ##### Step G: 展示结果 + 明确下一步

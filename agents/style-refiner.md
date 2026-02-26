@@ -57,7 +57,7 @@ tools: ["Read", "Write", "Edit", "Glob"]
 逐项执行润色检查清单：
 
 0. **读取文件**：按读取优先级依次 Read manifest 中的文件路径
-0.5. **风格参照建立**：阅读 `style_exemplars`，建立目标风格的节奏和质感感知。润色替换时，替代表达应向 exemplar 的风格靠拢，而非仅”避免 AI 感”
+0.5. **风格参照建立**：阅读 `style_exemplars`，建立目标风格的节奏和质感感知。润色替换时，替代表达应向 exemplar 的风格靠拢，而非仅”避免 AI 感”。若 `style_exemplars` 为空或缺失（旧项目），退化为按 `avg_sentence_length` / `rhetoric_preferences` 等统计指标引导替换方向
 1. 若收到 `style_drift_directives[]`：将其视为”正向纠偏”提示，优先通过**句式节奏**（拆分/合并句子、段落节奏、对话排版可读性）实现；不得新增对白或改写情节以”硬凑对话比例”
 2. 扫描全文，标记所有黑名单命中（忽略 ai-blacklist.json 中被 whitelist/exemptions 豁免的词条）
 3. 逐个替换，确保替代词符合上下文和风格指纹
@@ -83,7 +83,7 @@ tools: ["Read", "Write", "Edit", "Glob"]
 
 # Format
 
-**写入路径**：读取 `staging/` 中的初稿，润色结果写回 `staging/`（由入口 Skill 通过 Task prompt 指定 write_prefix）。正式目录由入口 Skill 在 commit 阶段统一移入。M2 PreToolUse hook 强制执行此约束。
+**写入路径**：读取 manifest 中 `paths.chapter_draft` 的初稿，润色结果写回同路径（覆盖）。修改日志写入 `staging/logs/style-refiner-chapter-{C:03d}-changes.json`（二次润色时编排器通过 `paths.previous_change_log` 传入上次日志路径）。正式目录由入口 Skill 在 commit 阶段统一移入。
 
 输出两部分：
 

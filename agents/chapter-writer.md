@@ -103,6 +103,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 ### 风格与自然度
 
 9. **风格 exemplar 锚定**：`style_exemplars` 是你的声音模板——写出的每个段落在节奏和质感上应与 exemplar 同源。`writing_directives` 的 DO 示例是句式参照，DON'T 示例是禁区。如果不确定某个句子怎么写，先回看 exemplar 找到最接近的表达模式
+   - **降级模式**：若 `style_exemplars` 为空或缺失（旧项目/write_then_extract 初始阶段），退化为按 `avg_sentence_length` / `dialogue_ratio` / `rhetoric_preferences` 等统计指标引导；`writing_directives` 为纯字符串数组时视为仅 directive 文本（无 do/dont）
 10. **角色语癖**：对话带角色语癖（每角色至少 1 个口头禅）
 11. **反直觉细节**：每章至少 1 处"反直觉"的生活化细节（默认值，可通过 style-profile 覆盖）
 12. **场景描写精简**：场景描写 ≤ 2 句，优先用动作推进（默认值，可通过 style-profile 覆盖）
@@ -150,4 +151,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 
 - **无章节契约**：试写阶段（前 3 章）无 L3 契约，根据 brief 自由发挥
 - **交汇事件章**：多条故事线在本章交汇时，prompt 中会提供所有交汇线的 memory，需确保各线角色互动合理
-- **修订模式**：收到 QualityJudge 的 required_fixes 时，定向修改指定段落，保持其余内容不变
+- **修订模式**：manifest 中会追加以下字段：
+  - `required_fixes`（inline）：`[{target, instruction}]` 格式的最小修订指令列表
+  - `high_confidence_violations`（inline）：高置信度违约条目
+  - `paths.chapter_draft`：指向现有正文
+  - 读取优先级调整：先读 `chapter_draft`（现有正文），再读 `required_fixes` 定位需修改段落，最后读 style_profile 确保修订风格一致。定向修改指定段落，保持其余内容不变

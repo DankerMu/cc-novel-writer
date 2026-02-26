@@ -25,7 +25,7 @@ else:
 - 若 gate_decision="revise" 且 revision_count < 2：
   - 更新 checkpoint: orchestrator_state="CHAPTER_REWRITE", pipeline_stage="revising", revision_count += 1
   - 调用 ChapterWriter 修订模式（Task(subagent_type="chapter-writer", model="opus")）：
-    - 输入: chapter_writer_revision_context
+    - 输入: chapter_writer_revision_manifest（在 chapter_writer_manifest 基础上追加 inline 字段 `required_fixes` + `high_confidence_violations`，paths 追加 `chapter_draft` 指向 staging 中的现有正文）
     - 修订指令：以 eval.required_fixes 作为最小修订指令；若 required_fixes 为空，则用 high_confidence_violations 生成 3-5 条最小修订指令兜底；若两者均为空（score 3.0-3.4 无 violation 触发），则从 eval 的 8 维度中取最低分 2 个维度的 feedback 作为修订方向
     - 约束：定向修改 required_fixes 指定段落，尽量保持其余内容不变
   - 回到步骤 2 重新走 Summarizer -> StyleRefiner -> QualityJudge -> 门控（保证摘要/state/crossref 与正文一致）
