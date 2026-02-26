@@ -1,0 +1,546 @@
+import { appendFile, rename, stat, truncate, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+
+import { readCheckpoint, type Checkpoint, writeCheckpoint } from "./checkpoint.js";
+import { NovelCliError } from "./errors.js";
+import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
+import { withWriteLock } from "./lock.js";
+import { chapterRelPaths, pad2 } from "./steps.js";
+
+type CommitArgs = {
+  rootDir: string;
+  chapter: number;
+  dryRun: boolean;
+};
+
+export type CommitResult = {
+  plan: string[];
+  warnings: string[];
+};
+
+type StateFile = Record<string, unknown> & {
+  schema_version: number;
+  state_version: number;
+  last_updated_chapter: number;
+};
+
+type DeltaFile = Record<string, unknown> & {
+  chapter: number;
+  base_state_version: number;
+  storyline_id: string;
+  ops: unknown[];
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requireInt(field: string, value: unknown, file: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) throw new NovelCliError(`Invalid ${file}: '${field}' must be an int.`, 2);
+  return value;
+}
+
+function requireString(field: string, value: unknown, file: string): string {
+  if (typeof value !== "string" || value.length === 0) throw new NovelCliError(`Invalid ${file}: '${field}' must be a non-empty string.`, 2);
+  return value;
+}
+
+function loadStateInit(): StateFile {
+  return {
+    schema_version: 1,
+    state_version: 0,
+    last_updated_chapter: 0,
+    characters: {},
+    world_state: {},
+    active_foreshadowing: []
+  };
+}
+
+async function readState(rootDir: string, relPath: string): Promise<StateFile> {
+  const abs = join(rootDir, relPath);
+  if (!(await pathExists(abs))) return loadStateInit();
+  const raw = await readJsonFile(abs);
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid state file: ${relPath} must be an object.`, 2);
+  const obj = raw as Record<string, unknown>;
+  const schemaVersion = requireInt("schema_version", obj.schema_version, relPath);
+  const stateVersion = requireInt("state_version", obj.state_version, relPath);
+  const lastUpdated = requireInt("last_updated_chapter", obj.last_updated_chapter, relPath);
+  return { ...obj, schema_version: schemaVersion, state_version: stateVersion, last_updated_chapter: lastUpdated } as StateFile;
+}
+
+async function appendJsonl(rootDir: string, relPath: string, payload: unknown): Promise<void> {
+  const abs = join(rootDir, relPath);
+  await ensureDir(dirname(abs));
+  await appendFile(abs, `${JSON.stringify(payload)}\n`, "utf8");
+}
+
+function validateOps(ops: unknown[], warnings: string[]): Array<Record<string, unknown>> {
+  const allowedTop = new Set(["characters", "items", "locations", "factions", "world_state", "active_foreshadowing"]);
+  const out: Array<Record<string, unknown>> = [];
+
+  for (const opRaw of ops) {
+    if (!isPlainObject(opRaw)) {
+      warnings.push("Dropped non-object op entry.");
+      continue;
+    }
+    const op = opRaw as Record<string, unknown>;
+    const opType = op.op;
+    if (opType === "foreshadow") {
+      out.push(op);
+      continue;
+    }
+    if (opType !== "set" && opType !== "inc" && opType !== "add" && opType !== "remove") {
+      warnings.push(`Dropped invalid op type: ${String(opType)}`);
+      continue;
+    }
+
+    const path = op.path;
+    if (typeof path !== "string" || path.length === 0) {
+      warnings.push(`Dropped op with invalid path: ${JSON.stringify(op)}`);
+      continue;
+    }
+    const parts = path.split(".");
+    if (parts.length < 2 || parts.length > 4) {
+      warnings.push(`Dropped op with invalid path depth: ${path}`);
+      continue;
+    }
+    if (!allowedTop.has(parts[0] ?? "")) {
+      warnings.push(`Dropped op with invalid top-level path: ${path}`);
+      continue;
+    }
+
+    out.push(op);
+  }
+
+  return out;
+}
+
+function ensureObjectAtPath(root: Record<string, unknown>, pathParts: string[], warnings: string[]): Record<string, unknown> | null {
+  let cursor: Record<string, unknown> = root;
+  for (const key of pathParts) {
+    const current = cursor[key];
+    if (current === undefined) {
+      cursor[key] = {};
+      cursor = cursor[key] as Record<string, unknown>;
+      continue;
+    }
+    if (!isPlainObject(current)) {
+      warnings.push(`Path collision: '${key}' is not an object; skipping op.`);
+      return null;
+    }
+    cursor = current as Record<string, unknown>;
+  }
+  return cursor;
+}
+
+function applyStateOps(state: StateFile, ops: Array<Record<string, unknown>>, warnings: string[]): { applied: number; foreshadowOps: Array<Record<string, unknown>> } {
+  let applied = 0;
+  const foreshadowOps: Array<Record<string, unknown>> = [];
+
+  for (const op of ops) {
+    const opType = op.op;
+    if (opType === "foreshadow") {
+      foreshadowOps.push(op);
+      continue;
+    }
+
+    const path = String(op.path ?? "");
+    const parts = path.split(".");
+    const leaf = parts.pop();
+    if (!leaf) {
+      warnings.push(`Dropped op with empty leaf path: ${path}`);
+      continue;
+    }
+    const parent = ensureObjectAtPath(state, parts, warnings);
+    if (!parent) continue;
+
+    if (opType === "set") {
+      parent[leaf] = op.value;
+      applied += 1;
+      continue;
+    }
+
+    if (opType === "inc") {
+      const delta = op.value;
+      if (typeof delta !== "number" || !Number.isFinite(delta)) {
+        warnings.push(`Dropped inc op with non-number value: ${path}`);
+        continue;
+      }
+      const prev = parent[leaf];
+      const prevNum = typeof prev === "number" && Number.isFinite(prev) ? prev : 0;
+      parent[leaf] = prevNum + delta;
+      applied += 1;
+      continue;
+    }
+
+    if (opType === "add") {
+      const prev = parent[leaf];
+      if (prev === undefined) {
+        parent[leaf] = [op.value];
+        applied += 1;
+        continue;
+      }
+      if (!Array.isArray(prev)) {
+        warnings.push(`Dropped add op: target is not an array: ${path}`);
+        continue;
+      }
+      prev.push(op.value);
+      applied += 1;
+      continue;
+    }
+
+    if (opType === "remove") {
+      const prev = parent[leaf];
+      if (!Array.isArray(prev)) {
+        warnings.push(`Dropped remove op: target is not an array: ${path}`);
+        continue;
+      }
+      const idx = prev.findIndex((v) => v === op.value);
+      if (idx >= 0) prev.splice(idx, 1);
+      applied += 1;
+      continue;
+    }
+  }
+
+  return { applied, foreshadowOps };
+}
+
+type ForeshadowItem = Record<string, unknown> & {
+  id: string;
+  status?: string;
+  history?: unknown[];
+  planted_chapter?: number;
+  planted_storyline?: string;
+  last_updated_chapter?: number;
+};
+
+function statusRank(status: string): number {
+  switch (status) {
+    case "planted":
+      return 1;
+    case "advanced":
+      return 2;
+    case "resolved":
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function normalizeForeshadowFile(raw: unknown): { foreshadowing: ForeshadowItem[] } {
+  if (!isPlainObject(raw)) return { foreshadowing: [] };
+  const obj = raw as Record<string, unknown>;
+  const list = Array.isArray(obj.foreshadowing) ? (obj.foreshadowing as unknown[]) : [];
+  const items: ForeshadowItem[] = [];
+  for (const it of list) {
+    if (!isPlainObject(it)) continue;
+    const id = typeof (it as Record<string, unknown>).id === "string" ? ((it as Record<string, unknown>).id as string) : null;
+    if (!id) continue;
+    items.push({ ...(it as Record<string, unknown>), id } as ForeshadowItem);
+  }
+  return { foreshadowing: items };
+}
+
+async function updateForeshadowing(args: {
+  rootDir: string;
+  checkpoint: Checkpoint;
+  delta: DeltaFile;
+  foreshadowOps: Array<Record<string, unknown>>;
+  warnings: string[];
+  dryRun: boolean;
+}): Promise<void> {
+  const globalRel = "foreshadowing/global.json";
+  const globalAbs = join(args.rootDir, globalRel);
+  const globalRaw = (await pathExists(globalAbs)) ? await readJsonFile(globalAbs) : { foreshadowing: [] };
+  const global = normalizeForeshadowFile(globalRaw);
+
+  const volumeRel = `volumes/vol-${pad2(args.checkpoint.current_volume)}/foreshadowing.json`;
+  const volumeAbs = join(args.rootDir, volumeRel);
+  const volumeRaw = (await pathExists(volumeAbs)) ? await readJsonFile(volumeAbs) : null;
+  const volume = normalizeForeshadowFile(volumeRaw);
+  const volumeIndex = new Map(volume.foreshadowing.map((it) => [it.id, it]));
+
+  const globalIndex = new Map(global.foreshadowing.map((it) => [it.id, it]));
+
+  for (const op of args.foreshadowOps) {
+    const id = typeof op.path === "string" ? op.path : null;
+    const value = typeof op.value === "string" ? op.value : null;
+    if (!id || !value) {
+      args.warnings.push(`Dropped invalid foreshadow op: ${JSON.stringify(op)}`);
+      continue;
+    }
+    if (value !== "planted" && value !== "advanced" && value !== "resolved") {
+      args.warnings.push(`Dropped foreshadow op with invalid value: ${id}=${value}`);
+      continue;
+    }
+    const detail = typeof op.detail === "string" ? op.detail : undefined;
+
+    let item = globalIndex.get(id);
+    if (!item) {
+      const seed = volumeIndex.get(id);
+      item = { id };
+      if (seed) {
+        for (const k of ["description", "scope", "target_resolve_range"]) {
+          if (seed[k] !== undefined) item[k] = seed[k];
+        }
+      }
+      global.foreshadowing.push(item);
+      globalIndex.set(id, item);
+    }
+
+    // Status monotonic.
+    const prevStatus = typeof item.status === "string" ? item.status : "";
+    const nextStatus = statusRank(value) >= statusRank(prevStatus) ? value : prevStatus;
+    item.status = nextStatus;
+
+    if (value === "planted") {
+      if (typeof item.planted_chapter !== "number") item.planted_chapter = args.delta.chapter;
+      if (typeof item.planted_storyline !== "string") item.planted_storyline = args.delta.storyline_id;
+    }
+
+    const lastUpdated = typeof item.last_updated_chapter === "number" ? item.last_updated_chapter : 0;
+    item.last_updated_chapter = Math.max(lastUpdated, args.delta.chapter);
+
+    // Backfill metadata when missing.
+    const seed = volumeIndex.get(id);
+    if (seed) {
+      for (const k of ["description", "scope", "target_resolve_range"]) {
+        if (item[k] === undefined && seed[k] !== undefined) item[k] = seed[k];
+      }
+    }
+
+    // History.
+    const history = Array.isArray(item.history) ? item.history : [];
+    const key = `${args.delta.chapter}:${value}`;
+    const existingKeys = new Set(
+      history
+        .filter((h) => isPlainObject(h))
+        .map((h) => `${String((h as Record<string, unknown>).chapter ?? "")}:${String((h as Record<string, unknown>).action ?? "")}`)
+    );
+    if (!existingKeys.has(key)) {
+      history.push({ chapter: args.delta.chapter, action: value, ...(detail ? { detail } : {}) });
+      item.history = history;
+    }
+  }
+
+  if (!args.dryRun) {
+    await ensureDir(dirname(globalAbs));
+    await writeJsonFile(globalAbs, { foreshadowing: global.foreshadowing });
+  }
+}
+
+async function doRename(rootDir: string, fromRel: string, toRel: string): Promise<void> {
+  const fromAbs = join(rootDir, fromRel);
+  const toAbs = join(rootDir, toRel);
+  if (await pathExists(toAbs)) {
+    throw new NovelCliError(`Refusing to overwrite existing destination: ${toRel}`, 2);
+  }
+  await ensureDir(dirname(toAbs));
+  try {
+    await rename(fromAbs, toAbs);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new NovelCliError(`Failed to move '${fromRel}' to '${toRel}': ${message}`, 2);
+  }
+}
+
+async function ensureFilePresent(rootDir: string, relPath: string): Promise<void> {
+  const abs = join(rootDir, relPath);
+  if (!(await pathExists(abs))) throw new NovelCliError(`Missing required file: ${relPath}`, 2);
+}
+
+export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
+  if (!Number.isInteger(args.chapter) || args.chapter <= 0) {
+    throw new NovelCliError(`--chapter must be an int >= 1`, 2);
+  }
+
+  const checkpoint = await readCheckpoint(args.rootDir);
+  const warnings: string[] = [];
+  const plan: string[] = [];
+
+  const rel = chapterRelPaths(args.chapter);
+  await ensureFilePresent(args.rootDir, rel.staging.chapterMd);
+  await ensureFilePresent(args.rootDir, rel.staging.summaryMd);
+  await ensureFilePresent(args.rootDir, rel.staging.deltaJson);
+  await ensureFilePresent(args.rootDir, rel.staging.crossrefJson);
+  await ensureFilePresent(args.rootDir, rel.staging.evalJson);
+
+  // Parse delta early to resolve storyline memory paths and state merge.
+  const deltaRaw = await readJsonFile(join(args.rootDir, rel.staging.deltaJson));
+  if (!isPlainObject(deltaRaw)) throw new NovelCliError(`Invalid delta file: ${rel.staging.deltaJson} must be an object.`, 2);
+  const deltaObj = deltaRaw as Record<string, unknown>;
+  const delta: DeltaFile = {
+    ...deltaObj,
+    chapter: requireInt("chapter", deltaObj.chapter, rel.staging.deltaJson),
+    base_state_version: requireInt("base_state_version", deltaObj.base_state_version, rel.staging.deltaJson),
+    storyline_id: requireString("storyline_id", deltaObj.storyline_id, rel.staging.deltaJson),
+    ops: Array.isArray(deltaObj.ops) ? (deltaObj.ops as unknown[]) : (() => {
+      throw new NovelCliError(`Invalid ${rel.staging.deltaJson}: 'ops' must be an array.`, 2);
+    })()
+  };
+
+  if (delta.chapter !== args.chapter) {
+    warnings.push(`Delta.chapter is ${delta.chapter}, expected ${args.chapter}.`);
+  }
+
+  const memoryRel = chapterRelPaths(args.chapter, delta.storyline_id).staging.storylineMemoryMd;
+  if (!memoryRel) throw new NovelCliError(`Internal error: storyline memory path is null`, 2);
+  await ensureFilePresent(args.rootDir, memoryRel);
+  const finalMemoryRel = chapterRelPaths(args.chapter, delta.storyline_id).final.storylineMemoryMd;
+  if (!finalMemoryRel) throw new NovelCliError(`Internal error: final storyline memory path is null`, 2);
+
+  // Plan moves.
+  plan.push(`MOVE ${rel.staging.chapterMd} -> ${rel.final.chapterMd}`);
+  plan.push(`MOVE ${rel.staging.summaryMd} -> ${rel.final.summaryMd}`);
+  plan.push(`MOVE ${rel.staging.evalJson} -> ${rel.final.evalJson}`);
+  plan.push(`MOVE ${rel.staging.crossrefJson} -> ${rel.final.crossrefJson}`);
+  plan.push(`MOVE ${memoryRel} -> ${finalMemoryRel}`);
+
+  // Merge state delta.
+  plan.push(`MERGE ${rel.staging.deltaJson} -> ${rel.final.stateCurrentJson} (+ append ${rel.final.stateChangelogJsonl})`);
+
+  // Update foreshadowing/global.json
+  plan.push(`UPDATE ${rel.final.foreshadowGlobalJson} (from foreshadow ops)`);
+
+  // Update checkpoint.
+  plan.push(`UPDATE .checkpoint.json (commit chapter ${args.chapter})`);
+
+  // Cleanup staging delta.
+  plan.push(`REMOVE ${rel.staging.deltaJson}`);
+
+  if (args.dryRun) {
+    return { plan, warnings };
+  }
+
+  await withWriteLock(args.rootDir, { chapter: args.chapter }, async () => {
+    const checkpointAbs = join(args.rootDir, ".checkpoint.json");
+    const stateAbs = join(args.rootDir, rel.final.stateCurrentJson);
+    const globalAbs = join(args.rootDir, rel.final.foreshadowGlobalJson);
+    const changelogAbs = join(args.rootDir, rel.final.stateChangelogJsonl);
+    const deltaAbs = join(args.rootDir, rel.staging.deltaJson);
+
+    const originalCheckpoint = await readTextFile(checkpointAbs);
+    const originalStateExists = await pathExists(stateAbs);
+    const originalState = originalStateExists ? await readTextFile(stateAbs) : null;
+    const originalGlobalExists = await pathExists(globalAbs);
+    const originalGlobal = originalGlobalExists ? await readTextFile(globalAbs) : null;
+    const originalChangelogExists = await pathExists(changelogAbs);
+    const originalChangelogSize = originalChangelogExists ? (await stat(changelogAbs)).size : 0;
+    const originalDelta = await readTextFile(deltaAbs);
+
+    const moved: Array<{ from: string; to: string }> = [];
+
+    const rollback = async (): Promise<void> => {
+      // Roll back moved files (best-effort).
+      for (const m of moved.slice().reverse()) {
+        try {
+          await doRename(args.rootDir, m.to, m.from);
+        } catch {
+          // ignore
+        }
+      }
+
+      // Roll back checkpoint/state/global.
+      try {
+        await writeFile(checkpointAbs, originalCheckpoint, "utf8");
+      } catch {
+        // ignore
+      }
+
+      try {
+        if (originalStateExists && originalState !== null) {
+          await ensureDir(dirname(stateAbs));
+          await writeFile(stateAbs, originalState, "utf8");
+        } else {
+          await removePath(stateAbs);
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        if (originalGlobalExists && originalGlobal !== null) {
+          await ensureDir(dirname(globalAbs));
+          await writeFile(globalAbs, originalGlobal, "utf8");
+        } else {
+          await removePath(globalAbs);
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        if (originalChangelogExists) {
+          await truncate(changelogAbs, originalChangelogSize);
+        } else {
+          await removePath(changelogAbs);
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        if (!(await pathExists(deltaAbs))) {
+          await ensureDir(dirname(deltaAbs));
+          await writeFile(deltaAbs, originalDelta, "utf8");
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    try {
+      // Pre-validate state merge (in-memory).
+      const state = await readState(args.rootDir, rel.final.stateCurrentJson);
+      if (state.state_version !== delta.base_state_version) {
+        throw new NovelCliError(
+          `State version mismatch: state.state_version=${state.state_version} delta.base_state_version=${delta.base_state_version}`,
+          2
+        );
+      }
+
+      const normalizedOps = validateOps(delta.ops, warnings);
+      const { applied: appliedOps, foreshadowOps } = applyStateOps(state, normalizedOps, warnings);
+      state.state_version = state.state_version + 1;
+      state.last_updated_chapter = args.chapter;
+
+      // Moves first (rollbackable).
+      await doRename(args.rootDir, rel.staging.chapterMd, rel.final.chapterMd);
+      moved.push({ from: rel.staging.chapterMd, to: rel.final.chapterMd });
+      await doRename(args.rootDir, rel.staging.summaryMd, rel.final.summaryMd);
+      moved.push({ from: rel.staging.summaryMd, to: rel.final.summaryMd });
+      await doRename(args.rootDir, rel.staging.evalJson, rel.final.evalJson);
+      moved.push({ from: rel.staging.evalJson, to: rel.final.evalJson });
+      await doRename(args.rootDir, rel.staging.crossrefJson, rel.final.crossrefJson);
+      moved.push({ from: rel.staging.crossrefJson, to: rel.final.crossrefJson });
+      await doRename(args.rootDir, memoryRel, finalMemoryRel);
+      moved.push({ from: memoryRel, to: finalMemoryRel });
+
+      // Now write state + changelog + foreshadowing + checkpoint.
+      await writeJsonFile(stateAbs, state);
+      await appendJsonl(args.rootDir, rel.final.stateChangelogJsonl, deltaObj);
+      warnings.push(`Applied ${appliedOps} state ops.`);
+
+      await updateForeshadowing({ rootDir: args.rootDir, checkpoint, delta, foreshadowOps, warnings, dryRun: false });
+
+      await removePath(join(args.rootDir, rel.staging.deltaJson));
+
+      const updatedCheckpoint: Checkpoint = { ...checkpoint };
+      if (updatedCheckpoint.last_completed_chapter >= args.chapter) {
+        warnings.push(`Checkpoint last_completed_chapter is already ${updatedCheckpoint.last_completed_chapter}; leaving as-is.`);
+      } else {
+        updatedCheckpoint.last_completed_chapter = args.chapter;
+      }
+      updatedCheckpoint.pipeline_stage = "committed";
+      updatedCheckpoint.inflight_chapter = null;
+      updatedCheckpoint.revision_count = 0;
+      updatedCheckpoint.last_checkpoint_time = new Date().toISOString();
+      await writeCheckpoint(args.rootDir, updatedCheckpoint);
+    } catch (err) {
+      await rollback();
+      throw err;
+    }
+  });
+
+  return { plan, warnings };
+}

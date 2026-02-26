@@ -44,6 +44,12 @@ claude --plugin-dir ~/cc-novel-writer
 | `/novel:continue` | 续写下一章 / 推进到下一卷 |
 | `/novel:status` | 查看当前项目进度、状态与统计 |
 
+### `novel` CLI（确定性编排核心）
+
+除 Claude Code 插件外，本仓库也提供不调用 LLM 的 `novel` CLI：负责 `next/instructions/validate/advance/commit/lock` 等确定性编排能力，便于 Codex CLI、纯终端脚本与 CI 使用。
+
+详见：`docs/user/novel-cli.md`。
+
 **30 秒体验**：执行 `/novel:start`，按提示填写题材、主角和核心冲突，系统自动创建项目结构并试写 3 章。详见 [快速起步指南](docs/user/quick-start.md)。
 
 ### 推荐配套

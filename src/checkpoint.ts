@@ -1,0 +1,132 @@
+import { join } from "node:path";
+
+import { NovelCliError } from "./errors.js";
+import { readJsonFile, writeJsonFile } from "./fs-utils.js";
+
+export const PIPELINE_STAGES = ["drafting", "drafted", "refined", "judged", "revising", "committed"] as const;
+export type PipelineStage = (typeof PIPELINE_STAGES)[number];
+
+export type Checkpoint = Record<string, unknown> & {
+  last_completed_chapter: number;
+  current_volume: number;
+  orchestrator_state?: string;
+  pipeline_stage?: PipelineStage | null;
+  inflight_chapter?: number | null;
+  revision_count?: number;
+  pending_actions?: unknown[];
+  last_checkpoint_time?: string;
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asInt(value: unknown): number | null {
+  if (typeof value !== "number") return null;
+  if (!Number.isInteger(value)) return null;
+  return value;
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value;
+}
+
+function asNullableInt(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return asInt(value);
+}
+
+function parseCheckpoint(data: unknown): Checkpoint {
+  if (!isPlainObject(data)) {
+    throw new NovelCliError(".checkpoint.json must be a JSON object.", 2);
+  }
+
+  const lastCompleted = asInt(data.last_completed_chapter);
+  if (lastCompleted === null || lastCompleted < 0) {
+    throw new NovelCliError(".checkpoint.json.last_completed_chapter must be an int >= 0.", 2);
+  }
+
+  const currentVolume = asInt(data.current_volume);
+  if (currentVolume === null || currentVolume < 0) {
+    throw new NovelCliError(".checkpoint.json.current_volume must be an int >= 0.", 2);
+  }
+
+  const orchestratorState = data.orchestrator_state;
+  if (orchestratorState !== undefined && asString(orchestratorState) === null) {
+    throw new NovelCliError(".checkpoint.json.orchestrator_state must be a string when present.", 2);
+  }
+
+  const pipelineStageRaw = data.pipeline_stage;
+  let pipelineStage: PipelineStage | null | undefined;
+  if (pipelineStageRaw === undefined) {
+    pipelineStage = undefined;
+  } else if (pipelineStageRaw === null) {
+    pipelineStage = null;
+  } else if (typeof pipelineStageRaw === "string") {
+    if ((PIPELINE_STAGES as readonly string[]).includes(pipelineStageRaw)) {
+      pipelineStage = pipelineStageRaw as PipelineStage;
+    } else {
+      throw new NovelCliError(`.checkpoint.json.pipeline_stage must be one of: ${PIPELINE_STAGES.join(", ")} (or null)`, 2);
+    }
+  } else {
+    throw new NovelCliError(`.checkpoint.json.pipeline_stage must be a string (or null)`, 2);
+  }
+
+  const inflightRaw = data.inflight_chapter;
+  const inflight = asNullableInt(inflightRaw);
+  if (inflightRaw !== undefined && inflight === null && inflightRaw !== null) {
+    throw new NovelCliError(".checkpoint.json.inflight_chapter must be an int >= 0 (or null).", 2);
+  }
+  if (inflight !== undefined && inflight !== null && inflight < 0) {
+    throw new NovelCliError(".checkpoint.json.inflight_chapter must be an int >= 0 (or null).", 2);
+  }
+
+  const revision = data.revision_count;
+  if (revision !== undefined) {
+    const rc = asInt(revision);
+    if (rc === null || rc < 0) {
+      throw new NovelCliError(".checkpoint.json.revision_count must be an int >= 0 when present.", 2);
+    }
+  }
+
+  const pending = data.pending_actions;
+  if (pending !== undefined && !Array.isArray(pending)) {
+    throw new NovelCliError(".checkpoint.json.pending_actions must be an array when present.", 2);
+  }
+
+  const lastTime = data.last_checkpoint_time;
+  if (lastTime !== undefined && asString(lastTime) === null) {
+    throw new NovelCliError(".checkpoint.json.last_checkpoint_time must be a string when present.", 2);
+  }
+
+  const checkpoint: Checkpoint = {
+    ...data,
+    last_completed_chapter: lastCompleted,
+    current_volume: currentVolume
+  };
+
+  if (orchestratorState !== undefined) checkpoint.orchestrator_state = orchestratorState as string;
+  if (pipelineStage !== undefined) checkpoint.pipeline_stage = pipelineStage;
+  if (inflight !== undefined) checkpoint.inflight_chapter = inflight;
+
+  return checkpoint;
+}
+
+export async function readCheckpoint(projectRootDir: string): Promise<Checkpoint> {
+  const checkpointPath = join(projectRootDir, ".checkpoint.json");
+  const raw = await readJsonFile(checkpointPath);
+  try {
+    return parseCheckpoint(raw);
+  } catch (err: unknown) {
+    if (err instanceof NovelCliError) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    throw new NovelCliError(`Invalid checkpoint: ${message}`, 2);
+  }
+}
+
+export async function writeCheckpoint(projectRootDir: string, checkpoint: Checkpoint): Promise<void> {
+  const checkpointPath = join(projectRootDir, ".checkpoint.json");
+  await writeJsonFile(checkpointPath, checkpoint);
+}
