@@ -27,6 +27,7 @@ depends_on:
 `depends_on` is a **baseline dependency** declaration:
 
 - It makes review/implementation order explicit.
+- Dependencies are treated as **transitive** for review/implementation ordering (A → B and B → C implies A indirectly depends on C).
 - It implies the dependent change **extends** the baseline(s) and MUST NOT re-define or copy baseline specs.
 - Incremental specs should reference baseline spec files and only describe **deltas**.
 
@@ -36,4 +37,3 @@ Examples in this repo:
   `m6-interactive-question-adapters` → declare `depends_on: [m6-interactive-question-adapters]`.
 - M7 platform-profile / platform-constraints specs extend the M6 baseline → declare
   `depends_on: [m6-platform-optimization]` and reference the baseline spec paths instead of duplicating them.
-
