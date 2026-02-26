@@ -41,7 +41,17 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
   const evidence = { hasChapter, hasSummary, hasDelta, hasCrossref, hasEval };
 
   // Resume rules (aligned with skills/continue).
-  if (stage === "drafting" || stage === "revising") {
+  // Revision loop: restart from ChapterWriter regardless of existing staging artifacts.
+  if (stage === "revising") {
+    return {
+      step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "draft" }),
+      reason: "revising:restart_draft",
+      inflight: { chapter: inflightChapter, pipeline_stage: stage },
+      evidence
+    };
+  }
+
+  if (stage === "drafting") {
     if (!hasChapter) {
       return {
         step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "draft" }),
@@ -133,4 +143,3 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
     evidence
   };
 }
-

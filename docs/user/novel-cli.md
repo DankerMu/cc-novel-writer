@@ -125,4 +125,3 @@ chapter:048:commit
 ```
 
 > 这使得你可以在任何时刻中断并恢复：只要 `.checkpoint.json` 和 `staging/**` 未被破坏，`novel next` 就能给出确定性的下一步。
-
