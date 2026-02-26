@@ -1,2 +1,4 @@
 schema: spec-driven
 created: 2026-02-26
+depends_on:
+  - m6-platform-optimization
