@@ -42,6 +42,8 @@
 - [ ] 7.2 Trigger audits every 5 chapters over the last 10 chapters; generate `logs/continuity/latest.json` + history file
 - [ ] 7.3 Add volume-end full audit trigger and output conventions
 - [ ] 7.4 Inject compact high/medium continuity summary into QualityJudge inputs (preserve LS-001 semantics)
+- [ ] 7.5 Reuse existing M3 NER/continuity outputs when available (`scripts/run-ner.sh`, existing `logs/continuity/**`) and define non-blocking degradation when missing/failing
+- [ ] 7.6 Sync runtime registries/docs: add `agents/consistency-auditor.md` and update `plugin.json` / `CLAUDE.md` if the agent is exposed via the plugin entrypoints
 
 ## 8. Foreshadow Visibility
 

@@ -1,7 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: The system SHALL maintain a configurable web-novel cliché lint list
-The system SHALL support a project-level configuration file `web-novel-cliche-lint.json` at the project root.
+The system SHALL ship a baseline template file `templates/web-novel-cliche-lint.json`.
+
+The system SHALL support a project-level configuration file `web-novel-cliche-lint.json` at the project root as the runtime, user-editable configuration.
+On project initialization, if `web-novel-cliche-lint.json` does not exist, the system SHOULD copy the template into the project root (similar to `ai-blacklist`).
 
 The file SHALL support:
 - `words[]` (flat list)
@@ -49,6 +52,7 @@ When enabled by `platform-profile.json`, cliché lint outcomes SHALL:
 ## References
 
 - `templates/ai-blacklist.json`
+- `templates/web-novel-cliche-lint.json`
 - `scripts/lint-blacklist.sh`
 - `openspec/changes/m6-platform-optimization/specs/platform-profile/spec.md`
 - `openspec/changes/m6-platform-optimization/proposal.md`

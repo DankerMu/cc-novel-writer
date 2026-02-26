@@ -20,6 +20,22 @@ Each promise entry SHALL include at minimum:
 - **WHEN** the project enables narrative health ledgers
 - **THEN** `promise-ledger.json` exists and can be loaded as the source of truth
 
+### Requirement: Promise ledger scope MUST be long-horizon narrative promises (not chapter-end hooks)
+The promise ledger MUST track **long-horizon** narrative promises that can span many chapters/volumes.
+
+The promise ledger MUST NOT be used as the source of truth for:
+- per-chapter chapter-end retention hooks and their short fulfillment windows (use `hook-ledger.json`)
+- clue-level foreshadowing items and their touch history (use `foreshadowing/global.json`)
+
+Promise entries MAY optionally include cross-references for evidence and traceability, such as:
+- `links.hook_entry_ids[]` (hook ledger entry ids) when specific chapter-end hooks advanced the promise
+- `links.foreshadowing_ids[]` (foreshadowing item ids) when the promise is supported by recurring clues
+
+#### Scenario: Promise links to foreshadowing items for evidence
+- **WHEN** a core mystery promise is maintained via recurring clue items
+- **THEN** the promise can include `links.foreshadowing_ids=[...]`
+- **AND** `foreshadowing/global.json` remains the authoritative record for each clue’s update history
+
 ### Requirement: The system SHALL compute dormancy and surface overdue promises
 The system SHALL compute `chapters_since_last_touch` for each promise and SHOULD surface overdue promises in periodic reports.
 
@@ -52,3 +68,4 @@ Suggestions derived from the ledger MUST be phrased as “light-touch” reminde
 
 - `openspec/changes/m7-narrative-health-ledgers/proposal.md`
 - `openspec/changes/m6-platform-optimization/specs/foreshadow-visibility/spec.md`
+- `openspec/changes/m7-retention-and-readability-guards/specs/hook-ledger/spec.md`

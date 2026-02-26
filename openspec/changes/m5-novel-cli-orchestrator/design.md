@@ -35,6 +35,7 @@
    - 以 TypeScript 编写，编译到 `dist/`，通过 `package.json.bin` 暴露 `novel` 命令；
    - 目标用户体验：`npx novel --help` / `npx novel status --json`（发布到 npm 后），本仓库内开发使用 `npm run dev` 或 `npm run build && node dist/cli.js`；
    - 允许引入少量成熟依赖（如 CLI 框架、schema 校验），但核心编排保持“确定性 + 可测试”。
+   - 与项目“**No build step / No package manager**”定位的关系：该定位针对 *默认插件/skills 使用路径*（克隆仓库即可跑 agents/skills，不要求本地装包/构建）。M5 的 CLI 是**可选入口**，面向终端/CI/回归测试；面向使用者的分发应以“**预构建产物**”为主（npm 包内包含 `dist/`，或发布单文件/二进制 release），使用户无需在项目内执行 build。
 
 2. **稳定接口：instruction packet 作为跨执行器协议**
    - `novel instructions <step>` 输出结构化 JSON：包含 step、目标 agent、context manifest（paths + inline）、预期产物、后续建议动作；
@@ -58,6 +59,7 @@
 - [Risk] CLI 与现有技能编排逻辑分叉（两套规则不一致） → Mitigation：以 PRD/agents contract 为单一真源；把关键规则（step id、next、packet schema）写入 specs，并在实现中加自检/fixtures
 - [Risk] 无依赖实现导致 JSON schema 校验/错误提示较弱 → Mitigation：先做“必要字段 + 类型 + 取值枚举”的显式校验；后续如需再引入可选依赖
 - [Risk] 适配器层引入新入口，用户不知从何开始 → Mitigation：CLI `--help` + 文档提供最短路径（next→instructions→execute→validate→advance→commit）
+- [Risk] Node/TS CLI 与“no build/no package manager”认知冲突 → Mitigation：明确“插件路径不变 + CLI 可选”；优先用预构建分发（npm 含 dist / release 单文件），让使用者不需要在仓库内装包/构建
 
 ## Migration Plan
 

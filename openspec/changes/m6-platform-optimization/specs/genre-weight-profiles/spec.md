@@ -4,13 +4,13 @@
 The system SHALL support a bounded set of narrative drive types, at minimum:
 - `plot` (plot-driven)
 - `character` (character-driven)
-- `hook` (hook-driven)
+- `suspense` (suspense / page-turner driven; often realized via hooks)
 - `slice_of_life` (daily-life / atmosphere-driven)
 
 Each drive type SHALL map to a weight profile that controls per-dimension weights in QualityJudge scoring.
 
 #### Scenario: Project selects a drive type
-- **WHEN** the user selects `genre_drive_type="hook"` during initialization
+- **WHEN** the user selects `genre_drive_type="suspense"` during initialization
 - **THEN** the system selects a corresponding weight profile for QualityJudge scoring
 
 ### Requirement: The system SHALL define weight profiles in a project-visible config

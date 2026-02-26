@@ -38,7 +38,7 @@ At minimum, it SHALL include:
   - `required` (boolean)
   - `min_strength` (integer 1-5)
   - `allowed_types` (string array)
-  - `fix_strategy` (string, e.g. `"hook-fix"`)
+  - `fix_strategy` (string enum; allowed: `"hook-fix"`; unknown values MUST fail validation; see `chapter-hook-system`)
 - `info_load` object:
   - `max_new_entities_per_chapter` (integer)
   - `max_unknown_entities_per_chapter` (integer)
@@ -70,3 +70,4 @@ During initialization, the system SHALL allow the user to override key threshold
 
 - `docs/dr-workflow/novel-writer-tool/final/prd/09-data.md`
 - `openspec/changes/m6-platform-optimization/proposal.md`
+- `openspec/changes/m6-platform-optimization/specs/chapter-hook-system/spec.md`

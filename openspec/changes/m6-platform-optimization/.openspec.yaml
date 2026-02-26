@@ -1,5 +1,2 @@
-id: m6-platform-optimization
-title: 起点/番茄平台适配与跨章一致性审计
-status: drafting
-created: "2026-02-26"
-milestone: M6
+schema: spec-driven
+created: 2026-02-26

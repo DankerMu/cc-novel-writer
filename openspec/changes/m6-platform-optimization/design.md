@@ -44,7 +44,7 @@
    - 高置信合规 violation 可直接触发 hard gate（与现有“high-confidence violation 强制修订”机制对齐）。
 
 5) **动态权重：drive_type → weight_profile →（可选 overrides）**
-   - `genre_drive_type` 作为用户可理解的控制面（plot/character/hook/slice_of_life）。
+   - `genre_drive_type` 作为用户可理解的控制面（plot/character/suspense/slice_of_life）。
    - `genre-weight-profiles.json` 定义默认 profile；`platform-profile.json` 选择 profile_id 并允许小范围 overrides。
    - 每章 evaluation 输出必须记录“最终权重”，保证可审计与可回归。
 

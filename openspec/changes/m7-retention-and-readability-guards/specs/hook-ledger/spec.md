@@ -19,6 +19,22 @@ Each ledger entry SHALL include at minimum:
 - **WHEN** a chapter is committed under a hook-enabled platform profile
 - **THEN** the system appends or updates an entry in `hook-ledger.json` for that chapter’s hook
 
+### Requirement: Hook ledger scope MUST be limited to chapter-end retention hooks
+The hook ledger MUST track **chapter-end** retention hooks only (page-turner promises meant to pull the reader into the next chapter(s)).
+
+The hook ledger MUST NOT be used as the source of truth for:
+- long-horizon narrative promises (use `promise-ledger.json`)
+- clue-level foreshadowing items and their touch history (use `foreshadowing/global.json`)
+
+Hook ledger entries MAY optionally include cross-references to broader narrative tracking, such as:
+- `links.promise_ids[]` (promise ledger ids) when a chapter-end hook is an instance of a broader promise
+- `links.foreshadowing_ids[]` (foreshadowing item ids) when the hook uses a specific existing clue
+
+#### Scenario: Hook hook links to a long-horizon promise
+- **WHEN** a chapter-end hook is “Will the heroine discover the real identity?”
+- **THEN** the hook ledger can include `links.promise_ids=["core_mystery_identity"]`
+- **AND** the hook ledger still remains the authoritative record for the chapter-end hook’s fulfillment window
+
 ### Requirement: Hook ledger entries MUST be derived from chapter-end evidence
 The system MUST derive hook ledger fields from chapter-end evidence and evaluation signals, including at minimum:
 - a short evidence snippet from the last section of the chapter
@@ -67,3 +83,5 @@ It SHALL update `logs/retention/latest.json` and write a history report for trac
 
 - `openspec/changes/m7-retention-and-readability-guards/proposal.md`
 - `openspec/changes/m6-platform-optimization/specs/chapter-hook-system/spec.md`
+- `openspec/changes/m7-narrative-health-ledgers/specs/promise-ledger/spec.md`
+- `openspec/changes/m6-platform-optimization/specs/foreshadow-visibility/spec.md`

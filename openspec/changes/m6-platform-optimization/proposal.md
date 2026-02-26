@@ -24,6 +24,14 @@
 6. **平台合规检测** — QualityJudge 前置：违禁词/重名/繁简混用/字数硬限等（尽量可脚本化）；输出可追溯报告，并可选择阻断 commit。
 7. **滑动窗口一致性检查** — 新增 ConsistencyAuditor Agent：每 5 章回顾最近 10 章 + 卷末全卷审计；覆盖 NER 一致性矛盾与“逻辑/动机漂移”提示；报告写入 `logs/continuity/`，摘要注入到 QualityJudge（复用现有连续性报告通道）。
 
+### Integration Notes（与现有 8-agent + M3 连续性能力的关系）
+
+- **对 8-agent 架构的影响**：ConsistencyAuditor 是一个 *analysis-only* 的周期性审计 Agent（不参与每章四段流水线的“写→摘要→润色→门控”链路），默认不阻断 commit。它可以被视为第 9 个 Agent，但只在“每 5 章/卷末”触发，不增加日更成本。
+- **与 M3 NER/连续性检查的关系**：
+  - M3 已有每章 NER 提取与一致性报告产物（`scripts/run-ner.sh`、`logs/continuity/latest.json` 等）。ConsistencyAuditor 不替代这些产物，而是**复用**它们作为输入信号，做“滑动窗口”的跨章归纳与建议（例如：同一实体属性在 10 章内反复漂移、时间线矛盾趋势、疑似温水漂移等）。
+  - 当 NER 脚本缺失/失败时，ConsistencyAuditor 必须降级为非阻断的启发式审计（仅建议/警告）。
+- **仓库同步点（实现阶段）**：引入新 Agent 需要在实现 PR 中同步更新 `agents/`（新增 contract）、以及（若要暴露为插件内能力）更新 `plugin.json` / 文档入口。此 OpenSpec PR 只定义能力与契约，不直接修改运行时目录。
+
 交互与落盘策略：
 - `novel init` 阶段通过交互式问卷收集 `platform`、`genre_drive_type`、关键阈值的“用户微调”（依赖/复用 `m6-interactive-question-adapters` 的 `NOVEL_ASK` 思路），并写入项目配置与锁文件，确保可恢复与可 review。
 
