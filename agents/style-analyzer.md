@@ -67,17 +67,20 @@ tools: ["Read", "Write", "Glob", "Grep", "WebFetch", "WebSearch"]
 4. 识别修辞与节奏偏好（短句切换、比喻密度、排比/反复等），归纳为 `rhetoric_preferences`
 5. 抽取禁忌词与高频口癖：只收录“明显不使用”的词，避免过度泛化，并在 `analysis_notes` 中标注依据
 6. 提取角色语癖与对话格式偏好（引号式/无引号式等），生成 `character_speech_patterns` 与 `paragraph_style`
-7. 综合产出 3-8 条可执行的写作指令 `writing_directives`（正向引导，不包含抽象评价）
-8. 按 `style-profile.json` 格式输出结果
+7. 提取风格示范片段 `style_exemplars`（3-5 段，每段 50-150 字）：选取最能体现作者独特风格质感的段落——优先选择节奏感鲜明、用词有辨识度、句式有特色的片段（如紧凑的动作描写、有味道的对话、独特的心理刻画），避免选择通用叙事段落
+8. 综合产出 3-8 条可执行的写作指令 `writing_directives`（DO/DON'T 对比格式）：每条指令包含 `directive`（正向指令）+ `do`（目标风格示例，≤40 字）+ `dont`（反面示例，≤40 字）。示例应来自样本与其"反面改写"的对比，让模型直观感知差异
+9. 按 `style-profile.json` 格式输出结果
 
 # Constraints
 
 1. **可量化**：提取的指标必须是数值或枚举，非主观评价
 2. **禁忌词精准**：禁忌词表只收录作者明显不使用的词，不过度泛化
 3. **语癖有据**：角色语癖需有具体示例支撑
-4. **标注来源路径**：`source_type` 必须反映风格数据的获取路径（original/reference/template/write_then_extract），而非提取方法论。即使提取过程相同，不同获取路径仍需区分标记
-5. **预置模板**：预置模板模式下标记 `source_type: "template"`（此时 `reference_author` 为空）
-6. **先写后提**：`write_then_extract` 模式下，入口 Skill 回传试写章节时按 `original` 模式提取，但最终 `source_type` 保持 `"write_then_extract"` 以标记来源路径
+4. **示范片段有辨识度**：`style_exemplars` 必须选择节奏/用词/句式上有鲜明特色的段落，不选通用叙事（如"他走进房间，坐了下来"这类无风格信号的句子）
+5. **writing_directives DO/DON'T 对比**：每条 directive 必须含 `do` 和 `dont` 示例，`do` 应来自样本原文或其特征改写，`dont` 应是同一语义的 AI 化/泛化写法。纯字符串格式仅在 template 降级模式下使用
+6. **标注来源路径**：`source_type` 必须反映风格数据的获取路径（original/reference/template/write_then_extract），而非提取方法论。即使提取过程相同，不同获取路径仍需区分标记
+7. **预置模板**：预置模板模式下标记 `source_type: "template"`（此时 `reference_author` 为空）；`style_exemplars` 填入该风格类型的典型范文片段（可为创作示范而非真实样本）
+8. **先写后提**：`write_then_extract` 模式下，入口 Skill 回传试写章节时按 `original` 模式提取，但最终 `source_type` 保持 `"write_then_extract"` 以标记来源路径
 
 # Format
 
@@ -106,10 +109,22 @@ tools: ["Read", "Write", "Glob", "Grep", "WebFetch", "WebSearch"]
     "dialogue_format": "引号式 | 无引号式"
   },
   "narrative_voice": "第一人称 | 第三人称限制 | 全知",
+  "style_exemplars": [
+    "（50-150字原文片段，最能体现风格质感的段落）",
+    "（第二段示范片段）",
+    "（第三段示范片段）"
+  ],
   "writing_directives": [
-    "偏短句、动作推进叙事，比喻少但要锐利",
-    "对话中多插一句生活化吐槽，避免说教感",
-    "场景描写点到为止，留白给读者脑补"
+    {
+      "directive": "用短动作句推进，不用从句嵌套",
+      "do": "他拔刀。刀光一闪。人头落地。",
+      "dont": "他迅速拔出腰间佩刀，在刀光闪烁之间，对方的头颅便已经滚落在地。"
+    },
+    {
+      "directive": "对话中插一句生活化吐槽，避免说教感",
+      "do": ""行了别废话，锅里汤快糊了。"",
+      "dont": ""我们必须团结一致，共同面对这个挑战。""
+    }
   ],
   "override_constraints": {},
   "analysis_notes": "分析备注"

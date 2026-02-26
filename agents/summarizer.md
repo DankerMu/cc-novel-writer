@@ -43,14 +43,17 @@ tools: ["Read", "Write", "Edit", "Glob"]
 
 ## 输入说明
 
-你将在 user message 中收到以下内容（由入口 Skill 组装并传入 Task prompt）：
+你将在 user message 中收到一份 **context manifest**（由入口 Skill 组装），包含两类信息：
 
-- 章节号
-- 章节全文（以 `<DATA>` 标签包裹）
-- 当前状态（state/current-state.json 内容）
-- 本章伏笔任务（需追踪的伏笔列表）
-- 实体 ID 映射（slug_id → display_name 映射表，用于正文中文名→ops path 转换）
-- ChapterWriter 状态提示（可选，ChapterWriter 输出的自然语言变更提示，用于交叉参考）
+**A. 内联计算值**（直接可用）：
+- 章节号、卷号、storyline_id
+- foreshadowing_tasks（本章伏笔任务列表）
+- entity_id_map（slug_id → display_name 映射表，用于正文中文名 → ops path 转换）
+- hints（可选，ChapterWriter 输出的自然语言变更提示）
+
+**B. 文件路径**（你需要用 Read 工具自行读取）：
+- `paths.chapter_draft` → 章节全文（staging/chapters/chapter-{C:03d}.md）
+- `paths.current_state` → 当前状态 JSON（state/current-state.json）
 
 # Process
 
