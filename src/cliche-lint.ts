@@ -1,18 +1,18 @@
-import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 
 import { NovelCliError } from "./errors.js";
+import { fingerprintFile, fingerprintTextFile, fingerprintsMatch, type FileFingerprint as SharedFileFingerprint } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, writeJsonFile } from "./fs-utils.js";
 import type { PlatformProfile, SeverityPolicy } from "./platform-profile.js";
+import { rejectPathTraversalInput } from "./safe-path.js";
 import { pad3 } from "./steps.js";
 import { isPlainObject } from "./type-guards.js";
 
 const execFileAsync = promisify(execFile);
 
-export type FileFingerprint = { size: number; mtime_ms: number; content_hash: string };
+export type FileFingerprint = SharedFileFingerprint;
 
 export type WebNovelClicheLintConfig = {
   schema_version: number;
@@ -125,11 +125,12 @@ function parseConfig(raw: unknown, file: string): WebNovelClicheLintConfig {
   if (obj.categories !== undefined) {
     if (!isPlainObject(obj.categories)) throw new NovelCliError(`Invalid ${file}: 'categories' must be an object.`, 2);
     for (const [cat, list] of Object.entries(obj.categories as Record<string, unknown>)) {
-      categories[cat] = parseOptionalStringArray(list);
+      categories[cat] = uniquePreserveOrder(parseOptionalStringArray(list));
     }
   }
 
   const severityDefault: SeverityPolicy = "warn";
+  let severity_default: SeverityPolicy = severityDefault;
   const per_category: Record<string, SeverityPolicy> = {};
   const per_word: Record<string, SeverityPolicy> = {};
 
@@ -138,7 +139,7 @@ function parseConfig(raw: unknown, file: string): WebNovelClicheLintConfig {
     const sev = obj.severity as Record<string, unknown>;
 
     const def = sev.default;
-    const severity_default = def === undefined ? severityDefault : requireSeverity(def, file, "severity.default");
+    severity_default = def === undefined ? severityDefault : requireSeverity(def, file, "severity.default");
 
     const pc = sev.per_category;
     if (pc !== undefined) {
@@ -155,27 +156,6 @@ function parseConfig(raw: unknown, file: string): WebNovelClicheLintConfig {
         per_word[k] = requireSeverity(v, file, `severity.per_word.${k}`);
       }
     }
-
-    const whitelistRaw = obj.whitelist;
-    const whitelist = Array.isArray(whitelistRaw)
-      ? parseOptionalStringArray(whitelistRaw)
-      : isPlainObject(whitelistRaw)
-        ? parseOptionalStringArray((whitelistRaw as Record<string, unknown>).words)
-        : [];
-
-    const exemptionsObj = isPlainObject(obj.exemptions) ? (obj.exemptions as Record<string, unknown>) : {};
-    const exemptionsExact = parseOptionalStringArray(exemptionsObj.exact);
-    const exemptionsRegex = parseOptionalStringArray(exemptionsObj.regex);
-
-    return {
-      schema_version,
-      last_updated,
-      words: uniquePreserveOrder(words),
-      categories,
-      severity: { default: severity_default, per_category, per_word },
-      whitelist: uniquePreserveOrder(whitelist),
-      exemptions: { exact: uniquePreserveOrder(exemptionsExact), regex: uniquePreserveOrder(exemptionsRegex) }
-    };
   }
 
   const whitelistRaw = obj.whitelist;
@@ -194,7 +174,7 @@ function parseConfig(raw: unknown, file: string): WebNovelClicheLintConfig {
     last_updated,
     words: uniquePreserveOrder(words),
     categories,
-    severity: { default: severityDefault, per_category, per_word },
+    severity: { default: severity_default, per_category, per_word },
     whitelist: uniquePreserveOrder(whitelist),
     exemptions: { exact: uniquePreserveOrder(exemptionsExact), regex: uniquePreserveOrder(exemptionsRegex) }
   };
@@ -208,17 +188,9 @@ export async function loadWebNovelClicheLintConfig(rootDir: string): Promise<{ r
   return { relPath, config: parseConfig(raw, relPath) };
 }
 
-function hashText(text: string): string {
-  return createHash("sha256").update(text, "utf8").digest("hex");
-}
-
-async function readWithFingerprint(absPath: string): Promise<{ fp: FileFingerprint; text: string }> {
-  const [s, text] = await Promise.all([stat(absPath), readFile(absPath, "utf8")]);
-  return { fp: { size: s.size, mtime_ms: s.mtimeMs, content_hash: hashText(text) }, text };
-}
-
-function fingerprintsMatch(a: FileFingerprint, b: FileFingerprint): boolean {
-  return a.size === b.size && a.mtime_ms === b.mtime_ms && a.content_hash === b.content_hash;
+function codepointCompare(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }
 
 function countNonWhitespaceChars(text: string): number {
@@ -265,12 +237,14 @@ function maskExemptions(text: string, exemptions: WebNovelClicheLintConfig["exem
 
 function buildWordIndex(cfg: WebNovelClicheLintConfig): Map<string, { categories: string[]; severity: SeverityPolicy }> {
   const index = new Map<string, { categories: Set<string>; severity: SeverityPolicy }>();
+  const whitelist = new Set(cfg.whitelist);
+  const exemptionsExact = new Set(cfg.exemptions.exact);
 
   const addWord = (word: string, category: string | null): void => {
     const trimmed = word.trim();
     if (trimmed.length === 0) return;
-    if (cfg.whitelist.includes(trimmed)) return;
-    if (cfg.exemptions.exact.includes(trimmed)) return;
+    if (whitelist.has(trimmed)) return;
+    if (exemptionsExact.has(trimmed)) return;
 
     const existing = index.get(trimmed) ?? { categories: new Set<string>(), severity: cfg.severity.default };
     if (category) existing.categories.add(category);
@@ -310,7 +284,7 @@ function computeFallbackReport(args: {
   const chars = countNonWhitespaceChars(args.chapterText);
 
   const index = buildWordIndex(args.config);
-  const words = Array.from(index.keys()).sort((a, b) => b.length - a.length || a.localeCompare(b, "zh"));
+  const words = Array.from(index.keys()).sort((a, b) => b.length - a.length || codepointCompare(a, b));
 
   let masked = maskExemptions(args.chapterText, args.config.exemptions);
   const hits: ClicheLintHit[] = [];
@@ -338,7 +312,7 @@ function computeFallbackReport(args: {
     hits.push({ word, count, severity, category, categories, lines: evidence.lines, snippets: evidence.snippets });
   }
 
-  hits.sort((a, b) => b.count - a.count || severityRank(b.severity) - severityRank(a.severity) || a.word.localeCompare(b.word, "zh"));
+  hits.sort((a, b) => b.count - a.count || severityRank(b.severity) - severityRank(a.severity) || codepointCompare(a.word, b.word));
 
   const hits_per_kchars = chars > 0 ? Math.round((totalHits / (chars / 1000.0)) * 1000) / 1000 : 0;
   const perK = (n: number): number => (chars > 0 ? Math.round((n / (chars / 1000.0)) * 1000) / 1000 : 0);
@@ -454,8 +428,25 @@ function parseScriptReport(raw: unknown): ClicheLintReport {
     const catRaw = ho.category;
     const category = catRaw === null ? null : typeof catRaw === "string" && catRaw.trim().length > 0 ? catRaw.trim() : null;
     const categories = Array.isArray(ho.categories) ? parseOptionalStringArray(ho.categories) : [];
-    const lines = Array.isArray(ho.lines) && ho.lines.every((n) => typeof n === "number" && Number.isInteger(n)) ? (ho.lines as number[]) : [];
-    const snippets = Array.isArray(ho.snippets) && ho.snippets.every((s) => typeof s === "string") ? (ho.snippets as string[]) : [];
+    const linesRaw = ho.lines;
+    const lines =
+      linesRaw === undefined || linesRaw === null
+        ? []
+        : Array.isArray(linesRaw) && linesRaw.every((n) => typeof n === "number" && Number.isInteger(n))
+          ? (linesRaw as number[])
+          : (() => {
+              throw new NovelCliError(`Invalid cliche lint script output: 'hits[${idx}].lines' must be an int array.`, 2);
+            })();
+
+    const snippetsRaw = ho.snippets;
+    const snippets =
+      snippetsRaw === undefined || snippetsRaw === null
+        ? []
+        : Array.isArray(snippetsRaw) && snippetsRaw.every((s) => typeof s === "string")
+          ? (snippetsRaw as string[])
+          : (() => {
+              throw new NovelCliError(`Invalid cliche lint script output: 'hits[${idx}].snippets' must be a string array.`, 2);
+            })();
 
     return { word, count, severity, category, categories, lines, snippets };
   });
@@ -490,23 +481,46 @@ function parseScriptReport(raw: unknown): ClicheLintReport {
   };
 }
 
+type ScriptAttempt =
+  | { status: "missing" }
+  | { status: "ok"; report: ClicheLintReport }
+  | { status: "error"; error: string };
+
 async function tryRunDeterministicScript(args: {
   rootDir: string;
   chapterAbsPath: string;
   configAbsPath: string;
   scriptRelPath: string;
-}): Promise<ClicheLintReport | null> {
-  const scriptAbs = join(args.rootDir, args.scriptRelPath);
-  if (!(await pathExists(scriptAbs))) return null;
+}): Promise<ScriptAttempt> {
+  const scriptRel = args.scriptRelPath.trim();
+  if (scriptRel.length === 0) {
+    return { status: "error", error: "Invalid lint_cliche script path: empty string." };
+  }
+  if (isAbsolute(scriptRel)) {
+    return { status: "error", error: "Invalid lint_cliche script path: must be project-relative (not absolute)." };
+  }
+  try {
+    rejectPathTraversalInput(scriptRel, "platform-profile.json.compliance.script_paths.lint_cliche");
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { status: "error", error: message };
+  }
+
+  const scriptAbs = join(args.rootDir, scriptRel);
+  if (!(await pathExists(scriptAbs))) return { status: "missing" };
 
   try {
     const { stdout } = await execFileAsync("bash", [scriptAbs, args.chapterAbsPath, args.configAbsPath], { maxBuffer: 10 * 1024 * 1024 });
     const trimmed = stdout.trim();
     const parsed = JSON.parse(trimmed) as unknown;
     const report = parseScriptReport(parsed);
-    return { ...report, mode: "script", script: { rel_path: args.scriptRelPath } };
-  } catch {
-    return null;
+    return { status: "ok", report: { ...report, mode: "script", script: { rel_path: scriptRel } } };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const stderr = (err as { stderr?: unknown }).stderr;
+    const stderrText = typeof stderr === "string" && stderr.trim().length > 0 ? stderr.trim() : null;
+    const detail = stderrText ? ` stderr=${stderrText.slice(0, 200)}` : "";
+    return { status: "error", error: `${message}${detail}` };
   }
 }
 
@@ -529,13 +543,13 @@ export async function computeClicheLintReport(args: {
   const preferScript = args.preferDeterministicScript ?? true;
   if (preferScript) {
     const scriptRelPath = resolveClicheLintScriptRelPath(args.platformProfile);
-    const fromScript = await tryRunDeterministicScript({
+    const attempted = await tryRunDeterministicScript({
       rootDir: args.rootDir,
       chapterAbsPath: args.chapterAbsPath,
       configAbsPath: join(args.rootDir, args.configRelPath),
       scriptRelPath
     });
-    if (fromScript) return fromScript;
+    if (attempted.status === "ok") return attempted.report;
   }
   return computeFallbackReport({ chapter: args.chapter, chapterText: args.chapterText, config: args.config });
 }
@@ -549,19 +563,24 @@ export async function precomputeClicheLintReport(args: {
   platformProfile: PlatformProfile | null;
 }): Promise<ClicheLintPrecompute> {
   try {
-    const before = await readWithFingerprint(args.chapterAbsPath);
-    const report = await computeClicheLintReport({
+    const before = await fingerprintTextFile(args.chapterAbsPath);
+
+    const scriptRelPath = resolveClicheLintScriptRelPath(args.platformProfile);
+    const attempted = await tryRunDeterministicScript({
       rootDir: args.rootDir,
-      chapter: args.chapter,
       chapterAbsPath: args.chapterAbsPath,
-      chapterText: before.text,
-      config: args.config,
-      configRelPath: args.configRelPath,
-      platformProfile: args.platformProfile,
-      preferDeterministicScript: true
+      configAbsPath: join(args.rootDir, args.configRelPath),
+      scriptRelPath
     });
-    const after = await readWithFingerprint(args.chapterAbsPath);
-    if (!fingerprintsMatch(before.fp, after.fp)) {
+
+    const error =
+      attempted.status === "error" ? `Deterministic cliché lint script failed; used fallback. ${attempted.error}` : undefined;
+
+    const report =
+      attempted.status === "ok" ? attempted.report : computeFallbackReport({ chapter: args.chapter, chapterText: before.text, config: args.config });
+
+    const afterFp = await fingerprintFile(args.chapterAbsPath);
+    if (!fingerprintsMatch(before.fingerprint, afterFp)) {
       return {
         status: "skipped",
         error: "Chapter changed while running cliché lint; skipping precomputed result.",
@@ -569,7 +588,7 @@ export async function precomputeClicheLintReport(args: {
         report: null
       };
     }
-    return { status: "pass", chapter_fingerprint: after.fp, report };
+    return { status: "pass", ...(error ? { error } : {}), chapter_fingerprint: afterFp, report };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { status: "skipped", error: message, chapter_fingerprint: null, report: null };

@@ -10,9 +10,10 @@ import {
   writeClicheLintLogs
 } from "./cliche-lint.js";
 import { NovelCliError } from "./errors.js";
+import { hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { withWriteLock } from "./lock.js";
-import { attachPlatformConstraintsToEval, computePlatformConstraints, hashText, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
+import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, pad2, pad3 } from "./steps.js";
@@ -460,6 +461,8 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       })
     : null;
 
+  if (precomputedClicheLint?.error) warnings.push(precomputedClicheLint.error);
+
   await withWriteLock(args.rootDir, { chapter: args.chapter }, async () => {
     const checkpointAbs = join(args.rootDir, ".checkpoint.json");
     const stateAbs = join(args.rootDir, rel.final.stateCurrentJson);
@@ -708,7 +711,8 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
             .map((h) => `${h.word} x${h.count}`)
             .slice(0, 3);
           const suffix = hardHits.length > 3 ? " …" : "";
-          throw new NovelCliError(`Cliché lint hard violation: ${hardSummaries.join(" | ")}${suffix}`, 2);
+          const details = hardSummaries.length > 0 ? `${hardSummaries.join(" | ")}${suffix}` : "(details in cliché lint report)";
+          throw new NovelCliError(`Cliché lint hard violation: ${details}`, 2);
         }
       }
 
