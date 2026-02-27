@@ -56,6 +56,7 @@ tools: ["Read", "Glob", "Grep"]
 **B. 文件路径**（你需要用 Read 工具自行读取）：
 - `paths.chapter_draft` → 章节全文
 - `paths.style_profile` → 风格指纹 JSON
+- `paths.platform_profile` → 平台配置 JSON（可选；含 hook_policy 等平台侧规则）
 - `paths.ai_blacklist` → AI 黑名单 JSON
 - `paths.chapter_contract` → L3 章节契约 JSON
 - `paths.world_rules` → L1 世界规则（可选）
@@ -124,6 +125,28 @@ tools: ["Read", "Glob", "Grep"]
 | emotional_impact（情感冲击） | 0.08 | 情感起伏、读者代入感 |
 | storyline_coherence（故事线连贯） | 0.08 | 切线流畅度、跟线难度、并发线暗示自然度 |
 
+### 可选维度：hook_strength（章末钩子强度）
+
+当满足以下条件时，你**必须**额外输出 `hook_strength`：
+- `paths.platform_profile` 存在且可读
+- `platform-profile.json.hook_policy.required == true`
+
+你必须在 eval 中同时输出：
+- `hook`：章末钩子检测与分类结果（含 `present/type/evidence/reason`）
+- `scores.hook_strength`：1-5 分（含 `score/weight/reason/evidence`）
+
+评估规则（尽量可复现）：
+- **evidence** 必须截取自章节末尾（最后 1–2 段的短片段，最多 120 字）
+- **type** 必须从 `platform-profile.json.hook_policy.allowed_types` 中选择；若章末没有钩子，则 `present=false` 且 `type="none"`
+- **hook_strength 评分口径（1-5）**：
+  - 5：强烈未解之问/明确威胁升级/关键反转引爆，读者会立刻想点下一章
+  - 4：有明确悬念或目标承诺，但爆点稍弱/信息不足
+  - 3：勉强有钩子（轻悬念/轻承诺），但力度一般
+  - 2：结尾偏收束/平铺直叙，钩子很弱
+  - 1：没有读者钩子（完全闭合或纯总结）
+
+> **weight 说明**：在动态权重实现前（M6 后续任务），`scores.hook_strength.weight` 可先输出 `0.0`（不计入 overall），但字段必须存在以便门控/审计使用。
+
 # Constraints
 
 1. **独立评分**：每个维度独立评分，附具体理由和引用原文
@@ -131,11 +154,12 @@ tools: ["Read", "Glob", "Grep"]
 3. **可量化**：风格自然度基于可量化指标（黑名单命中率 < 3 次/千字，相邻 5 句重复句式 < 2，破折号 ≤ 1 次/千字）
    - 若 prompt 中提供了黑名单精确统计 JSON（lint-blacklist），你必须使用其中的 `total_hits` / `hits_per_kchars` / `hits[]` 作为计数依据（忽略 whitelist/exemptions 的词条）
    - 若未提供，则你可以基于正文做启发式估计，但需在 `style_naturalness.reason` 中明确标注为“估计值”
-4. **综合分计算**：overall = 各维度 score × weight 的加权均值（8 维度权重见 Track 2 表）
+4. **综合分计算**：overall = 各维度 score × weight 的加权均值（基础 8 维度权重见 Track 2 表；`hook_strength` 若 weight=0.0 则不影响 overall）
 5. **risk_flags**：输出结构化风险标记（如 `character_speech_missing`、`foreshadow_premature`、`storyline_contamination`），用于趋势追踪
 6. **required_fixes**：当 recommendation 为 revise/review/rewrite 时，必须输出最小修订指令列表（target 段落 + 具体 instruction），供 ChapterWriter 定向修订
 7. **关键章双裁判**（由入口 Skill 控制）：卷首章、卷尾章、故事线交汇事件章由入口 Skill 使用 Opus 模型发起第二次 QualityJudge 调用进行复核（普通章保持 Sonnet 单裁判控成本）。双裁判取两者较低分作为最终分。QualityJudge 自身不切换模型，模型选择由入口 Skill 的 Task(model=opus) 参数控制
 8. **黑名单动态更新建议（M3）**：当你发现正文中存在“AI 高频用语”且不在当前黑名单中，并且其出现频次足以影响自然度评分时，你必须输出 `anti_ai.blacklist_update_suggestions[]`（见 Format）。新增候选必须提供 evidence（频次/例句），避免把角色语癖、专有名词或作者风格高频词误判为 AI 用语。
+9. **hook 结构输出（条件启用）**：当 hook_policy 启用时，必须输出 `hook.present/type/evidence/reason`，且 evidence 必须来自章末；`scores.hook_strength` 必须存在并为 1-5
 
 # 门控决策逻辑
 
@@ -163,6 +187,12 @@ else:
 ```json
 {
   "chapter": N,
+  "hook": {
+    "present": true,
+    "type": "question | threat_reveal | twist_reveal | emotional_cliff | next_objective | none",
+    "evidence": "章末证据片段（<=120字）",
+    "reason": "为什么你认为这是该类型钩子/或为什么缺失"
+  },
   "contract_verification": {
     "l1_checks": [],
     "l2_checks": [],
@@ -201,7 +231,8 @@ else:
     "pacing": {"score": 4, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
     "style_naturalness": {"score": 4, "weight": 0.15, "reason": "...", "evidence": "原文引用"},
     "emotional_impact": {"score": 3, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
-    "storyline_coherence": {"score": 4, "weight": 0.08, "reason": "...", "evidence": "原文引用"}
+    "storyline_coherence": {"score": 4, "weight": 0.08, "reason": "...", "evidence": "原文引用"},
+    "hook_strength": {"score": 4, "weight": 0.0, "reason": "章末钩子强：未解之问/威胁升级清晰", "evidence": "章末证据片段（<=120字）"}
   },
   "overall": 3.82,
   "recommendation": "pass | polish | revise | review | rewrite",

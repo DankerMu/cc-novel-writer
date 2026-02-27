@@ -1,7 +1,9 @@
 import { join } from "node:path";
 
 import type { Checkpoint } from "./checkpoint.js";
-import { pathExists } from "./fs-utils.js";
+import { pathExists, readJsonFile } from "./fs-utils.js";
+import { checkHookPolicy } from "./hook-policy.js";
+import { loadPlatformProfile } from "./platform-profile.js";
 import { chapterRelPaths, formatStepId } from "./steps.js";
 
 export type NextStepResult = {
@@ -17,9 +19,67 @@ function normalizeStage(stage: unknown): string | null {
   return null;
 }
 
+async function checkHookPolicyForStage(args: {
+  projectRootDir: string;
+  stagePrefix: "refined" | "judged";
+  inflightChapter: number;
+  pipelineStage: string;
+  evidence: Record<string, unknown>;
+  hookFixCount: number;
+  evalRelPath: string;
+}): Promise<NextStepResult | null> {
+  const loadedProfile = await loadPlatformProfile(args.projectRootDir);
+  const hookPolicy = loadedProfile?.profile.hook_policy;
+  if (!hookPolicy?.required) return null;
+
+  let evalRaw: unknown;
+  try {
+    evalRaw = await readJsonFile(join(args.projectRootDir, args.evalRelPath));
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "judge" }),
+      reason: `${args.stagePrefix}:hook_eval_read_failed`,
+      inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+      evidence: { ...args.evidence, hookFixCount: args.hookFixCount, error: message }
+    };
+  }
+
+  const check = checkHookPolicy({ hookPolicy, evalRaw });
+
+  if (check.status === "invalid_eval") {
+    return {
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "judge" }),
+      reason: `${args.stagePrefix}:hook_eval_invalid:${check.reason}`,
+      inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+      evidence: { ...args.evidence, hookFixCount: args.hookFixCount, hook_check: check }
+    };
+  }
+
+  if (check.status === "fail") {
+    if (args.hookFixCount < 1) {
+      return {
+        step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "hook-fix" }),
+        reason: `${args.stagePrefix}:hook_policy_fail:hook-fix:${check.reason}`,
+        inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+        evidence: { ...args.evidence, hookFixCount: args.hookFixCount, hook_check: check }
+      };
+    }
+    return {
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "review" }),
+      reason: `${args.stagePrefix}:hook_policy_fail:manual_review:${check.reason}`,
+      inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+      evidence: { ...args.evidence, hookFixCount: args.hookFixCount, hook_check: check }
+    };
+  }
+
+  return null;
+}
+
 export async function computeNextStep(projectRootDir: string, checkpoint: Checkpoint): Promise<NextStepResult> {
   const inflightChapter = typeof checkpoint.inflight_chapter === "number" ? checkpoint.inflight_chapter : null;
   const stage = normalizeStage(checkpoint.pipeline_stage);
+  const hookFixCount = typeof checkpoint.hook_fix_count === "number" ? checkpoint.hook_fix_count : 0;
 
   // Fresh start.
   if (inflightChapter === null || stage === null || stage === "committed") {
@@ -110,6 +170,18 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
         evidence
       };
     }
+
+    const hookGate = await checkHookPolicyForStage({
+      projectRootDir,
+      stagePrefix: "refined",
+      inflightChapter,
+      pipelineStage: stage,
+      evidence,
+      hookFixCount,
+      evalRelPath: rel.staging.evalJson
+    });
+    if (hookGate) return hookGate;
+
     return {
       step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "commit" }),
       reason: "refined:ready_commit",
@@ -127,6 +199,18 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
         evidence
       };
     }
+
+    const hookGate = await checkHookPolicyForStage({
+      projectRootDir,
+      stagePrefix: "judged",
+      inflightChapter,
+      pipelineStage: stage,
+      evidence,
+      hookFixCount,
+      evalRelPath: rel.staging.evalJson
+    });
+    if (hookGate) return hookGate;
+
     return {
       step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "commit" }),
       reason: "judged:ready_commit",

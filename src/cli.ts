@@ -74,7 +74,7 @@ function buildProgram(argv: string[]): Command {
       process.stdout.write(
         `Pipeline: stage=${checkpoint.pipeline_stage ?? "null"} inflight=${checkpoint.inflight_chapter ?? "null"} revisions=${
           checkpoint.revision_count ?? 0
-        }\n`
+        } hook_fixes=${checkpoint.hook_fix_count ?? 0}\n`
       );
       if (lock.exists) {
         process.stdout.write(
@@ -199,6 +199,9 @@ function buildProgram(argv: string[]): Command {
       }
 
       for (const line of result.plan) process.stdout.write(`${line}\n`);
+      if (result.warnings.length > 0) {
+        for (const w of result.warnings) process.stdout.write(`WARN: ${w}\n`);
+      }
       if (!localOpts.dryRun) process.stdout.write(`Committed chapter ${localOpts.chapter}.\n`);
     });
 

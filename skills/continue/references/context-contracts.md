@@ -39,6 +39,7 @@ chapter_writer_manifest = {
   # ── paths（subagent 自读） ──
   paths: {
     style_profile: "style-profile.json",                              # 必读（含 style_exemplars + writing_directives）
+    platform_profile: "platform-profile.json",                        # 可选（平台字数/钩子策略/信息负载等）
     style_drift: "style-drift.json",                                  # 可选
     chapter_contract: "volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json",
     volume_outline: "volumes/vol-{V:02d}/outline.md",
@@ -65,6 +66,7 @@ chapter_writer_revision_manifest = chapter_writer_manifest + {
   # ── paths 追加 ──
   paths += {
     chapter_draft: "staging/chapters/chapter-{C:03d}.md",  # 待修订的现有正文
+    chapter_eval: "staging/evaluations/chapter-{C:03d}-eval.json",  # 可选（hook-fix/修订时提供的评估上下文）
   }
 }
 ```

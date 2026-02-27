@@ -61,6 +61,7 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
 
   await maybeAdd("project_brief", "brief.md");
   await maybeAdd("style_profile", "style-profile.json");
+  await maybeAdd("platform_profile", "platform-profile.json");
   await maybeAdd("ai_blacklist", "ai-blacklist.json");
   await maybeAdd("web_novel_cliche_lint", "web-novel-cliche-lint.json");
   await maybeAdd("style_guide", "skills/novel-writing/references/style-guide.md");
@@ -127,7 +128,41 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
     });
     next_actions.push({ kind: "command", command: `novel validate ${stepId}` });
     next_actions.push({ kind: "command", command: `novel advance ${stepId}` });
-    next_actions.push({ kind: "command", command: `novel commit --chapter ${args.step.chapter}`, note: "After judged, commit staging artifacts." });
+    next_actions.push({
+      kind: "command",
+      command: `novel next`,
+      note: "After advance, compute the next deterministic step (may be hook-fix/review/commit)."
+    });
+  } else if (args.step.stage === "hook-fix") {
+    agent = { kind: "subagent", name: "chapter-writer" };
+    paths.chapter_draft = relIfExists(rel.staging.chapterMd, await pathExists(join(args.rootDir, rel.staging.chapterMd)));
+    paths.chapter_eval = relIfExists(rel.staging.evalJson, await pathExists(join(args.rootDir, rel.staging.evalJson)));
+    inline.fix_mode = "hook-fix";
+    inline.required_fixes = [
+      {
+        target: "chapter_end",
+        instruction:
+          "执行 hook-fix：在不改变前文既定事件/信息的前提下，只改最后 1–2 段（或末尾 ~10%），补强章末钩子（读者面对面悬念/威胁/反转/情绪 cliff/下一目标承诺）。钩子类型需遵守 platform-profile.json.hook_policy.allowed_types，目标 hook_strength >= platform-profile.json.hook_policy.min_strength。禁止新增关键设定/新命名角色/新地点，尽量不影响 state/crossref。",
+      }
+    ];
+    expected_outputs.push({ path: rel.staging.chapterMd, required: true, note: "Overwrite chapter draft with ending-only hook fix." });
+    next_actions.push({ kind: "command", command: `novel validate ${stepId}` });
+    next_actions.push({ kind: "command", command: `novel advance ${stepId}` });
+    next_actions.push({
+      kind: "command",
+      command: `novel instructions chapter:${String(args.step.chapter).padStart(3, "0")}:judge --json`,
+      note: "After hook-fix, re-run QualityJudge to refresh eval."
+    });
+  } else if (args.step.stage === "review") {
+    agent = { kind: "cli", name: "manual-review" };
+    paths.chapter_draft = relIfExists(rel.staging.chapterMd, await pathExists(join(args.rootDir, rel.staging.chapterMd)));
+    paths.chapter_eval = relIfExists(rel.staging.evalJson, await pathExists(join(args.rootDir, rel.staging.evalJson)));
+    expected_outputs.push({ path: "(manual)", required: false, note: "Review required: hook policy still failing after bounded hook-fix." });
+    next_actions.push({
+      kind: "command",
+      command: `novel instructions chapter:${String(args.step.chapter).padStart(3, "0")}:judge --json`,
+      note: "After manually editing the chapter ending, re-run QualityJudge."
+    });
   } else if (args.step.stage === "commit") {
     agent = { kind: "cli", name: "novel" };
     expected_outputs.push({ path: `chapters/chapter-${String(args.step.chapter).padStart(3, "0")}.md`, required: true });
