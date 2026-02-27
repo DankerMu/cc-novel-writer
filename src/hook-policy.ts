@@ -87,7 +87,7 @@ export function checkHookPolicy(args: { hookPolicy: HookPolicy; evalRaw: unknown
   const extracted: HookEvalExtract = { ...hook, type: hookType, strength };
 
   if (!strengthInRange(strength)) {
-    return { status: "invalid_eval", reason: "missing or invalid scores.hook_strength.score (expected 1-5)", extracted };
+    return { status: "invalid_eval", reason: "missing or invalid hook_strength (expected 1-5)", extracted };
   }
 
   if (hook.present === null) {

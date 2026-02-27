@@ -199,6 +199,9 @@ function buildProgram(argv: string[]): Command {
       }
 
       for (const line of result.plan) process.stdout.write(`${line}\n`);
+      if (result.warnings.length > 0) {
+        for (const w of result.warnings) process.stdout.write(`WARN: ${w}\n`);
+      }
       if (!localOpts.dryRun) process.stdout.write(`Committed chapter ${localOpts.chapter}.\n`);
     });
 
