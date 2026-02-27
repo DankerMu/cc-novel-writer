@@ -95,7 +95,6 @@ novel-project/
 ```
 
 > `logs/` 目录完整清单与命名约定见 `docs/dr-workflow/novel-writer-tool/final/prd/09-logs-index.md`（SSOT）。
-
 > **chapter_id 命名规范**：全局统一使用 3 位零填充格式 `chapter-{C:03d}`（如 `chapter-001`、`chapter-048`、`chapter-150`）。适用于所有章节相关文件：`chapters/chapter-{C:03d}.md`、`summaries/chapter-{C:03d}-summary.md`、`evaluations/chapter-{C:03d}-eval.json`、`staging/` 下对应文件、`logs/chapter-{C:03d}-log.json`、`chapter-contracts/chapter-{C:03d}.json`。hook 脚本使用 `printf '%03d'` 格式化。
 > **实体 ID 命名规范**：角色、故事线等实体使用稳定的 **slug ID**（小写英文/拼音 + 连字符，如 `zhang-san`、`main-arc`），而非中文显示名。ops path 统一使用 ID：`characters.zhang-san.location`（非 `characters.张三.location`）。角色档案文件名即为 ID（`characters/active/zhang-san.md` + `characters/active/zhang-san.json`），其中 `.md` 为叙述性档案，`.json` 为结构化数据（至少包含 `display_name` 与 `contracts[]`）。`storyline_id` 同理（`storylines/main-arc/memory.md`）。关系映射也使用 ID：`relationships: {"li-si": 50}`。
 

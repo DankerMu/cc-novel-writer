@@ -145,4 +145,3 @@
 - Owning specs：
   - `openspec/changes/m7-retention-and-readability-guards/specs/name-conflict-lint/spec.md`
   - `openspec/changes/m7-retention-and-readability-guards/tasks.md`（落盘约定）
-
