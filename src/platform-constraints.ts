@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { NovelCliError } from "./errors.js";
-import { ensureDir, pathExists, readTextFile, writeJsonFile } from "./fs-utils.js";
+import { ensureDir, pathExists, readJsonFile, writeJsonFile } from "./fs-utils.js";
 import type { PlatformId, PlatformProfile, SeverityPolicy } from "./platform-profile.js";
 import { pad3 } from "./steps.js";
 import { isPlainObject } from "./type-guards.js";
@@ -203,9 +203,21 @@ function detectScriptConsistency(text: string): {
   const simplifiedCounts = new Map<string, number>();
   const traditionalCounts = new Map<string, number>();
 
+  const targetChars = new Set<string>();
   for (const [s, t] of SIMPLIFIED_TRADITIONAL_PAIRS) {
-    const sCount = findPhraseHits(text, s).count;
-    const tCount = findPhraseHits(text, t).count;
+    targetChars.add(s);
+    targetChars.add(t);
+  }
+
+  const freq = new Map<string, number>();
+  for (const ch of text) {
+    if (!targetChars.has(ch)) continue;
+    freq.set(ch, (freq.get(ch) ?? 0) + 1);
+  }
+
+  for (const [s, t] of SIMPLIFIED_TRADITIONAL_PAIRS) {
+    const sCount = freq.get(s) ?? 0;
+    const tCount = freq.get(t) ?? 0;
     if (sCount > 0) simplifiedCounts.set(s, sCount);
     if (tCount > 0) traditionalCounts.set(t, tCount);
   }
@@ -284,6 +296,7 @@ function parseNerOutput(raw: unknown): NerOutput {
   const obj = raw as Record<string, unknown>;
   const schema = obj.schema_version;
   if (typeof schema !== "number" || !Number.isInteger(schema)) throw new NovelCliError(`Invalid NER output: missing schema_version.`, 2);
+  if (schema !== 1) throw new NovelCliError(`Invalid NER output: unsupported schema_version=${schema} (expected 1).`, 2);
   const entitiesRaw = obj.entities;
   if (!isPlainObject(entitiesRaw)) throw new NovelCliError(`Invalid NER output: missing entities object.`, 2);
   const entitiesObj = entitiesRaw as Record<string, unknown>;
@@ -404,7 +417,7 @@ export async function computePlatformConstraints(args: {
   } else if (wcSoftWarn) {
     issues.push({
       id: "word_count.target_deviation",
-      severity: "warn",
+      severity: "soft",
       summary: `Word count ${wordCount} is outside target range ${wc.target_min}-${wc.target_max} (within hard bounds).`,
       suggestion: "Consider adjusting chapter length to better match platform target range."
     });
@@ -517,7 +530,7 @@ export async function computePlatformConstraints(args: {
   if (unknownEntitiesCount !== null && unknownEntitiesCount > info.max_unknown_entities_per_chapter) {
     infoIssues.push({
       id: "info_load.unknown_entities_exceeded",
-      severity: "warn",
+      severity: "soft",
       summary: `Unknown entities ${unknownEntitiesCount} exceeds max ${info.max_unknown_entities_per_chapter}.`,
       evidence: unknownEntities?.[0] ? `${unknownEntities[0].text} (${unknownEntities[0].category})` : undefined,
       suggestion: "Reduce new/unknown names or add brief reintroductions/grounding context."
@@ -526,7 +539,7 @@ export async function computePlatformConstraints(args: {
   if (newEntitiesCount !== null && newEntitiesCount > info.max_new_entities_per_chapter) {
     infoIssues.push({
       id: "info_load.new_entities_exceeded",
-      severity: "warn",
+      severity: "soft",
       summary: `New entities ${newEntitiesCount} exceeds max ${info.max_new_entities_per_chapter}.`,
       evidence: newEntities?.[0] ? `${newEntities[0].text} (${newEntities[0].category})` : undefined,
       suggestion: "Reduce the number of newly introduced entities in a single chapter."
@@ -535,7 +548,7 @@ export async function computePlatformConstraints(args: {
   if (newTermsPer1k !== null && newTermsPer1k > info.max_new_terms_per_1k_words) {
     infoIssues.push({
       id: "info_load.new_terms_density_exceeded",
-      severity: "warn",
+      severity: "soft",
       summary: `New terms per 1k ${newTermsPer1k} exceeds max ${info.max_new_terms_per_1k_words}.`,
       suggestion: "Spread new terminology across chapters or add clearer context for each new term."
     });
@@ -609,7 +622,7 @@ export async function attachPlatformConstraintsToEval(args: {
   reportRelPath: string;
   report: PlatformConstraintsReport;
 }): Promise<void> {
-  const raw = JSON.parse(await readTextFile(args.evalAbsPath)) as unknown;
+  const raw = await readJsonFile(args.evalAbsPath);
   if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${args.evalRelPath}: eval JSON must be an object.`, 2);
   const obj = raw as Record<string, unknown>;
 
@@ -625,9 +638,3 @@ export async function attachPlatformConstraintsToEval(args: {
 
   await writeJsonFile(args.evalAbsPath, obj);
 }
-
-export async function ensurePlatformConstraintsDir(rootDir: string): Promise<void> {
-  const abs = join(rootDir, "logs/platform-constraints");
-  if (!(await pathExists(abs))) await ensureDir(abs);
-}
-
