@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -370,24 +371,79 @@ function buildEntityIndex(ner: NerOutput): EntityIndex {
   return index;
 }
 
+type FileFingerprint = { size: number; mtime_ms: number };
+
+async function fingerprintFile(absPath: string): Promise<FileFingerprint> {
+  const s = await stat(absPath);
+  return { size: s.size, mtime_ms: s.mtimeMs };
+}
+
 async function collectRecentEntityTexts(args: { rootDir: string; chapter: number }): Promise<Set<string>> {
   const recent = new Set<string>();
   const start = Math.max(1, args.chapter - INFO_LOAD_WINDOW_CHAPTERS);
   const end = args.chapter - 1;
 
+  const chapterAbsPaths: string[] = [];
   for (let c = start; c <= end; c += 1) {
     const rel = `chapters/chapter-${pad3(c)}.md`;
     const abs = join(args.rootDir, rel);
-    if (!(await pathExists(abs))) continue;
-    try {
-      const ner = await runNer(abs);
-      for (const text of buildEntityIndex(ner).keys()) recent.add(text);
-    } catch {
-      // ignore
-    }
+    if (await pathExists(abs)) chapterAbsPaths.push(abs);
   }
 
+  const MAX_PARALLEL_NER = 4;
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(MAX_PARALLEL_NER, chapterAbsPaths.length) }, async () => {
+    while (true) {
+      const idx = cursor;
+      cursor += 1;
+      const abs = chapterAbsPaths[idx];
+      if (!abs) break;
+      try {
+        const ner = await runNer(abs);
+        for (const text of buildEntityIndex(ner).keys()) recent.add(text);
+      } catch {
+        // ignore
+      }
+    }
+  });
+  await Promise.all(workers);
+
   return recent;
+}
+
+export type InfoLoadNerPrecompute = {
+  status: "pass" | "skipped";
+  error?: string;
+  chapter_fingerprint: FileFingerprint | null;
+  current_index: EntityIndex | null;
+  recent_texts: Set<string> | null;
+};
+
+export async function precomputeInfoLoadNer(args: {
+  rootDir: string;
+  chapter: number;
+  chapterAbsPath: string;
+}): Promise<InfoLoadNerPrecompute> {
+  try {
+    const fpBefore = await fingerprintFile(args.chapterAbsPath);
+    const ner = await runNer(args.chapterAbsPath);
+    const fpAfter = await fingerprintFile(args.chapterAbsPath);
+    if (fpBefore.size !== fpAfter.size || fpBefore.mtime_ms !== fpAfter.mtime_ms) {
+      return {
+        status: "skipped",
+        error: "Chapter changed while running NER; skipping info-load NER.",
+        chapter_fingerprint: null,
+        current_index: null,
+        recent_texts: null
+      };
+    }
+    const current_index = buildEntityIndex(ner);
+    const recent_texts = await collectRecentEntityTexts({ rootDir: args.rootDir, chapter: args.chapter });
+    return { status: "pass", chapter_fingerprint: fpAfter, current_index, recent_texts };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { status: "skipped", error: message, chapter_fingerprint: null, current_index: null, recent_texts: null };
+  }
 }
 
 export async function computePlatformConstraints(args: {
@@ -397,6 +453,7 @@ export async function computePlatformConstraints(args: {
   chapterText: string;
   platformProfile: PlatformProfile;
   state: Record<string, unknown>;
+  infoLoadNer?: InfoLoadNerPrecompute;
 }): Promise<PlatformConstraintsReport> {
   const generated_at = new Date().toISOString();
 
@@ -490,10 +547,12 @@ export async function computePlatformConstraints(args: {
   let newEntities: Array<{ text: string; category: string; evidence: string | null }> | null = null;
 
   try {
-    const ner = await runNer(args.chapterAbsPath);
-    const currentIndex = buildEntityIndex(ner);
-    const recentTexts = await collectRecentEntityTexts({ rootDir: args.rootDir, chapter: args.chapter });
-
+    const pre = args.infoLoadNer;
+    if (pre && pre.status === "skipped") {
+      throw new Error(pre.error ?? "NER precompute skipped.");
+    }
+    const currentIndex = pre?.current_index ?? buildEntityIndex(await runNer(args.chapterAbsPath));
+    const recentTexts = pre?.recent_texts ?? await collectRecentEntityTexts({ rootDir: args.rootDir, chapter: args.chapter });
     const knownNames = collectKnownEntityNames(args.state);
 
     const unknown: Array<{ text: string; category: string; evidence: string | null }> = [];
