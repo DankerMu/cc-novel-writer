@@ -31,17 +31,20 @@
         "banned_words": [],
         "duplicate_name_policy": "soft",
         "script_paths": {
-          "lint_blacklist": "scripts/lint-blacklist.sh",
-          "lint_cliche": "scripts/lint-cliche.sh"
-        }
+          "lint_blacklist": "scripts/lint-blacklist.sh"
+        },
+        "_comment_lint_cliche": "TODO: implement deterministic cliché lint (e.g. scripts/lint-cliche.sh) and wire it here."
       },
       "scoring": {
         "genre_drive_type": "plot",
         "weight_profile_id": "plot:v1"
       },
       "retention": null,
+      "_comment_retention": "TODO: retention policies (M7).",
       "readability": null,
-      "naming": null
+      "_comment_readability": "TODO: readability policies (future milestone).",
+      "naming": null,
+      "_comment_naming": "TODO: naming policies (future milestone)."
     },
     "tomato": {
       "$schema": "schemas/platform-profile.schema.json",
@@ -70,18 +73,20 @@
         "banned_words": [],
         "duplicate_name_policy": "soft",
         "script_paths": {
-          "lint_blacklist": "scripts/lint-blacklist.sh",
-          "lint_cliche": "scripts/lint-cliche.sh"
-        }
+          "lint_blacklist": "scripts/lint-blacklist.sh"
+        },
+        "_comment_lint_cliche": "TODO: implement deterministic cliché lint (e.g. scripts/lint-cliche.sh) and wire it here."
       },
       "scoring": {
         "genre_drive_type": "plot",
         "weight_profile_id": "plot:v1"
       },
       "retention": null,
+      "_comment_retention": "TODO: retention policies (M7).",
       "readability": null,
-      "naming": null
+      "_comment_readability": "TODO: readability policies (future milestone).",
+      "naming": null,
+      "_comment_naming": "TODO: naming policies (future milestone)."
     }
   }
 }
-
