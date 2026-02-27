@@ -196,6 +196,7 @@ export function parsePlatformProfile(raw: unknown, file: string): PlatformProfil
   const info_load = parseInfoLoadPolicy(obj.info_load, file);
   const compliance = parseCompliancePolicy(obj.compliance, file);
 
+  // hook_policy is required in schemas/platform-profile.schema.json but optional here for backward compat with older files.
   const hook_policy = isPlainObject(obj.hook_policy) ? parseHookPolicy(obj.hook_policy, file) : undefined;
   const scoring = isPlainObject(obj.scoring) ? parseScoringPolicy(obj.scoring, file) : undefined;
 
