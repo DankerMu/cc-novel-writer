@@ -10,6 +10,10 @@ novel-project/
 ├── style-profile.json              # 用户风格指纹
 ├── ai-blacklist.json               # AI 用语黑名单
 ├── style-drift.json                # 风格漂移纠偏指令（每 5 章检测生成，回归基线后清除）
+├── character-voice-drift.json      # 角色语气漂移纠偏指令（M7，可选；存在时注入后续写作/润色）
+├── engagement-metrics.jsonl        # 参与度密度指标流（M7，可选；append-only）
+├── hook-ledger.json                # 章末钩子台账（M7，可选；短周期留存“承诺→兑现”）
+├── promise-ledger.json             # 长周期承诺台账（M7，可选；跨章/跨卷叙事承诺）
 ├── research/                       # 背景研究资料（doc-workflow 导入或手动放入）
 │   └── *.md                        # 每个主题一个文件，WorldBuilder/CharacterWeaver 自动读取
 ├── world/                          # 世界观（活文档）
@@ -63,6 +67,7 @@ novel-project/
 │   ├── chapter-001-eval.json
 │   └── ...
 └── logs/                          # 流水线日志 + 分析报告
+    ├── audit.jsonl                # 安全拦截审计（append-only）
     ├── chapter-001-log.json
     ├── unknown-entities.jsonl
     ├── continuity/                 # 一致性检查报告（NER）
@@ -71,13 +76,29 @@ novel-project/
     ├── foreshadowing/              # 伏笔盘点报告
     │   ├── latest.json
     │   └── foreshadowing-check-vol-01-ch001-ch010.json
-    └── storylines/                 # 故事线分析报告
-        ├── rhythm-latest.json
-        ├── rhythm-vol-01-ch001-ch010.json
-        ├── broken-bridges-latest.json
-        └── broken-bridges-vol-01-ch001-ch010.json
+    ├── storylines/                 # 故事线分析报告
+    │   ├── rhythm-latest.json
+    │   ├── rhythm-vol-01-ch001-ch010.json
+    │   ├── broken-bridges-latest.json
+    │   └── broken-bridges-vol-01-ch001-ch010.json
+    ├── engagement/                 # 参与度密度窗口报告（M7）
+    │   ├── latest.json
+    │   └── engagement-report-vol-01-ch001-ch010.json
+    ├── promises/                   # 长周期承诺台账窗口报告（M7）
+    │   ├── latest.json
+    │   └── promise-ledger-report-vol-01-ch001-ch010.json
+    ├── retention/                  # 短周期留存钩子窗口报告（M7）
+    │   ├── latest.json
+    │   └── retention-report-vol-01-ch001-ch010.json
+    ├── readability/                # 移动端可读性 lint（M7）
+    │   ├── latest.json
+    │   └── readability-report-chapter-001.json
+    └── naming/                     # 命名冲突 lint（M7）
+        ├── latest.json
+        └── naming-report-chapter-001.json
 ```
 
+> `logs/` 目录完整清单与命名约定见 `docs/dr-workflow/novel-writer-tool/final/prd/09-logs-index.md`（SSOT）。
 > **chapter_id 命名规范**：全局统一使用 3 位零填充格式 `chapter-{C:03d}`（如 `chapter-001`、`chapter-048`、`chapter-150`）。适用于所有章节相关文件：`chapters/chapter-{C:03d}.md`、`summaries/chapter-{C:03d}-summary.md`、`evaluations/chapter-{C:03d}-eval.json`、`staging/` 下对应文件、`logs/chapter-{C:03d}-log.json`、`chapter-contracts/chapter-{C:03d}.json`。hook 脚本使用 `printf '%03d'` 格式化。
 > **实体 ID 命名规范**：角色、故事线等实体使用稳定的 **slug ID**（小写英文/拼音 + 连字符，如 `zhang-san`、`main-arc`），而非中文显示名。ops path 统一使用 ID：`characters.zhang-san.location`（非 `characters.张三.location`）。角色档案文件名即为 ID（`characters/active/zhang-san.md` + `characters/active/zhang-san.json`），其中 `.md` 为叙述性档案，`.json` 为结构化数据（至少包含 `display_name` 与 `contracts[]`）。`storyline_id` 同理（`storylines/main-arc/memory.md`）。关系映射也使用 ID：`relationships: {"li-si": 50}`。
 
