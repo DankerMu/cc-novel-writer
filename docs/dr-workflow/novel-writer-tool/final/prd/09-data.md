@@ -10,6 +10,10 @@ novel-project/
 ├── style-profile.json              # 用户风格指纹
 ├── ai-blacklist.json               # AI 用语黑名单
 ├── style-drift.json                # 风格漂移纠偏指令（每 5 章检测生成，回归基线后清除）
+├── character-voice-drift.json      # 角色语气漂移纠偏指令（M7，可选；存在时注入后续写作/润色）
+├── engagement-metrics.jsonl        # 参与度密度指标流（M7，可选；append-only）
+├── hook-ledger.json                # 章末钩子台账（M7，可选；短周期留存“承诺→兑现”）
+├── promise-ledger.json             # 长周期承诺台账（M7，可选；跨章/跨卷叙事承诺）
 ├── research/                       # 背景研究资料（doc-workflow 导入或手动放入）
 │   └── *.md                        # 每个主题一个文件，WorldBuilder/CharacterWeaver 自动读取
 ├── world/                          # 世界观（活文档）
