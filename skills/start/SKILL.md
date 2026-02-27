@@ -337,10 +337,10 @@ Skill → 状态映射：
    - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~005）
    - `storylines/storylines.json`：`{"storylines": [], "relationships": [], "storyline_types": ["type:main_arc", "type:faction_conflict", "type:conspiracy", "type:mystery", "type:character_arc", "type:parallel_timeline"]}` （WorldBuilder 在 Step D 填充具体故事线）
    - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`staging/foreshadowing/`、`staging/novel-ask/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
-   - （平台配置 gate；NOVEL_ASK-compatible）写入：
+   - （平台配置 gate；NOVEL_ASK-compatible）写入（仅当 `platform-profile.json` 不存在且 Step B.4.4 已确认）：
      - `staging/novel-ask/init-platform-profile.question.json`（QuestionSpec：platform/genre_drive_type/overrides_json）
      - `staging/novel-ask/init-platform-profile.answers.json`（AnswerSpec：回答 + answered_at/answered_by）
-     - 仅当 Step B.4 的 review gate 已确认，才允许写入以上 gate 产物与 `platform-profile.json`（不得先写盘后确认）
+     - 若 `platform-profile.json` 已存在（Step B.4.1 跳过路径）：不得创建/覆盖以上 gate 产物（避免伪造审计记录）
 
 ##### Step D: 世界观 + 角色 + 故事线
 
@@ -443,7 +443,7 @@ Skill → 状态映射：
 
 确认更新类型（世界观/角色/关系） → 变更前快照 → 派发 WorldBuilder/CharacterWeaver 增量更新（含退场保护三重检查） → 变更后差异分析写入 `pending_actions` → 输出传播摘要。
 
-> 平台绑定不可变：`platform-profile.json.platform` 一旦写入不得更改；若用户要求“换平台”，必须拒绝并建议新建项目。
+> 平台画像不可被“更新设定”修改：`platform-profile.json.platform` 一旦写入不得更改；“更新设定”仅允许改世界观/角色/关系，**不得**修改 `platform-profile.json`（包括 `scoring.genre_drive_type` 与各类阈值）。若用户要求“换平台”，必须拒绝并建议新建项目；若用户要求调整驱动类型/阈值，应引导走专门的配置 review gate（待实现）。
 
 详见 `references/setting-update.md`。
 
