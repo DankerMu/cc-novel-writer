@@ -35,10 +35,12 @@
 ## 读者画像
 
 - **目标平台**：{platform}
+- **叙事驱动类型**：{genre_drive_type}（plot / character / suspense / slice_of_life）
+- **平台画像**：platform-profile.json（不可变平台绑定；字数/钩子/信息负载/合规等阈值单一事实来源）
+- **平台约束摘要**：{platform_constraints_summary}（建议由 init 从 platform-profile.json 的 word_count/hook_policy/info_load/compliance 聚合生成；也可手填覆盖）
 - **目标读者**：{target_reader}
 - **核心卖点**：{selling_point}
 
 ## 备注
 
 {notes}
-
