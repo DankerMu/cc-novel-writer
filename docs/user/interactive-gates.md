@@ -17,6 +17,7 @@
   "version": 1,
   "step": "chapter:048:draft",
   "agent": { "kind": "subagent", "name": "chapter-writer" },
+  "manifest": { "mode": "paths", "inline": {}, "paths": {} },
   "novel_ask": {
     "version": 1,
     "topic": "platform binding",
@@ -36,7 +37,19 @@
       }
     ]
   },
-  "answer_path": "staging/novel-ask/chapter-048-draft.answers.json"
+  "answer_path": "staging/novel-ask/chapter-048-draft.answers.json",
+  "expected_outputs": [
+    {
+      "path": "staging/novel-ask/chapter-048-draft.answers.json",
+      "required": true,
+      "note": "AnswerSpec JSON record for the NOVEL_ASK gate (written before main step execution)."
+    },
+    { "path": "staging/chapters/chapter-048.md", "required": true }
+  ],
+  "next_actions": [
+    { "kind": "command", "command": "novel validate chapter:048:draft" },
+    { "kind": "command", "command": "novel advance chapter:048:draft" }
+  ]
 }
 ```
 
@@ -53,6 +66,8 @@
   "answered_by": "claude_code"
 }
 ```
+
+> `answered_by` 是审计字段：建议在 Claude Code 适配器写入 `claude_code`，在 Codex 适配器写入 `codex`（也可以用 `human` 等）。
 
 ### 3) gate 通过后再执行主 agent
 
@@ -77,14 +92,17 @@
 
 执行器在进入主 agent 之前必须确保：
 
-- `answer_path` 是非空字符串、非绝对路径、且不包含 `..`
+- `answer_path` 必须是非空的项目相对路径：不允许绝对路径、`..` 段，且解析后不得逃出项目根目录
 - AnswerSpec 是合法 JSON object
 - `version/topic` 与 QuestionSpec 一致
+- `answers` 的 key 必须是 `snake_case`，且必须能在 QuestionSpec 里找到同名 question id（不允许多写未知字段）
 - required=true 的问题必须回答
+- `allow_other`（可选，默认 false）：设为 `true` 时允许 choice 问题回答不在 option labels 内的自定义字符串
 - choice 问题：当 `allow_other` 不是 `true` 时，答案必须落在 option labels 内
 - multi_choice：
   - required=true：至少选 1 个
-  - required=false：若 0 选择，推荐**不要写入该 question id**（而不是写空数组）
+  - required=false：若 0 选择，**必须完全不写入该 question id**（写空数组会被校验拒绝）
+  - 不允许重复选项（数组内 duplicate 会被校验拒绝）
 
 ## Claude Code vs Codex：交互差异与降级策略
 
