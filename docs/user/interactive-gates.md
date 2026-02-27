@@ -104,4 +104,3 @@
 - 若工具不可用或无法可靠表达语义（例如 `free_text`）：退化为严格 JSON 回答格式，由适配器构造 + 校验 AnswerSpec 后落盘
 
 详见：`.codex/skills/novel-cli-step/SKILL.md`
-
