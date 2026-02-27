@@ -196,7 +196,7 @@ Skill → 状态映射：
 
 > 关键：每条路径的补充信息必须在 Step B 内收齐，不得延迟到 Step E 再问。Step E 仅执行 StyleAnalyzer 派发，不再与用户交互。
 
-##### Step B.4: 平台画像 + 驱动类型（M6 gate，1-3 轮交互）
+##### Step B.4: 平台画像 + 驱动类型（M6 gate；支持回退）
 
 目标：在写入 `brief.md` 与 `platform-profile.json` 之前，完成一次**显式 review gate**，把平台绑定、题材驱动类型、关键阈值确认下来（对齐 `NOVEL_ASK` 语义：可审计、可恢复、跨执行器一致）。
 
@@ -231,7 +231,15 @@ Skill → 状态映射：
 2. 我要微调阈值
 ```
 
-3) 若用户选择微调：让用户用**严格 JSON** 提供 overrides（只允许覆盖 `word_count` / `hook_policy` / `info_load` 的字段；其余字段不得改动）：
+3) 若用户选择微调：让用户用**严格 JSON** 提供 overrides（deep merge；仅允许白名单字段；其余字段不得改动）：
+
+- 仅允许的 root keys：`word_count` / `hook_policy` / `info_load`（不允许出现 `platform` / `created_at` / `scoring` 等）
+- 仅允许的 leaf keys：
+  - `word_count.{target_min,target_max,hard_min,hard_max}`
+  - `hook_policy.{required,min_strength,allowed_types}`（不允许覆盖 `fix_strategy`）
+  - `info_load.{max_new_entities_per_chapter,max_unknown_entities_per_chapter,max_new_terms_per_1k_words}`
+- merge 语义：对象字段 deep merge；数组字段整体替换；若出现非白名单字段则拒绝并要求用户重填
+
 ```json
 {
   "word_count": { "target_min": 2500, "target_max": 3500 },
@@ -255,10 +263,14 @@ Skill → 状态映射：
 选项：
 1. 确认并继续 (Recommended)
 2. 返回微调阈值
-3. 重新选择平台/驱动类型
+3. 重新选择（平台/驱动类型；若已存在 `platform-profile.json` 则仅可重选驱动类型）
 ```
 
-> 通过该 gate 后：Step C 才允许写入 `platform-profile.json` 与 `brief.md`，并将 gate 的 QuestionSpec/AnswerSpec 落盘到 `staging/novel-ask/` 供审计与恢复。
+选择选项 3 时：
+- 若 `platform-profile.json` 不存在：回退到 B.4.1（重选平台）→ B.4.2（重选驱动类型）
+- 若 `platform-profile.json` 已存在：回退到 B.4.2（仅重选驱动类型）
+
+> 通过该 gate 后：Step C 才允许写入 `platform-profile.json`（`brief.md` 仍由 Step B.5 确认后写入），并将 gate 的 QuestionSpec/AnswerSpec 落盘到 `staging/novel-ask/` 供审计与恢复。
 
 ##### Step B.5: Brief 交互完善（1-2 轮交互）
 
@@ -317,8 +329,8 @@ Skill → 状态映射：
    - `storylines/storylines.json`：`{"storylines": [], "relationships": [], "storyline_types": ["type:main_arc", "type:faction_conflict", "type:conspiracy", "type:mystery", "type:character_arc", "type:parallel_timeline"]}` （WorldBuilder 在 Step D 填充具体故事线）
    - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`staging/foreshadowing/`、`staging/novel-ask/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
    - （平台配置 gate；NOVEL_ASK-compatible）写入：
-     - `staging/novel-ask/init.platform_profile.question.json`（QuestionSpec：platform/genre_drive_type/overrides_json）
-     - `staging/novel-ask/init.platform_profile.answers.json`（AnswerSpec：回答 + answered_at/answered_by）
+     - `staging/novel-ask/init-platform-profile.question.json`（QuestionSpec：platform/genre_drive_type/overrides_json）
+     - `staging/novel-ask/init-platform-profile.answers.json`（AnswerSpec：回答 + answered_at/answered_by）
      - 仅当 Step B.4 的 review gate 已确认，才允许写入以上 gate 产物与 `platform-profile.json`（不得先写盘后确认）
 
 ##### Step D: 世界观 + 角色 + 故事线
