@@ -1,11 +1,10 @@
-import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { NovelCliError } from "./errors.js";
+import { fingerprintFile, fingerprintsMatch, type FileFingerprint } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, writeJsonFile } from "./fs-utils.js";
 import type { PlatformId, PlatformProfile, SeverityPolicy } from "./platform-profile.js";
 import { pad3 } from "./steps.js";
@@ -372,21 +371,6 @@ function buildEntityIndex(ner: NerOutput): EntityIndex {
   return index;
 }
 
-type FileFingerprint = { size: number; mtime_ms: number; content_hash: string };
-
-export function hashText(text: string): string {
-  return createHash("sha256").update(text, "utf8").digest("hex");
-}
-
-async function fingerprintFile(absPath: string): Promise<FileFingerprint> {
-  const [s, content] = await Promise.all([stat(absPath), readFile(absPath, "utf8")]);
-  return { size: s.size, mtime_ms: s.mtimeMs, content_hash: hashText(content) };
-}
-
-function fingerprintsMatch(a: FileFingerprint, b: FileFingerprint): boolean {
-  return a.size === b.size && a.mtime_ms === b.mtime_ms && a.content_hash === b.content_hash;
-}
-
 async function collectRecentEntityTexts(args: { rootDir: string; chapter: number }): Promise<Set<string>> {
   const recent = new Set<string>();
   const start = Math.max(1, args.chapter - INFO_LOAD_WINDOW_CHAPTERS);
@@ -437,7 +421,7 @@ export async function precomputeInfoLoadNer(args: {
     const fpBefore = await fingerprintFile(args.chapterAbsPath);
     const ner = await runNer(args.chapterAbsPath);
     const fpAfter = await fingerprintFile(args.chapterAbsPath);
-    if (fpBefore.size !== fpAfter.size || fpBefore.mtime_ms !== fpAfter.mtime_ms || fpBefore.content_hash !== fpAfter.content_hash) {
+    if (!fingerprintsMatch(fpBefore, fpAfter)) {
       return {
         status: "skipped",
         error: "Chapter changed while running NER; skipping info-load NER.",

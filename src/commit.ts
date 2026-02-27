@@ -2,10 +2,18 @@ import { appendFile, rename, stat, truncate, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path";
 
 import { readCheckpoint, type Checkpoint, writeCheckpoint } from "./checkpoint.js";
+import {
+  attachClicheLintToEval,
+  computeClicheLintReport,
+  loadWebNovelClicheLintConfig,
+  precomputeClicheLintReport,
+  writeClicheLintLogs
+} from "./cliche-lint.js";
 import { NovelCliError } from "./errors.js";
+import { fingerprintsMatch, hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { withWriteLock } from "./lock.js";
-import { attachPlatformConstraintsToEval, computePlatformConstraints, hashText, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
+import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, pad2, pad3 } from "./steps.js";
@@ -368,6 +376,9 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   const loadedProfile = await loadPlatformProfile(args.rootDir);
   if (!loadedProfile) warnings.push("Missing platform-profile.json; platform constraints will be skipped.");
 
+  const loadedCliche = await loadWebNovelClicheLintConfig(args.rootDir);
+  if (!loadedCliche) warnings.push("Missing web-novel-cliche-lint.json; cliché lint will be skipped.");
+
   const rel = chapterRelPaths(args.chapter);
   await ensureFilePresent(args.rootDir, rel.staging.chapterMd);
   await ensureFilePresent(args.rootDir, rel.staging.summaryMd);
@@ -422,6 +433,11 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     plan.push(`PATCH ${rel.final.evalJson} (attach platform_constraints metadata)`);
   }
 
+  if (loadedCliche) {
+    plan.push(`WRITE logs/cliche-lint/cliche-lint-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
+    plan.push(`PATCH ${rel.final.evalJson} (attach cliche_lint metadata)`);
+  }
+
   // Update checkpoint.
   plan.push(`UPDATE .checkpoint.json (commit chapter ${args.chapter})`);
 
@@ -433,6 +449,19 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   const precomputedNer = loadedProfile
     ? await precomputeInfoLoadNer({ rootDir: args.rootDir, chapter: args.chapter, chapterAbsPath: chapterAbs })
     : null;
+
+  const precomputedClicheLint = loadedCliche
+    ? await precomputeClicheLintReport({
+        rootDir: args.rootDir,
+        chapter: args.chapter,
+        chapterAbsPath: chapterAbs,
+        config: loadedCliche.config,
+        configRelPath: loadedCliche.relPath,
+        platformProfile: loadedProfile?.profile ?? null
+      })
+    : null;
+
+  if (precomputedClicheLint?.error) warnings.push(precomputedClicheLint.error);
 
   await withWriteLock(args.rootDir, { chapter: args.chapter }, async () => {
     const checkpointAbs = join(args.rootDir, ".checkpoint.json");
@@ -450,7 +479,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     const originalChangelogExists = await pathExists(changelogAbs);
     const originalChangelogSize = originalChangelogExists ? (await stat(changelogAbs)).size : 0;
     const originalDelta = await readTextFile(deltaAbs);
-    const originalEval = loadedProfile ? await readTextFile(evalStagingAbs) : null;
+    const originalEval = loadedProfile || loadedCliche ? await readTextFile(evalStagingAbs) : null;
 
     const platformConstraintsLatestAbs = join(args.rootDir, "logs/platform-constraints/latest.json");
     const platformConstraintsHistoryAbs = join(
@@ -462,8 +491,16 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     const originalPlatformConstraintsHistoryExists = loadedProfile ? await pathExists(platformConstraintsHistoryAbs) : false;
     const originalPlatformConstraintsHistory = originalPlatformConstraintsHistoryExists ? await readTextFile(platformConstraintsHistoryAbs) : null;
 
+    const clicheLintLatestAbs = join(args.rootDir, "logs/cliche-lint/latest.json");
+    const clicheLintHistoryAbs = join(args.rootDir, `logs/cliche-lint/cliche-lint-chapter-${pad3(args.chapter)}.json`);
+    const originalClicheLintLatestExists = loadedCliche ? await pathExists(clicheLintLatestAbs) : false;
+    const originalClicheLintLatest = originalClicheLintLatestExists ? await readTextFile(clicheLintLatestAbs) : null;
+    const originalClicheLintHistoryExists = loadedCliche ? await pathExists(clicheLintHistoryAbs) : false;
+    const originalClicheLintHistory = originalClicheLintHistoryExists ? await readTextFile(clicheLintHistoryAbs) : null;
+
     const moved: Array<{ from: string; to: string }> = [];
     let platformConstraintsWritten = false;
+    let clicheLintWritten = false;
 
     const rollback = async (): Promise<void> => {
       // Roll back moved files (best-effort).
@@ -555,6 +592,30 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           // ignore
         }
       }
+
+      if (clicheLintWritten) {
+        try {
+          if (originalClicheLintLatestExists && originalClicheLintLatest !== null) {
+            await ensureDir(dirname(clicheLintLatestAbs));
+            await writeFile(clicheLintLatestAbs, originalClicheLintLatest, "utf8");
+          } else {
+            await removePath(clicheLintLatestAbs);
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          if (originalClicheLintHistoryExists && originalClicheLintHistory !== null) {
+            await ensureDir(dirname(clicheLintHistoryAbs));
+            await writeFile(clicheLintHistoryAbs, originalClicheLintHistory, "utf8");
+          } else {
+            await removePath(clicheLintHistoryAbs);
+          }
+        } catch {
+          // ignore
+        }
+      }
     };
 
     try {
@@ -572,16 +633,23 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       state.state_version = state.state_version + 1;
       state.last_updated_chapter = args.chapter;
 
+      const chapterText = loadedProfile || loadedCliche ? await readTextFile(chapterAbs) : null;
+      const chapterFingerprintNow =
+        chapterText !== null
+          ? await (async () => {
+              const s = await stat(chapterAbs);
+              return { size: s.size, mtime_ms: s.mtimeMs, content_hash: hashText(chapterText) };
+            })()
+          : null;
+
       let platformConstraintsReport: Awaited<ReturnType<typeof computePlatformConstraints>> | null = null;
-      if (loadedProfile) {
-        const chapterText = await readTextFile(chapterAbs);
+      if (loadedProfile && chapterText !== null) {
 
         let infoLoadNer = precomputedNer;
-        if (precomputedNer?.status === "pass" && precomputedNer.chapter_fingerprint) {
-          const s = await stat(chapterAbs);
-          const fpNow = { size: s.size, mtime_ms: s.mtimeMs, content_hash: hashText(chapterText) };
+        if (precomputedNer?.status === "pass" && precomputedNer.chapter_fingerprint && chapterFingerprintNow) {
+          const fpNow = chapterFingerprintNow;
           const fpPrev = precomputedNer.chapter_fingerprint;
-          if (fpNow.size !== fpPrev.size || fpNow.mtime_ms !== fpPrev.mtime_ms || fpNow.content_hash !== fpPrev.content_hash) {
+          if (!fingerprintsMatch(fpNow, fpPrev)) {
             infoLoadNer = {
               status: "skipped",
               error: "Chapter changed during commit; skipping info-load NER.",
@@ -607,6 +675,42 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           const hardSummaries = hardIssues.map((i) => i.summary).slice(0, 3);
           const suffix = hardIssues.length > 3 ? " …" : "";
           throw new NovelCliError(`Platform constraints hard violation: ${hardSummaries.join(" | ")}${suffix}`, 2);
+        }
+      }
+
+      let clicheLintReport: Awaited<ReturnType<typeof computeClicheLintReport>> | null = null;
+      if (loadedCliche && chapterText !== null) {
+        const pre = precomputedClicheLint;
+        if (
+          pre &&
+          pre.status === "pass" &&
+          pre.report &&
+          pre.chapter_fingerprint &&
+          chapterFingerprintNow &&
+          fingerprintsMatch(pre.chapter_fingerprint, chapterFingerprintNow)
+        ) {
+          clicheLintReport = pre.report;
+        } else {
+          clicheLintReport = await computeClicheLintReport({
+            rootDir: args.rootDir,
+            chapter: args.chapter,
+            chapterAbsPath: chapterAbs,
+            chapterText,
+            config: loadedCliche.config,
+            configRelPath: loadedCliche.relPath,
+            platformProfile: loadedProfile?.profile ?? null,
+            preferDeterministicScript: false
+          });
+        }
+
+        if (clicheLintReport.has_hard_hits) {
+          const hardHits = clicheLintReport.hits.filter((h) => h.severity === "hard");
+          const hardSummaries = hardHits
+            .map((h) => `${h.word} x${h.count}`)
+            .slice(0, 3);
+          const suffix = hardHits.length > 3 ? " …" : "";
+          const details = hardSummaries.length > 0 ? `${hardSummaries.join(" | ")}${suffix}` : "(details in cliché lint report)";
+          throw new NovelCliError(`Cliché lint hard violation: ${details}`, 2);
         }
       }
 
@@ -640,6 +744,17 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           platform: loadedProfile.profile.platform,
           reportRelPath: historyRel,
           report: platformConstraintsReport
+        });
+      }
+
+      if (loadedCliche && clicheLintReport) {
+        clicheLintWritten = true;
+        const { historyRel } = await writeClicheLintLogs({ rootDir: args.rootDir, chapter: args.chapter, report: clicheLintReport });
+        await attachClicheLintToEval({
+          evalAbsPath: join(args.rootDir, rel.final.evalJson),
+          evalRelPath: rel.final.evalJson,
+          reportRelPath: historyRel,
+          report: clicheLintReport
         });
       }
 

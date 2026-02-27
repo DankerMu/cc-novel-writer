@@ -1,28 +1,28 @@
 ## 1. Templates & Config Files
 
-- [ ] 1.1 Add `templates/platform-profile.json` with schema_version + qidian/tomato defaults
-- [ ] 1.2 Add `templates/web-novel-cliche-lint.json` with severity + whitelist/exemptions structure
-- [ ] 1.3 Add `templates/genre-weight-profiles.json` with drive_type profiles and normalization rules
-- [ ] 1.4 Update `templates/brief-template.md` to include `genre_drive_type` and platform-profile linkage/constraints summary
+- [x] 1.1 Add `templates/platform-profile.json` with schema_version + qidian/tomato defaults
+- [x] 1.2 Add `templates/web-novel-cliche-lint.json` with severity + whitelist/exemptions structure
+- [x] 1.3 Add `templates/genre-weight-profiles.json` with drive_type profiles and normalization rules
+- [x] 1.4 Update `templates/brief-template.md` to include `genre_drive_type` and platform-profile linkage/constraints summary
 
 ## 2. Init & Immutability
 
-- [ ] 2.1 Extend init flow to collect `platform` and `genre_drive_type` via an explicit review gate (NOVEL_ASK-compatible)
-- [ ] 2.2 Write `platform-profile.json` to project root on init and refuse any later platform changes
-- [ ] 2.3 Persist user-confirmed threshold overrides (word_count/hook_policy/info_load) into `platform-profile.json`
+- [x] 2.1 Extend init flow to collect `platform` and `genre_drive_type` via an explicit review gate (NOVEL_ASK-compatible)
+- [x] 2.2 Write `platform-profile.json` to project root on init and refuse any later platform changes
+- [x] 2.3 Persist user-confirmed threshold overrides (word_count/hook_policy/info_load) into `platform-profile.json`
 
 ## 3. Platform Constraints Engine
 
-- [ ] 3.1 Implement word-count validation (hard vs soft) driven by `platform-profile.json.word_count`
-- [ ] 3.2 Implement compliance checks (banned words / duplicate names / simplified-traditional consistency) and produce a structured report
-- [ ] 3.3 Implement information-load metrics (unknown entities / new entities / new terms per 1k) and threshold validation
-- [ ] 3.4 Ensure constraint outcomes are recorded in chapter evaluation and/or chapter log output (auditable)
+- [x] 3.1 Implement word-count validation (hard vs soft) driven by `platform-profile.json.word_count`
+- [x] 3.2 Implement compliance checks (banned words / duplicate names / simplified-traditional consistency) and produce a structured report
+- [x] 3.3 Implement information-load metrics (unknown entities / new entities / new terms per 1k) and threshold validation
+- [x] 3.4 Ensure constraint outcomes are recorded in chapter evaluation and/or chapter log output (auditable)
 
 ## 4. Cliché Lint
 
-- [ ] 4.1 Implement cliché lint loader for `web-novel-cliche-lint.json` (severity + whitelist/exemptions)
-- [ ] 4.2 Add deterministic linter path (script hook if present) with safe fallback when missing/failing
-- [ ] 4.3 Wire cliché metrics into scoring/gating according to `platform-profile.json` policy (warn/soft/hard)
+- [x] 4.1 Implement cliché lint loader for `web-novel-cliche-lint.json` (severity + whitelist/exemptions)
+- [x] 4.2 Add deterministic linter path (script hook if present) with safe fallback when missing/failing
+- [x] 4.3 Wire cliché metrics into scoring/gating according to `platform-profile.json` policy (warn/soft/hard)
 
 ## 5. Chapter Hook System
 

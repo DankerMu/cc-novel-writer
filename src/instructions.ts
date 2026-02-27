@@ -62,6 +62,7 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
   await maybeAdd("project_brief", "brief.md");
   await maybeAdd("style_profile", "style-profile.json");
   await maybeAdd("ai_blacklist", "ai-blacklist.json");
+  await maybeAdd("web_novel_cliche_lint", "web-novel-cliche-lint.json");
   await maybeAdd("style_guide", "skills/novel-writing/references/style-guide.md");
   await maybeAdd("quality_rubric", "skills/novel-writing/references/quality-rubric.md");
   await maybeAdd("current_state", "state/current-state.json");
