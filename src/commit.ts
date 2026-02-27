@@ -623,6 +623,12 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       if (loadedProfile?.profile.hook_policy?.required) {
         const hookPolicy = loadedProfile.profile.hook_policy;
         const evalRaw = await readJsonFile(evalStagingAbs);
+        if (isPlainObject(evalRaw)) {
+          const evalChapter = (evalRaw as Record<string, unknown>).chapter;
+          if (typeof evalChapter === "number" && Number.isFinite(evalChapter) && evalChapter !== args.chapter) {
+            warnings.push(`Eval.chapter is ${evalChapter}, expected ${args.chapter}.`);
+          }
+        }
         const hookCheck = checkHookPolicy({ hookPolicy, evalRaw });
         if (hookCheck.status === "invalid_eval") {
           throw new NovelCliError(`Hook policy enabled but eval is missing required hook fields: ${hookCheck.reason}`, 2);

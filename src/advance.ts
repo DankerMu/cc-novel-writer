@@ -43,7 +43,7 @@ export async function advanceCheckpointForStep(args: { rootDir: string; step: St
     updated.pipeline_stage = nextStage;
     updated.inflight_chapter = args.step.chapter;
 
-    // Reset revision counter when (re)starting a chapter from draft.
+    // Ensure revision counter is initialized when starting from draft (revision loops may preserve it).
     if (args.step.stage === "draft") {
       if (typeof updated.revision_count !== "number") updated.revision_count = 0;
       updated.hook_fix_count = 0;
