@@ -92,8 +92,10 @@ EOF
   - `allow_other=false` 风险：AskUserQuestion UI 可能提供 “Other” 自定义输入；若用户选择 Other 且输入不在 option labels 内，会被校验拒绝 → 需要重新提问直到得到合法答案
 
 - `multi_choice`：循环 AskUserQuestion 单选累积为 string[]
-  - 每轮 options 结构：最多 2 个真实 option + `__more__` + `__done__`（控制项不写入 answers；若真实 option 少于 2，则按实际数量展示）
-  - `__more__`：切换到下一页（循环）；用于在 options 过多时访问更多真实 option
+  - 目标：每轮 `options[]` 总数 **不超过 4**（AskUserQuestion 限制）
+  - 若当前“可选的真实 option”（排除已选项）`<= 3`：本轮直接展示 **全部真实 option + `__done__`**（不需要 `__more__`）
+  - 若当前“可选的真实 option”`> 3`：分页展示（每页最多 **2 个真实 option + `__more__` + `__done__`**；控制项不写入 answers）
+  - `__more__`：切换到下一页（循环）；仅在 options 过多时使用（`<=3` 时不需要）
   - `__done__`：结束选择并写入 answers
   - required=true：必须至少选 1 个再 `__done__`，否则视为未回答（blocked）
   - required=false：若最终 0 选择，则不要写入该 question id（不要写空数组）
