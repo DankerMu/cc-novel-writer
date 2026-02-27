@@ -18,6 +18,10 @@
     "^_.*$": { "$ref": "#/$defs/comment_value" }
   },
   "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional schema pointer for editor tooling. Example: schemas/platform-profile.schema.json"
+    },
     "schema_version": {
       "type": "integer",
       "enum": [1],
@@ -138,6 +142,7 @@
     },
     "retention_policy": {
       "type": ["object", "null"],
+      "required": ["title_policy", "hook_ledger"],
       "additionalProperties": false,
       "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
       "properties": {
@@ -154,8 +159,8 @@
         "enabled": { "type": "boolean" },
         "min_chars": { "type": "integer", "minimum": 0 },
         "max_chars": { "type": "integer", "minimum": 0 },
-        "forbidden_patterns": { "type": "array", "items": { "type": "string" } },
-        "required_patterns": { "type": "array", "items": { "type": "string" } },
+        "forbidden_patterns": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "required_patterns": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "auto_fix": { "type": "boolean" }
       }
     },
@@ -182,6 +187,7 @@
     },
     "readability_policy": {
       "type": ["object", "null"],
+      "required": ["mobile"],
       "additionalProperties": false,
       "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
       "properties": {
@@ -227,4 +233,3 @@
     }
   }
 }
-
