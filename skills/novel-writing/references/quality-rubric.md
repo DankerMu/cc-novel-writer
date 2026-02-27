@@ -1,6 +1,8 @@
-# 8 维度质量评分标准
+# 核心 8 维度质量评分标准
 
 本文档定义 QualityJudge 的完整评分标准。每维度 1-5 分，综合分 = 加权均值。
+
+> **注意（动态权重）**：评分维度权重以 `manifest.inline.scoring_weights` 为准（来源：`platform-profile.json.scoring` + `genre-weight-profiles.json`）。本文各维度标题中的“权重 X”与下方固定公式仅作为 **legacy fallback 默认值**（当未提供 `scoring_weights` 时使用）。
 
 ## 1. 情节逻辑（plot_logic）— 权重 0.18
 
@@ -100,6 +102,13 @@
 
 **注意**：单线章节（非切线章）此维度默认 4 分，仅评估与上下文的衔接自然度。
 
+## 9. 章末钩子强度（hook_strength）— 条件启用
+
+当 `platform-profile.json.hook_policy.required=true` 时启用该维度：
+- **评分**：1-5 分（钩子越强分越高）
+- **证据**：必须来自章节末尾（最后 1–2 段的短片段）；建议同时写入 `hook.evidence` 与 `scores.hook_strength.evidence`（内容可相同）便于门控与审计
+- **权重**：以 `manifest.inline.scoring_weights.weights.hook_strength` 为准；若未提供 `scoring_weights`，默认权重为 `0.0`（不计入 overall）。当 `hook_policy.required=false` 时，执行器会强制将 `hook_strength` 权重归零（即使权重档案里有非零默认值）。
+
 ## 综合分计算
 
 ```
@@ -111,6 +120,12 @@ overall = plot_logic × 0.18
         + style_naturalness × 0.15
         + emotional_impact × 0.08
         + storyline_coherence × 0.08
+```
+
+若提供了 `scoring_weights`，则：
+
+```
+overall = Σ(scores[dim].score × scoring_weights.weights[dim]) / Σ(scoring_weights.weights[dim])  （加权均值）
 ```
 
 ## 门控决策

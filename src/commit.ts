@@ -16,6 +16,7 @@ import { checkHookPolicy } from "./hook-policy.js";
 import { withWriteLock } from "./lock.js";
 import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
+import { attachScoringWeightsToEval, loadGenreWeightProfiles } from "./scoring-weights.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, pad2, pad3 } from "./steps.js";
 import { isPlainObject } from "./type-guards.js";
@@ -380,6 +381,14 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   const loadedCliche = await loadWebNovelClicheLintConfig(args.rootDir);
   if (!loadedCliche) warnings.push("Missing web-novel-cliche-lint.json; cliché lint will be skipped.");
 
+  const loadedGenreWeights = loadedProfile?.profile.scoring ? await loadGenreWeightProfiles(args.rootDir) : null;
+  if (loadedProfile?.profile.scoring && !loadedGenreWeights) {
+    throw new NovelCliError(
+      "Missing required file: genre-weight-profiles.json (required when platform-profile.json.scoring is present). Copy it from templates/genre-weight-profiles.json.",
+      2
+    );
+  }
+
   const rel = chapterRelPaths(args.chapter);
   await ensureFilePresent(args.rootDir, rel.staging.chapterMd);
   await ensureFilePresent(args.rootDir, rel.staging.summaryMd);
@@ -437,6 +446,10 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   if (loadedCliche) {
     plan.push(`WRITE logs/cliche-lint/cliche-lint-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
     plan.push(`PATCH ${rel.final.evalJson} (attach cliche_lint metadata)`);
+  }
+
+  if (loadedGenreWeights) {
+    plan.push(`PATCH ${rel.final.evalJson} (attach scoring_weights metadata + per-dimension weights)`);
   }
 
   // Update checkpoint.
@@ -774,6 +787,15 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           evalRelPath: rel.final.evalJson,
           reportRelPath: historyRel,
           report: clicheLintReport
+        });
+      }
+
+      if (loadedProfile && loadedProfile.profile.scoring && loadedGenreWeights) {
+        await attachScoringWeightsToEval({
+          evalAbsPath: join(args.rootDir, rel.final.evalJson),
+          evalRelPath: rel.final.evalJson,
+          platformProfile: loadedProfile.profile,
+          genreWeightProfiles: loadedGenreWeights
         });
       }
 

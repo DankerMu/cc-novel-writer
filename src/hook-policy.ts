@@ -80,7 +80,8 @@ export function checkHookPolicy(args: { hookPolicy: HookPolicy; evalRaw: unknown
     };
   }
 
-  const evalObj = args.evalRaw as Record<string, unknown>;
+  const root = args.evalRaw as Record<string, unknown>;
+  const evalObj = isPlainObject(root.eval_used) ? (root.eval_used as Record<string, unknown>) : root;
   const { strength, evidence: strengthEvidence } = extractHookStrength(evalObj);
   const hook = extractHook(evalObj);
   const hookType = hook.type !== null ? hook.type.toLowerCase() : null;

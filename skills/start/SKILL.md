@@ -329,6 +329,7 @@ Skill → 状态映射：
    - `brief.md`：从 `brief-template.md` 复制并用用户输入填充占位符（包含 `platform` / `genre_drive_type` / `platform_constraints_summary`）
    - `style-profile.json`：从 `style-profile-template.json` 复制（后续由 StyleAnalyzer 填充）
    - `ai-blacklist.json`：从 `ai-blacklist.json` 复制
+   - `genre-weight-profiles.json`：从 `templates/genre-weight-profiles.json` 复制（QualityJudge 动态权重配置；后续仅允许通过 `platform-profile.json.scoring.weight_overrides` 做微调）
    - `platform-profile.json`：从 `templates/platform-profile.json` 的默认库生成（按 Step B.4 的 platform/genre_drive_type 与 overrides；`platform` 字段写入后不可变；若文件已存在则只允许校验/读取，禁止任何覆盖/写回）
 3. **初始化最小可运行文件**（模板复制后立即创建，确保后续 Agent 可正常读取）：
    - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "quick_start_step": "C", "revision_count": 0, "pending_actions": [], "last_checkpoint_time": "<now>"}`

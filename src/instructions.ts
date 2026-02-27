@@ -3,7 +3,9 @@ import { join } from "node:path";
 import type { Checkpoint } from "./checkpoint.js";
 import { NovelCliError } from "./errors.js";
 import { ensureDir, pathExists, readTextFile, writeJsonFile } from "./fs-utils.js";
+import { computeEffectiveScoringWeights, loadGenreWeightProfiles } from "./scoring-weights.js";
 import { parseNovelAskQuestionSpec, type NovelAskQuestionSpec } from "./novel-ask.js";
+import { loadPlatformProfile } from "./platform-profile.js";
 import { resolveProjectRelativePath } from "./safe-path.js";
 import { chapterRelPaths, formatStepId, pad2, type Step } from "./steps.js";
 
@@ -64,6 +66,7 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
   await maybeAdd("platform_profile", "platform-profile.json");
   await maybeAdd("ai_blacklist", "ai-blacklist.json");
   await maybeAdd("web_novel_cliche_lint", "web-novel-cliche-lint.json");
+  await maybeAdd("genre_weight_profiles", "genre-weight-profiles.json");
   await maybeAdd("style_guide", "skills/novel-writing/references/style-guide.md");
   await maybeAdd("quality_rubric", "skills/novel-writing/references/quality-rubric.md");
   await maybeAdd("current_state", "state/current-state.json");
@@ -121,6 +124,27 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
     agent = { kind: "subagent", name: "quality-judge" };
     paths.chapter_draft = relIfExists(rel.staging.chapterMd, await pathExists(join(args.rootDir, rel.staging.chapterMd)));
     paths.cross_references = relIfExists(rel.staging.crossrefJson, await pathExists(join(args.rootDir, rel.staging.crossrefJson)));
+
+    const loadedPlatform = await loadPlatformProfile(args.rootDir);
+    if (loadedPlatform?.profile.scoring) {
+      const loadedWeights = await loadGenreWeightProfiles(args.rootDir);
+      if (!loadedWeights) {
+        throw new NovelCliError(
+          "Missing required file: genre-weight-profiles.json (required when platform-profile.json.scoring is present). Copy it from templates/genre-weight-profiles.json.",
+          2
+        );
+      }
+      const effective = computeEffectiveScoringWeights({
+        config: loadedWeights.config,
+        scoring: loadedPlatform.profile.scoring,
+        hookPolicy: loadedPlatform.profile.hook_policy
+      });
+      inline.scoring_weights = {
+        ...effective,
+        source: { platform_profile: loadedPlatform.relPath, genre_weight_profiles: loadedWeights.relPath }
+      };
+    }
+
     expected_outputs.push({
       path: rel.staging.evalJson,
       required: true,

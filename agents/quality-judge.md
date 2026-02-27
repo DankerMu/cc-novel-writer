@@ -112,7 +112,7 @@ tools: ["Read", "Glob", "Grep"]
 
 ## Track 2: Quality Scoring（软评估）
 
-8 维度独立评分（1-5 分），每个维度附具体理由和原文引用：
+8 维度独立评分（1-5 分），每个维度附具体理由和原文引用。**权重优先来自 `manifest.inline.scoring_weights`；若缺失则使用下表的默认权重（legacy fallback）**：
 
 | 维度 | 权重 | 评估要点 |
 |------|------|---------|
@@ -125,6 +125,14 @@ tools: ["Read", "Glob", "Grep"]
 | emotional_impact（情感冲击） | 0.08 | 情感起伏、读者代入感 |
 | storyline_coherence（故事线连贯） | 0.08 | 切线流畅度、跟线难度、并发线暗示自然度 |
 
+### 权重输入：`manifest.inline.scoring_weights`（优先）
+
+当 `manifest.inline.scoring_weights` 存在时，你**必须**：
+- 必须输出 8 个核心维度：`plot_logic/character/immersion/foreshadowing/pacing/style_naturalness/emotional_impact/storyline_coherence`
+- 对你输出的每个维度，把 `scores.{dimension}.weight` 设置为 `scoring_weights.weights[dimension]`
+- 用这些 weight 计算 `overall`（加权均值；如某维度 weight=0 则不影响 overall；归一化规则见 `scoring_weights.normalization`）
+- 当 `platform-profile.json.hook_policy.required == true` 时，必须额外输出 `hook_strength`，并将其 `weight` 设为 `scoring_weights.weights.hook_strength`
+
 ### 可选维度：hook_strength（章末钩子强度）
 
 当满足以下条件时，你**必须**额外输出 `hook_strength`：
@@ -136,7 +144,7 @@ tools: ["Read", "Glob", "Grep"]
 - `scores.hook_strength`：1-5 分（含 `score/weight/reason/evidence`）
 
 评估规则（尽量可复现）：
-- **evidence** 必须截取自章节末尾（最后 1–2 段的短片段，最多 120 字）
+- **evidence** 必须截取自章节末尾（最后 1–2 段的短片段，最多 120 字）。为兼容门控与审计，建议同时写入 `hook.evidence` 与 `scores.hook_strength.evidence`（内容可相同）。
 - **type** 必须从 `platform-profile.json.hook_policy.allowed_types` 中选择；若章末没有钩子，则 `present=false` 且 `type="none"`
 - **hook_strength 评分口径（1-5）**：
   - 5：强烈未解之问/明确威胁升级/关键反转引爆，读者会立刻想点下一章
@@ -145,7 +153,7 @@ tools: ["Read", "Glob", "Grep"]
   - 2：结尾偏收束/平铺直叙，钩子很弱
   - 1：没有读者钩子（完全闭合或纯总结）
 
-> **weight 说明**：在动态权重实现前（M6 后续任务），`scores.hook_strength.weight` 可先输出 `0.0`（不计入 overall），但字段必须存在以便门控/审计使用。
+> **weight 说明**：优先使用 `manifest.inline.scoring_weights.weights.hook_strength`；若未提供 `scoring_weights`，默认 `0.0`（不计入 overall）。另外当 `platform-profile.json.hook_policy.required == false` 时，执行器会强制将 `hook_strength` 权重归零以避免影响综合分。
 
 # Constraints
 
@@ -154,7 +162,7 @@ tools: ["Read", "Glob", "Grep"]
 3. **可量化**：风格自然度基于可量化指标（黑名单命中率 < 3 次/千字，相邻 5 句重复句式 < 2，破折号 ≤ 1 次/千字）
    - 若 prompt 中提供了黑名单精确统计 JSON（lint-blacklist），你必须使用其中的 `total_hits` / `hits_per_kchars` / `hits[]` 作为计数依据（忽略 whitelist/exemptions 的词条）
    - 若未提供，则你可以基于正文做启发式估计，但需在 `style_naturalness.reason` 中明确标注为“估计值”
-4. **综合分计算**：overall = 各维度 score × weight 的加权均值（基础 8 维度权重见 Track 2 表；`hook_strength` 若 weight=0.0 则不影响 overall）
+4. **综合分计算**：overall = 各维度 score × weight 的加权均值（权重优先来自 `manifest.inline.scoring_weights`；若缺失则使用 Track 2 默认表；`hook_strength` 若 weight=0.0 则不影响 overall）
 5. **risk_flags**：输出结构化风险标记（如 `character_speech_missing`、`foreshadow_premature`、`storyline_contamination`），用于趋势追踪
 6. **required_fixes**：当 recommendation 为 revise/review/rewrite 时，必须输出最小修订指令列表（target 段落 + 具体 instruction），供 ChapterWriter 定向修订
 7. **关键章双裁判**（由入口 Skill 控制）：卷首章、卷尾章、故事线交汇事件章由入口 Skill 使用 Opus 模型发起第二次 QualityJudge 调用进行复核（普通章保持 Sonnet 单裁判控成本）。双裁判取两者较低分作为最终分。QualityJudge 自身不切换模型，模型选择由入口 Skill 的 Task(model=opus) 参数控制
