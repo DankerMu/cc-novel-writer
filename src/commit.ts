@@ -12,6 +12,7 @@ import {
 import { NovelCliError } from "./errors.js";
 import { fingerprintsMatch, hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
+import { checkHookPolicy } from "./hook-policy.js";
 import { withWriteLock } from "./lock.js";
 import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
@@ -619,6 +620,18 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     };
 
     try {
+      if (loadedProfile?.profile.hook_policy?.required) {
+        const hookPolicy = loadedProfile.profile.hook_policy;
+        const evalRaw = await readJsonFile(evalStagingAbs);
+        const hookCheck = checkHookPolicy({ hookPolicy, evalRaw });
+        if (hookCheck.status === "invalid_eval") {
+          throw new NovelCliError(`Hook policy enabled but eval is missing required hook fields: ${hookCheck.reason}`, 2);
+        }
+        if (hookCheck.status === "fail") {
+          throw new NovelCliError(`Hook policy violation: ${hookCheck.reason}`, 2);
+        }
+      }
+
       // Pre-validate state merge (in-memory).
       const state = await readState(args.rootDir, rel.final.stateCurrentJson);
       if (state.state_version !== delta.base_state_version) {
@@ -762,11 +775,12 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       if (updatedCheckpoint.last_completed_chapter >= args.chapter) {
         warnings.push(`Checkpoint last_completed_chapter is already ${updatedCheckpoint.last_completed_chapter}; leaving as-is.`);
       } else {
-        updatedCheckpoint.last_completed_chapter = args.chapter;
+      updatedCheckpoint.last_completed_chapter = args.chapter;
       }
       updatedCheckpoint.pipeline_stage = "committed";
       updatedCheckpoint.inflight_chapter = null;
       updatedCheckpoint.revision_count = 0;
+      updatedCheckpoint.hook_fix_count = 0;
       updatedCheckpoint.last_checkpoint_time = new Date().toISOString();
       await writeCheckpoint(args.rootDir, updatedCheckpoint);
     } catch (err) {

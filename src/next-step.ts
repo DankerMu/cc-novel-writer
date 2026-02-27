@@ -1,7 +1,9 @@
 import { join } from "node:path";
 
 import type { Checkpoint } from "./checkpoint.js";
-import { pathExists } from "./fs-utils.js";
+import { pathExists, readJsonFile } from "./fs-utils.js";
+import { checkHookPolicy } from "./hook-policy.js";
+import { loadPlatformProfile } from "./platform-profile.js";
 import { chapterRelPaths, formatStepId } from "./steps.js";
 
 export type NextStepResult = {
@@ -20,6 +22,7 @@ function normalizeStage(stage: unknown): string | null {
 export async function computeNextStep(projectRootDir: string, checkpoint: Checkpoint): Promise<NextStepResult> {
   const inflightChapter = typeof checkpoint.inflight_chapter === "number" ? checkpoint.inflight_chapter : null;
   const stage = normalizeStage(checkpoint.pipeline_stage);
+  const hookFixCount = typeof checkpoint.hook_fix_count === "number" ? checkpoint.hook_fix_count : 0;
 
   // Fresh start.
   if (inflightChapter === null || stage === null || stage === "committed") {
@@ -127,6 +130,40 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
         evidence
       };
     }
+
+    const loadedProfile = await loadPlatformProfile(projectRootDir);
+    const hookPolicy = loadedProfile?.profile.hook_policy;
+    if (hookPolicy?.required) {
+      const evalRaw = await readJsonFile(join(projectRootDir, rel.staging.evalJson));
+      const check = checkHookPolicy({ hookPolicy, evalRaw });
+
+      if (check.status === "invalid_eval") {
+        return {
+          step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "judge" }),
+          reason: `judged:hook_eval_invalid:${check.reason}`,
+          inflight: { chapter: inflightChapter, pipeline_stage: stage },
+          evidence: { ...evidence, hookFixCount, hook_check: check }
+        };
+      }
+
+      if (check.status === "fail") {
+        if (hookFixCount < 1) {
+          return {
+            step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "hook-fix" }),
+            reason: `judged:hook_policy_fail:hook-fix:${check.reason}`,
+            inflight: { chapter: inflightChapter, pipeline_stage: stage },
+            evidence: { ...evidence, hookFixCount, hook_check: check }
+          };
+        }
+        return {
+          step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "review" }),
+          reason: `judged:hook_policy_fail:manual_review:${check.reason}`,
+          inflight: { chapter: inflightChapter, pipeline_stage: stage },
+          evidence: { ...evidence, hookFixCount, hook_check: check }
+        };
+      }
+    }
+
     return {
       step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "commit" }),
       reason: "judged:ready_commit",

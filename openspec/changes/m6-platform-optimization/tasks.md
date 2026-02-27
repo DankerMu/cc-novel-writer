@@ -26,9 +26,9 @@
 
 ## 5. Chapter Hook System
 
-- [ ] 5.1 Update ChapterWriter contract/prompt to enforce chapter-end hook when `hook_policy.required=true`
-- [ ] 5.2 Update QualityJudge contract to classify hook type and score `hook_strength` with evidence
-- [ ] 5.3 Implement `hook-fix` micro-step (edit last 1–2 paragraphs only) with bounded retry and escalation
+- [x] 5.1 Update ChapterWriter contract/prompt to enforce chapter-end hook when `hook_policy.required=true`
+- [x] 5.2 Update QualityJudge contract to classify hook type and score `hook_strength` with evidence
+- [x] 5.3 Implement `hook-fix` micro-step (edit last 1–2 paragraphs only) with bounded retry and escalation
 
 ## 6. Dynamic Weight Profiles
 

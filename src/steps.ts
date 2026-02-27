@@ -1,6 +1,6 @@
 import { NovelCliError } from "./errors.js";
 
-export const CHAPTER_STAGES = ["draft", "summarize", "refine", "judge", "commit"] as const;
+export const CHAPTER_STAGES = ["draft", "summarize", "refine", "judge", "hook-fix", "review", "commit"] as const;
 export type ChapterStage = (typeof CHAPTER_STAGES)[number];
 
 export type ChapterStep = {

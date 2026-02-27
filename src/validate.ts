@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { NovelCliError } from "./errors.js";
 import type { Checkpoint } from "./checkpoint.js";
 import { pathExists, readJsonFile, readTextFile } from "./fs-utils.js";
+import { checkHookPolicy } from "./hook-policy.js";
+import { loadPlatformProfile } from "./platform-profile.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, formatStepId, type Step } from "./steps.js";
 import { isPlainObject } from "./type-guards.js";
@@ -88,6 +90,34 @@ export async function validateStep(args: { rootDir: string; checkpoint: Checkpoi
     if (chapter !== args.step.chapter) warnings.push(`Eval.chapter is ${chapter}, expected ${args.step.chapter}.`);
     requireNumberField(evalObj, "overall", rel.staging.evalJson);
     requireStringField(evalObj, "recommendation", rel.staging.evalJson);
+
+    const loadedProfile = await loadPlatformProfile(args.rootDir);
+    const hookPolicy = loadedProfile?.profile.hook_policy;
+    if (hookPolicy?.required) {
+      const check = checkHookPolicy({ hookPolicy, evalRaw });
+      if (check.status === "invalid_eval") {
+        throw new NovelCliError(
+          `Hook policy enabled but eval is missing required hook fields (${rel.staging.evalJson}): ${check.reason}. Re-run QualityJudge with the updated contract.`,
+          2
+        );
+      }
+      if (check.status === "fail") warnings.push(`Hook policy failing: ${check.reason}`);
+    }
+
+    return { ok: true, step: stepId, warnings };
+  }
+
+  if (args.step.stage === "hook-fix") {
+    const absChapter = join(args.rootDir, rel.staging.chapterMd);
+    const exists = await pathExists(absChapter);
+    requireFile(exists, rel.staging.chapterMd);
+    const content = await readTextFile(absChapter);
+    if (content.trim().length === 0) throw new NovelCliError(`Empty draft file: ${rel.staging.chapterMd}`, 2);
+    return { ok: true, step: stepId, warnings };
+  }
+
+  if (args.step.stage === "review") {
+    warnings.push("Review step has no machine-validated outputs; resolve issues manually and re-run judge.");
     return { ok: true, step: stepId, warnings };
   }
 
