@@ -9,6 +9,8 @@ novel-project/
 ├── brief.md                        # 创作纲领（精简，≤1000 字）
 ├── style-profile.json              # 用户风格指纹
 ├── ai-blacklist.json               # AI 用语黑名单
+├── platform-profile.json           # 平台画像/约束配置（M6）
+├── web-novel-cliche-lint.json      # 网文套路词 / 模板腔 lint 词库（M6）
 ├── style-drift.json                # 风格漂移纠偏指令（每 5 章检测生成，回归基线后清除）
 ├── character-voice-drift.json      # 角色语气漂移纠偏指令（M7，可选；存在时注入后续写作/润色）
 ├── engagement-metrics.jsonl        # 参与度密度指标流（M7，可选；append-only）
@@ -73,6 +75,9 @@ novel-project/
     ├── platform-constraints/       # 平台约束报告（M6）
     │   ├── latest.json
     │   └── platform-constraints-chapter-001.json
+    ├── cliche-lint/                # 网文套路词 / 模板腔 lint（M6）
+    │   ├── latest.json
+    │   └── cliche-lint-chapter-001.json
     ├── continuity/                 # 一致性检查报告（NER）
     │   ├── latest.json
     │   └── continuity-report-vol-01-ch001-ch010.json

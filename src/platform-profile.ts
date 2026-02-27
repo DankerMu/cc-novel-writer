@@ -23,6 +23,7 @@ export type InfoLoadPolicy = {
 export type CompliancePolicy = {
   banned_words: string[];
   duplicate_name_policy: SeverityPolicy;
+  script_paths?: Record<string, string>;
 };
 
 export type HookPolicy = {
@@ -120,10 +121,25 @@ function parseCompliancePolicy(raw: unknown, file: string): CompliancePolicy {
   }
   const banned_words = Array.from(new Set(bannedRaw.map((w) => w.trim()))).filter((w) => w.length > 0);
 
-  return {
+  const out: CompliancePolicy = {
     banned_words,
     duplicate_name_policy: requireSeverityPolicy(obj.duplicate_name_policy, file, "compliance.duplicate_name_policy")
   };
+
+  if (obj.script_paths !== undefined) {
+    if (!isPlainObject(obj.script_paths)) throw new NovelCliError(`Invalid ${file}: 'compliance.script_paths' must be an object.`, 2);
+    const sp = obj.script_paths as Record<string, unknown>;
+    const script_paths: Record<string, string> = {};
+    for (const [k, v] of Object.entries(sp)) {
+      if (typeof v !== "string" || v.trim().length === 0) {
+        throw new NovelCliError(`Invalid ${file}: 'compliance.script_paths.${k}' must be a non-empty string.`, 2);
+      }
+      script_paths[k] = v.trim();
+    }
+    out.script_paths = script_paths;
+  }
+
+  return out;
 }
 
 const VALID_FIX_STRATEGIES = ["hook-fix"] as const;
@@ -189,4 +205,3 @@ export async function loadPlatformProfile(rootDir: string): Promise<{ relPath: s
   const raw = await readJsonFile(absPath);
   return { relPath, profile: parsePlatformProfile(raw, relPath) };
 }
-

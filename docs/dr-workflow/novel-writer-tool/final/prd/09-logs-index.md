@@ -154,3 +154,12 @@
 - Owning specs：
   - `openspec/changes/m6-platform-optimization/specs/platform-constraints/spec.md`
   - `openspec/changes/m6-platform-optimization/specs/platform-profile/spec.md`
+
+#### 13) Cliché lint（网文套路词 / 模板腔 lint：每章报告）
+
+- 目录：`logs/cliche-lint/`
+- Latest：`logs/cliche-lint/latest.json`
+- History：`logs/cliche-lint/cliche-lint-chapter-{C:03d}.json`
+- Related config：`web-novel-cliche-lint.json`（项目根目录）
+- Owning specs：
+  - `openspec/changes/m6-platform-optimization/specs/web-novel-cliche-lint/spec.md`

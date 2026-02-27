@@ -31,9 +31,9 @@
         "banned_words": [],
         "duplicate_name_policy": "soft",
         "script_paths": {
-          "lint_blacklist": "scripts/lint-blacklist.sh"
-        },
-        "_comment_lint_cliche": "TODO: implement deterministic cliché lint (e.g. scripts/lint-cliche.sh) and wire it here."
+          "lint_blacklist": "scripts/lint-blacklist.sh",
+          "lint_cliche": "scripts/lint-cliche.sh"
+        }
       },
       "scoring": {
         "genre_drive_type": "plot",
@@ -73,9 +73,9 @@
         "banned_words": [],
         "duplicate_name_policy": "soft",
         "script_paths": {
-          "lint_blacklist": "scripts/lint-blacklist.sh"
-        },
-        "_comment_lint_cliche": "TODO: implement deterministic cliché lint (e.g. scripts/lint-cliche.sh) and wire it here."
+          "lint_blacklist": "scripts/lint-blacklist.sh",
+          "lint_cliche": "scripts/lint-cliche.sh"
+        }
       },
       "scoring": {
         "genre_drive_type": "plot",

@@ -150,6 +150,9 @@ skills/
 templates/
   brief-template.md            创作纲领模板
   ai-blacklist.json            AI 高频用语黑名单（38 词）
+  web-novel-cliche-lint.json   网文套路词 / 模板腔 lint 词库模板（M6）
+  platform-profile.json        平台画像默认模板（qidian/tomato；M6）
+  genre-weight-profiles.json   题材驱动权重 profiles（M6）
   style-profile-template.json  风格指纹模板
 hooks/hooks.json               SessionStart 自动注入 context
 scripts/
@@ -158,6 +161,7 @@ scripts/
   run-ner.sh                   中文 NER 命名实体识别
   query-foreshadow.sh          伏笔查询
   lint-blacklist.sh            AI 黑名单命中统计
+  lint-cliche.sh               网文套路词 / 模板腔命中统计（M6）
   calibrate-quality-judge.sh   QualityJudge 校准（Pearson r + 阈值建议）
   run-regression.sh            回归运行（合规率 + 评分汇总）
   compare-regression-runs.sh   回归 run 对比
