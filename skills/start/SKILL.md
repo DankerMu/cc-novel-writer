@@ -198,16 +198,22 @@ Skill → 状态映射：
 
 ##### Step B.4: 平台画像 + 驱动类型（M6 gate；支持回退）
 
-目标：在写入 `brief.md` 与 `platform-profile.json` 之前，完成一次**显式 review gate**，把平台绑定、题材驱动类型、关键阈值确认下来（对齐 `NOVEL_ASK` 语义：可审计、可恢复、跨执行器一致）。
+目标：在写入 `platform-profile.json` 之前，完成一次**显式 review gate**，把平台绑定、题材驱动类型、关键阈值确认下来（对齐 `NOVEL_ASK` 语义：可审计、可恢复、跨执行器一致）。
 
 **B.4.1 平台绑定（immutable）**
 
-- 如果项目根目录已存在 `platform-profile.json`：平台已经绑定，**不得更改**。跳过提问，直接读取其中的 `platform` 作为平台。
+- 如果项目根目录已存在 `platform-profile.json`：视为该项目已完成平台画像初始化，平台/驱动类型/阈值均以该文件为准，**不得重问/重建/覆盖**：
+  - 读取 `platform-profile.json.platform` 作为平台
+  - 读取 `platform-profile.json.scoring.genre_drive_type` 作为 `genre_drive_type`
+  - 将“候选 platform profile”（用于 brief 预填与阈值摘要）直接设为该文件内容
+  - 跳过 B.4.2-B.4.4
 - 否则：使用 AskUserQuestion 让用户选择平台（2 选项）：
   - `qidian`（Recommended）
   - `tomato`
 
 **B.4.2 选择叙事驱动类型（genre_drive_type）**
+
+> 仅当 `platform-profile.json` 不存在时执行。
 
 使用 AskUserQuestion 让用户选择 1 个 `genre_drive_type`（4 选项）：
 - `plot`（Recommended）— 情节驱动
@@ -216,6 +222,8 @@ Skill → 状态映射：
 - `slice_of_life` — 日常/氛围驱动
 
 **B.4.3 关键阈值（word_count / hook_policy / info_load）确认与可选覆盖**
+
+> 仅当 `platform-profile.json` 不存在时执行。
 
 1) 从 `${CLAUDE_PLUGIN_ROOT}/templates/platform-profile.json` 读取对应平台默认值（`defaults.{platform}`）并生成一份**候选 platform profile**（暂存在变量，不写盘）：
 - 将 `created_at` 设置为当前时间（ISO-8601）
@@ -236,7 +244,7 @@ Skill → 状态映射：
 - 仅允许的 root keys：`word_count` / `hook_policy` / `info_load`（不允许出现 `platform` / `created_at` / `scoring` 等）
 - 仅允许的 leaf keys：
   - `word_count.{target_min,target_max,hard_min,hard_max}`
-  - `hook_policy.{required,min_strength,allowed_types}`（不允许覆盖 `fix_strategy`）
+  - `hook_policy.{required,min_strength,allowed_types}`（`allowed_types` 必须非空且去重；不允许覆盖 `fix_strategy`）
   - `info_load.{max_new_entities_per_chapter,max_unknown_entities_per_chapter,max_new_terms_per_1k_words}`
 - merge 语义：对象字段 deep merge；数组字段整体替换；若出现非白名单字段则拒绝并要求用户重填
 
@@ -251,6 +259,8 @@ Skill → 状态映射：
 
 **B.4.4 显式 review gate（确认后才允许写盘）**
 
+> 仅当 `platform-profile.json` 不存在时执行。
+
 将平台/驱动类型/阈值（以**最终 profile**为准）汇总成 5-10 行摘要展示给用户，并用 AskUserQuestion 要求确认：
 ```
 将写入以下平台配置（确认后不可更改平台）：
@@ -263,12 +273,11 @@ Skill → 状态映射：
 选项：
 1. 确认并继续 (Recommended)
 2. 返回微调阈值
-3. 重新选择（平台/驱动类型；若已存在 `platform-profile.json` 则仅可重选驱动类型）
+3. 重新选择平台/驱动类型
 ```
 
 选择选项 3 时：
-- 若 `platform-profile.json` 不存在：回退到 B.4.1（重选平台）→ B.4.2（重选驱动类型）
-- 若 `platform-profile.json` 已存在：回退到 B.4.2（仅重选驱动类型）
+- 回退到 B.4.1（重选平台）→ B.4.2（重选驱动类型）
 
 > 通过该 gate 后：Step C 才允许写入 `platform-profile.json`（`brief.md` 仍由 Step B.5 确认后写入），并将 gate 的 QuestionSpec/AnswerSpec 落盘到 `staging/novel-ask/` 供审计与恢复。
 
@@ -320,7 +329,7 @@ Skill → 状态映射：
    - `brief.md`：从 `brief-template.md` 复制并用用户输入填充占位符（包含 `platform` / `genre_drive_type` / `platform_constraints_summary`）
    - `style-profile.json`：从 `style-profile-template.json` 复制（后续由 StyleAnalyzer 填充）
    - `ai-blacklist.json`：从 `ai-blacklist.json` 复制
-   - `platform-profile.json`：从 `templates/platform-profile.json` 的默认库生成（按 Step B.4 的 platform/genre_drive_type 与 overrides；`platform` 字段写入后不可变；若文件已存在则只允许校验/读取，禁止覆盖/改平台）
+   - `platform-profile.json`：从 `templates/platform-profile.json` 的默认库生成（按 Step B.4 的 platform/genre_drive_type 与 overrides；`platform` 字段写入后不可变；若文件已存在则只允许校验/读取，禁止任何覆盖/写回）
 3. **初始化最小可运行文件**（模板复制后立即创建，确保后续 Agent 可正常读取）：
    - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "quick_start_step": "C", "revision_count": 0, "pending_actions": [], "last_checkpoint_time": "<now>"}`
    - `state/current-state.json`：`{"schema_version": 1, "state_version": 0, "last_updated_chapter": 0, "characters": {}, "world_state": {}, "active_foreshadowing": []}`
