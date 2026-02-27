@@ -47,8 +47,7 @@ node dist/cli.js instructions "<STEP>" --json --write-manifest
 
 校验命令（会做 questionSpec↔answerSpec cross-validate）：
 ```bash
-PACKET_JSON="<data.written_manifest_path>"
-node --input-type=module - <<'EOF'
+PACKET_JSON="<data.written_manifest_path>" node --input-type=module - <<'EOF'
 import fs from "node:fs/promises";
 import { extractNovelAskGate, loadNovelAskAnswerIfPresent } from "./dist/instruction-gates.js";
 
@@ -69,6 +68,8 @@ EOF
 
 - `single_choice`：直接用 `request_user_input`（将 `default` 对应选项放到 options 第一项，并标注 Recommended）
 - `multi_choice`：循环调用 `request_user_input`，每轮让用户 pick 1 个 option（外加一个保留 label `__done__` 的结束项；该项不写入 answers），累积为 string[]
+  - required=true：必须至少选 1 个再选择 `__done__`，否则视为未回答（blocked）
+  - required=false：若最终 0 选择，则**不要写入该 question id**（而不是写入空数组）
 - `free_text`：改用下方 JSON fallback（保持语义，不做不可靠映射）
 - 注意：UI 可能会自动提供 “Other” 自定义输入；若 question 未设置 `allow_other=true`，则校验会拒绝该输入，需要重新回答
 
@@ -102,9 +103,7 @@ EOF
 （建议）把 fallback JSON 先落盘为 `staging/novel-ask/answers.json`，再用以下命令构造 + 写入 AnswerSpec：
 ```bash
 mkdir -p staging/novel-ask
-PACKET_JSON="<data.written_manifest_path>"
-ANSWERS_JSON="staging/novel-ask/answers.json"
-node --input-type=module - <<'EOF'
+PACKET_JSON="<data.written_manifest_path>" ANSWERS_JSON="staging/novel-ask/answers.json" node --input-type=module - <<'EOF'
 import fs from "node:fs/promises";
 import { dirname } from "node:path";
 import { extractNovelAskGate, requireNovelAskAnswer } from "./dist/instruction-gates.js";
