@@ -7,6 +7,7 @@ import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJso
 import { withWriteLock } from "./lock.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, pad2 } from "./steps.js";
+import { isPlainObject } from "./type-guards.js";
 
 type CommitArgs = {
   rootDir: string;
@@ -31,10 +32,6 @@ type DeltaFile = Record<string, unknown> & {
   storyline_id: string;
   ops: unknown[];
 };
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function requireInt(field: string, value: unknown, file: string): number {
   if (typeof value !== "number" || !Number.isInteger(value)) throw new NovelCliError(`Invalid ${file}: '${field}' must be an int.`, 2);

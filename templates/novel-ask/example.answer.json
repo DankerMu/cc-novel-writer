@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "topic": "init.platform_binding",
+  "answers": {
+    "platform": "qidian",
+    "genre_drive_type": ["plot", "character"],
+    "tone": "noir",
+    "project_note": "Prefer 3k-4k words per chapter; keep POV consistent."
+  },
+  "answered_at": "2026-02-27T00:00:00Z",
+  "answered_by": "human"
+}

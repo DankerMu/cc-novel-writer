@@ -2,6 +2,7 @@ import { join } from "node:path";
 
 import { NovelCliError } from "./errors.js";
 import { readJsonFile, writeJsonFile } from "./fs-utils.js";
+import { isPlainObject } from "./type-guards.js";
 
 export const PIPELINE_STAGES = ["drafting", "drafted", "refined", "judged", "revising", "committed"] as const;
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];
@@ -16,10 +17,6 @@ export type Checkpoint = Record<string, unknown> & {
   pending_actions?: unknown[];
   last_checkpoint_time?: string;
 };
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function asInt(value: unknown): number | null {
   if (typeof value !== "number") return null;

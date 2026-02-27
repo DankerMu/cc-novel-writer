@@ -5,16 +5,13 @@ import type { Checkpoint } from "./checkpoint.js";
 import { pathExists, readJsonFile, readTextFile } from "./fs-utils.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, formatStepId, type Step } from "./steps.js";
+import { isPlainObject } from "./type-guards.js";
 
 export type ValidateReport = {
   ok: true;
   step: string;
   warnings: string[];
 };
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function requireFile(exists: boolean, relPath: string): void {
   if (!exists) throw new NovelCliError(`Missing required file: ${relPath}`, 2);

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "topic": "init.platform_binding",
+  "questions": [
+    {
+      "id": "platform",
+      "header": "Platform",
+      "question": "Choose your target platform.",
+      "kind": "single_choice",
+      "required": true,
+      "options": [
+        { "label": "qidian", "description": "Qidian / 起点中文网" },
+        { "label": "tomato", "description": "Tomato / 番茄小说" }
+      ],
+      "default": "qidian"
+    },
+    {
+      "id": "genre_drive_type",
+      "header": "Genre Drive",
+      "question": "Select one or more genre drive types.",
+      "kind": "multi_choice",
+      "required": true,
+      "options": [
+        { "label": "plot", "description": "Plot-driven" },
+        { "label": "character", "description": "Character-driven" },
+        { "label": "slice_of_life", "description": "Slice-of-life" }
+      ],
+      "default": ["plot"]
+    },
+    {
+      "id": "tone",
+      "header": "Tone",
+      "question": "Pick a default tone (or enter your own).",
+      "kind": "single_choice",
+      "required": false,
+      "options": [
+        { "label": "serious", "description": "Serious / tense" },
+        { "label": "light", "description": "Light / upbeat" }
+      ],
+      "allow_other": true,
+      "default": "serious"
+    },
+    {
+      "id": "project_note",
+      "header": "Notes",
+      "question": "Any special constraints or notes for the project?",
+      "kind": "free_text",
+      "required": false
+    }
+  ]
+}
