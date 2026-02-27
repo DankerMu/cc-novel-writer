@@ -104,9 +104,9 @@ clig.dev："Discoverable CLIs suggest what command to run next."
 ## Sources
 
 - [clig.dev - Command Line Interface Guidelines](https://clig.dev/)
-- [Laws of UX - Miller's Law / Hick's Law](https://lawsofux.com/)
+- [Laws of UX - Miller's Law / Hick's Law (Archived)](https://web.archive.org/web/20260225132837/https://lawsofux.com/)
 - [Lucas F. Costa - UX Patterns for CLI Tools](https://lucasfcosta.com/2022/06/01/ux-patterns-cli-tools.html)
 - [AskUserQuestion in Subagents (Issue #18721)](https://github.com/anthropics/claude-code/issues/18721)
-- [SmartScope - AskUserQuestion Tool Guide](https://smartscope.blog/en/generative-ai/claude/claude-code-askuserquestion-tool-guide/)
+- [SmartScope - AskUserQuestion Tool Guide (Archived)](https://web.archive.org/web/20260112214813/https://smartscope.blog/en/generative-ai/claude/claude-code-askuserquestion-tool-guide/)
 - [Terraform State Documentation](https://developer.hashicorp.com/terraform/language/state)
 - [awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code)

@@ -55,4 +55,5 @@ At minimum, these new sections SHALL include:
 ## References
 
 - `openspec/changes/m6-platform-optimization/specs/platform-profile/spec.md`
+- `schemas/platform-profile.schema.json`
 - `openspec/changes/m7-retention-and-readability-guards/proposal.md`
