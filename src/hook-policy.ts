@@ -83,7 +83,8 @@ export function checkHookPolicy(args: { hookPolicy: HookPolicy; evalRaw: unknown
   const evalObj = args.evalRaw as Record<string, unknown>;
   const { strength, evidence: strengthEvidence } = extractHookStrength(evalObj);
   const hook = extractHook(evalObj);
-  const extracted: HookEvalExtract = { ...hook, strength };
+  const hookType = hook.type !== null ? hook.type.toLowerCase() : null;
+  const extracted: HookEvalExtract = { ...hook, type: hookType, strength };
 
   if (!strengthInRange(strength)) {
     return { status: "invalid_eval", reason: "missing or invalid scores.hook_strength.score (expected 1-5)", extracted };
@@ -93,7 +94,7 @@ export function checkHookPolicy(args: { hookPolicy: HookPolicy; evalRaw: unknown
     return { status: "invalid_eval", reason: "missing hook.present (expected boolean)", extracted };
   }
 
-  if (hook.type === null) {
+  if (hookType === null) {
     return { status: "invalid_eval", reason: "missing hook.type (expected non-empty string or 'none')", extracted };
   }
 
@@ -102,10 +103,14 @@ export function checkHookPolicy(args: { hookPolicy: HookPolicy; evalRaw: unknown
     return { status: "invalid_eval", reason: "missing hook evidence snippet (expected hook.evidence or scores.hook_strength.evidence)", extracted };
   }
 
-  const allowed = Array.isArray(args.hookPolicy.allowed_types) ? args.hookPolicy.allowed_types : [];
+  const allowed = Array.isArray(args.hookPolicy.allowed_types)
+    ? args.hookPolicy.allowed_types
+        .map((t) => (typeof t === "string" ? t.trim().toLowerCase() : ""))
+        .filter((t) => t.length > 0)
+    : [];
   const minStrength = typeof args.hookPolicy.min_strength === "number" ? args.hookPolicy.min_strength : 1;
 
-  if (!hook.present || hook.type === "none") {
+  if (!hook.present || hookType === "none") {
     return {
       status: "fail",
       reason: "missing chapter-end hook",
@@ -113,10 +118,10 @@ export function checkHookPolicy(args: { hookPolicy: HookPolicy; evalRaw: unknown
     };
   }
 
-  if (allowed.length > 0 && !allowed.includes(hook.type)) {
+  if (allowed.length > 0 && !allowed.includes(hookType)) {
     return {
       status: "fail",
-      reason: `hook.type not allowed: ${hook.type}`,
+      reason: `hook.type not allowed: ${hookType}`,
       extracted: { ...extracted, evidence }
     };
   }

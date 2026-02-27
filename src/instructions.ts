@@ -128,7 +128,11 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
     });
     next_actions.push({ kind: "command", command: `novel validate ${stepId}` });
     next_actions.push({ kind: "command", command: `novel advance ${stepId}` });
-    next_actions.push({ kind: "command", command: `novel commit --chapter ${args.step.chapter}`, note: "After judged, commit staging artifacts." });
+    next_actions.push({
+      kind: "command",
+      command: `novel next`,
+      note: "After advance, compute the next deterministic step (may be hook-fix/review/commit)."
+    });
   } else if (args.step.stage === "hook-fix") {
     agent = { kind: "subagent", name: "chapter-writer" };
     paths.chapter_draft = relIfExists(rel.staging.chapterMd, await pathExists(join(args.rootDir, rel.staging.chapterMd)));

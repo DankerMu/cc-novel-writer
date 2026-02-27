@@ -121,6 +121,7 @@ novel-project/
   "pipeline_stage": "committed",
   "inflight_chapter": null,
   "revision_count": 0,
+  "hook_fix_count": 0,
   "pending_actions": [],
   "last_checkpoint_time": "2026-02-21T15:30:00"
 }
@@ -132,13 +133,14 @@ novel-project/
 
 - `inflight_chapter` 记录当前正在处理的章节号
 - `revision_count` 记录当前 `inflight_chapter` 的修订次数（用于限制修订循环；commit 后重置为 0）
+- `hook_fix_count` 记录当前 `inflight_chapter` 的 `hook-fix` 自动尝试次数（用于限制章末钩子自动修复；commit 后重置为 0）
 
 冷启动恢复时：若 `pipeline_stage != committed && inflight_chapter != null`，检查 `staging/` 子目录并从对应阶段恢复：
 - `drafting` 且 `staging/chapters/` 无对应文件 → 重启整章
 - `drafting` 且 `staging/chapters/` 有初稿但 `staging/summaries/` 无摘要 → 从 Summarizer 恢复
 - `drafted` → 跳过 ChapterWriter 和 Summarizer，从 StyleRefiner 恢复
 - `refined` → 从 QualityJudge 恢复
-- `judged` → 执行 commit 阶段
+- `judged` → 运行确定性下一步（可能是 `commit` / `hook-fix` / `review`；若使用 `novel` CLI，则执行 `novel next` 决定）
 - `revising` → 从 ChapterWriter 重启（保留 `revision_count`，防止无限循环）
 ```
 

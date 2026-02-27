@@ -775,7 +775,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       if (updatedCheckpoint.last_completed_chapter >= args.chapter) {
         warnings.push(`Checkpoint last_completed_chapter is already ${updatedCheckpoint.last_completed_chapter}; leaving as-is.`);
       } else {
-      updatedCheckpoint.last_completed_chapter = args.chapter;
+        updatedCheckpoint.last_completed_chapter = args.chapter;
       }
       updatedCheckpoint.pipeline_stage = "committed";
       updatedCheckpoint.inflight_chapter = null;

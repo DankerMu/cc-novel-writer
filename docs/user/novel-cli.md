@@ -83,7 +83,7 @@ novel next
 
 ### 5) 提交事务（commit）
 
-当 `novel next` 返回 `chapter:003:commit`（或你已经完成 judge 阶段）：
+当 `novel next` 返回 `chapter:003:commit` 时：
 
 ```bash
 novel commit --chapter 3
@@ -126,9 +126,19 @@ chapter:048:summarize
 chapter:048:judge
 ```
 
-5) 若 eval 已存在，会返回：
+5) 若 eval 已存在，通常会返回：
 ```
 chapter:048:commit
 ```
+
+但当启用 `platform-profile.json.hook_policy.required=true` 且章末钩子缺失/偏弱时，可能改为返回：
+```
+chapter:048:hook-fix
+```
+（自动一次，且只允许修改最后 1–2 段），若仍不满足 hook 门槛则返回：
+```
+chapter:048:review
+```
+（人工处理后再重新 judge/commit）。
 
 > 这使得你可以在任何时刻中断并恢复：只要 `.checkpoint.json` 和 `staging/**` 未被破坏，`novel next` 就能给出确定性的下一步。
