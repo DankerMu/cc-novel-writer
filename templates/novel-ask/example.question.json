@@ -10,7 +10,7 @@
       "required": true,
       "options": [
         { "label": "qidian", "description": "Qidian / 起点中文网" },
-        { "label": "jjwxc", "description": "Jinjiang / 晋江文学城" }
+        { "label": "tomato", "description": "Tomato / 番茄小说" }
       ],
       "default": "qidian"
     },

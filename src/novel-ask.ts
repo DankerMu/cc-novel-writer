@@ -1,4 +1,5 @@
 import { NovelCliError } from "./errors.js";
+import { isPlainObject } from "./type-guards.js";
 
 export type NovelAskKind = "single_choice" | "multi_choice" | "free_text";
 
@@ -56,6 +57,7 @@ export type NovelAskAnswerSpec = {
 };
 
 const SNAKE_CASE_ID = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const RFC3339_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 export function isSnakeCaseId(id: string): boolean {
   return SNAKE_CASE_ID.test(id);
@@ -63,10 +65,6 @@ export function isSnakeCaseId(id: string): boolean {
 
 function fail(context: string, message: string): never {
   throw new NovelCliError(`Invalid ${context}: ${message}`, 2);
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function assertNoUnknownKeys(obj: Record<string, unknown>, allowed: ReadonlySet<string>, context: string): void {
@@ -105,7 +103,8 @@ function requireNonEmptyArray(value: unknown, context: string): unknown[] {
 
 function requireIsoDateString(value: unknown, context: string): string {
   const s = requireNonEmptyString(value, context);
-  if (!Number.isFinite(Date.parse(s))) fail(context, "Expected an ISO-8601 date string.");
+  if (!RFC3339_DATE_TIME.test(s)) fail(context, "Expected an ISO-8601 / RFC3339 date-time string (with timezone).");
+  if (!Number.isFinite(Date.parse(s))) fail(context, "Expected a valid ISO-8601 / RFC3339 date-time string.");
   return s;
 }
 
@@ -159,6 +158,7 @@ export function parseNovelAskQuestionSpec(raw: unknown): NovelAskQuestionSpec {
   assertNoUnknownKeys(obj, new Set(["version", "topic", "questions"]), ctx);
 
   const version = requireInt(obj.version, `${ctx}.version`);
+  if (version < 1) fail(`${ctx}.version`, "Expected an integer >= 1.");
   const topic = requireNonEmptyString(obj.topic, `${ctx}.topic`);
   const questionsRaw = requireNonEmptyArray(obj.questions, `${ctx}.questions`);
 
@@ -233,6 +233,7 @@ export function parseNovelAskAnswerSpec(raw: unknown): NovelAskAnswerSpec {
   assertNoUnknownKeys(obj, new Set(["version", "topic", "answers", "answered_at", "answered_by"]), ctx);
 
   const version = requireInt(obj.version, `${ctx}.version`);
+  if (version < 1) fail(`${ctx}.version`, "Expected an integer >= 1.");
   const topic = requireNonEmptyString(obj.topic, `${ctx}.topic`);
   const answered_at = requireIsoDateString(obj.answered_at, `${ctx}.answered_at`);
   const answered_by = requireNonEmptyString(obj.answered_by, `${ctx}.answered_by`);
