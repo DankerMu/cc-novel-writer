@@ -5,7 +5,7 @@ import { readCheckpoint, type Checkpoint, writeCheckpoint } from "./checkpoint.j
 import { NovelCliError } from "./errors.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { withWriteLock } from "./lock.js";
-import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
+import { attachPlatformConstraintsToEval, computePlatformConstraints, hashText, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, pad2, pad3 } from "./steps.js";
@@ -579,9 +579,9 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
         let infoLoadNer = precomputedNer;
         if (precomputedNer?.status === "pass" && precomputedNer.chapter_fingerprint) {
           const s = await stat(chapterAbs);
-          const fpNow = { size: s.size, mtime_ms: s.mtimeMs };
+          const fpNow = { size: s.size, mtime_ms: s.mtimeMs, content_hash: hashText(chapterText) };
           const fpPrev = precomputedNer.chapter_fingerprint;
-          if (fpNow.size !== fpPrev.size || fpNow.mtime_ms !== fpPrev.mtime_ms) {
+          if (fpNow.size !== fpPrev.size || fpNow.mtime_ms !== fpPrev.mtime_ms || fpNow.content_hash !== fpPrev.content_hash) {
             infoLoadNer = {
               status: "skipped",
               error: "Chapter changed during commit; skipping info-load NER.",

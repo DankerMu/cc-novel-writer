@@ -25,6 +25,19 @@ export type CompliancePolicy = {
   duplicate_name_policy: SeverityPolicy;
 };
 
+export type HookPolicy = {
+  required: boolean;
+  min_strength: number;
+  allowed_types: string[];
+  fix_strategy: string;
+};
+
+export type ScoringPolicy = {
+  genre_drive_type: string;
+  weight_profile_id: string;
+  weight_overrides?: Record<string, number>;
+};
+
 export type PlatformProfile = {
   schema_version: number;
   platform: PlatformId;
@@ -32,12 +45,32 @@ export type PlatformProfile = {
   word_count: WordCountPolicy;
   info_load: InfoLoadPolicy;
   compliance: CompliancePolicy;
+  hook_policy?: HookPolicy;
+  scoring?: ScoringPolicy;
 };
 
 function requireIntField(obj: Record<string, unknown>, field: string, file: string): number {
   const v = obj[field];
   if (typeof v !== "number" || !Number.isInteger(v)) throw new NovelCliError(`Invalid ${file}: '${field}' must be an int.`, 2);
   return v;
+}
+
+function requirePositiveNumberField(obj: Record<string, unknown>, field: string, file: string): number {
+  const v = obj[field];
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0) throw new NovelCliError(`Invalid ${file}: '${field}' must be a non-negative number.`, 2);
+  return v;
+}
+
+function requireBoolField(obj: Record<string, unknown>, field: string, file: string): boolean {
+  const v = obj[field];
+  if (typeof v !== "boolean") throw new NovelCliError(`Invalid ${file}: '${field}' must be a boolean.`, 2);
+  return v;
+}
+
+function requireStringArrayField(obj: Record<string, unknown>, field: string, file: string): string[] {
+  const v = obj[field];
+  if (!Array.isArray(v) || !v.every((s) => typeof s === "string")) throw new NovelCliError(`Invalid ${file}: '${field}' must be a string array.`, 2);
+  return v as string[];
 }
 
 function requireStringField(obj: Record<string, unknown>, field: string, file: string): string {
@@ -73,7 +106,7 @@ function parseInfoLoadPolicy(raw: unknown, file: string): InfoLoadPolicy {
   return {
     max_new_entities_per_chapter: requireIntField(obj, "max_new_entities_per_chapter", file),
     max_unknown_entities_per_chapter: requireIntField(obj, "max_unknown_entities_per_chapter", file),
-    max_new_terms_per_1k_words: requireIntField(obj, "max_new_terms_per_1k_words", file)
+    max_new_terms_per_1k_words: requirePositiveNumberField(obj, "max_new_terms_per_1k_words", file)
   };
 }
 
@@ -93,6 +126,45 @@ function parseCompliancePolicy(raw: unknown, file: string): CompliancePolicy {
   };
 }
 
+const VALID_FIX_STRATEGIES = ["hook-fix"] as const;
+
+function parseHookPolicy(raw: unknown, file: string): HookPolicy {
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'hook_policy' must be an object.`, 2);
+  const obj = raw as Record<string, unknown>;
+  const min_strength = requireIntField(obj, "min_strength", file);
+  if (min_strength < 1 || min_strength > 5) throw new NovelCliError(`Invalid ${file}: 'hook_policy.min_strength' must be 1-5.`, 2);
+  const fix_strategy = requireStringField(obj, "fix_strategy", file);
+  if (!(VALID_FIX_STRATEGIES as readonly string[]).includes(fix_strategy)) {
+    throw new NovelCliError(`Invalid ${file}: 'hook_policy.fix_strategy' must be one of: ${VALID_FIX_STRATEGIES.join(", ")}.`, 2);
+  }
+  return {
+    required: requireBoolField(obj, "required", file),
+    min_strength,
+    allowed_types: requireStringArrayField(obj, "allowed_types", file),
+    fix_strategy
+  };
+}
+
+function parseScoringPolicy(raw: unknown, file: string): ScoringPolicy {
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'scoring' must be an object.`, 2);
+  const obj = raw as Record<string, unknown>;
+  const out: ScoringPolicy = {
+    genre_drive_type: requireStringField(obj, "genre_drive_type", file),
+    weight_profile_id: requireStringField(obj, "weight_profile_id", file)
+  };
+  if (obj.weight_overrides !== undefined) {
+    if (!isPlainObject(obj.weight_overrides)) throw new NovelCliError(`Invalid ${file}: 'scoring.weight_overrides' must be an object.`, 2);
+    const wo = obj.weight_overrides as Record<string, unknown>;
+    const overrides: Record<string, number> = {};
+    for (const [k, v] of Object.entries(wo)) {
+      if (typeof v !== "number" || !Number.isFinite(v)) throw new NovelCliError(`Invalid ${file}: 'scoring.weight_overrides.${k}' must be a number.`, 2);
+      overrides[k] = v;
+    }
+    out.weight_overrides = overrides;
+  }
+  return out;
+}
+
 export function parsePlatformProfile(raw: unknown, file: string): PlatformProfile {
   if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: expected a JSON object.`, 2);
   const obj = raw as Record<string, unknown>;
@@ -104,7 +176,10 @@ export function parsePlatformProfile(raw: unknown, file: string): PlatformProfil
   const info_load = parseInfoLoadPolicy(obj.info_load, file);
   const compliance = parseCompliancePolicy(obj.compliance, file);
 
-  return { schema_version, platform, created_at, word_count, info_load, compliance };
+  const hook_policy = isPlainObject(obj.hook_policy) ? parseHookPolicy(obj.hook_policy, file) : undefined;
+  const scoring = isPlainObject(obj.scoring) ? parseScoringPolicy(obj.scoring, file) : undefined;
+
+  return { schema_version, platform, created_at, word_count, info_load, compliance, hook_policy, scoring };
 }
 
 export async function loadPlatformProfile(rootDir: string): Promise<{ relPath: string; profile: PlatformProfile } | null> {
