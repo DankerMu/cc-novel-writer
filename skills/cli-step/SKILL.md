@@ -83,11 +83,25 @@ EOF
 
 对 `novel_ask.questions[]` 按顺序提问，并构造 `answers: {[id]: value}`：
 
-- `single_choice`：AskUserQuestion 单选；保存为 string（选项 label 或 allow_other 的自定义字符串）
-- `multi_choice`：循环 AskUserQuestion 单选（额外提供保留 label `__done__` 结束项；该项不写入 answers），累积为 string[]
+> AskUserQuestion 对 `options[]` 有硬限制（每次 2-4 个）。当 QuestionSpec 的 options 过多时，必须用“分页/循环”拆成多轮 AskUserQuestion，保证每轮 options 不超过上限。
+
+- `single_choice`：
+  - 若 `options.length <= 4`：直接 AskUserQuestion 单选；保存为 string（选项 label 或 allow_other 的自定义字符串）
+  - 若 `options.length > 4`：分页展示（每页最多 3 个真实 option + 1 个控制项 `__more__`，`__more__` 不写入 answers；用户选到真实 option 才结束）
+  - 若存在 `default`：把 default 对应的 option **排到当前页第一位**，并在 description 里标注 Recommended（不要修改 label，否则会导致校验不通过）
+  - `allow_other=false` 风险：AskUserQuestion UI 可能提供 “Other” 自定义输入；若用户选择 Other 且输入不在 option labels 内，会被校验拒绝 → 需要重新提问直到得到合法答案
+
+- `multi_choice`：循环 AskUserQuestion 单选累积为 string[]
+  - 每轮 options 结构：最多 2 个真实 option + `__more__` + `__done__`（控制项不写入 answers；若真实 option 少于 2，则按实际数量展示）
+  - `__more__`：切换到下一页（循环）；用于在 options 过多时访问更多真实 option
+  - `__done__`：结束选择并写入 answers
   - required=true：必须至少选 1 个再 `__done__`，否则视为未回答（blocked）
   - required=false：若最终 0 选择，则不要写入该 question id（不要写空数组）
-- `free_text`：AskUserQuestion 自由输入；required=false 时可先问 “Skip / Provide”，Skip 则不写入 answers
+  - `allow_other=false` 风险同上：若用户通过 Other 输入自定义值，会被校验拒绝，需要重新提问
+
+- `free_text`：AskUserQuestion 本身是“选项式交互”，要采集自由文本需要依赖 UI 的 “Other” 输入（或退化为普通消息输入）
+  - required=false：先 AskUserQuestion 让用户选 “Skip / Provide”；Skip 则不写入 answers；Provide 则让用户用 Other 输入文本（或在下一条消息直接粘贴文本）
+  - required=true：AskUserQuestion 提示用户用 Other 输入文本（或在下一条消息直接粘贴文本），并将该文本写入 answers[id]
 
 #### Step 3.3: 写入 AnswerSpec 到 answer_path，并校验通过
 
