@@ -153,10 +153,14 @@ function parseHookPolicy(raw: unknown, file: string): HookPolicy {
   if (!(VALID_FIX_STRATEGIES as readonly string[]).includes(fix_strategy)) {
     throw new NovelCliError(`Invalid ${file}: 'hook_policy.fix_strategy' must be one of: ${VALID_FIX_STRATEGIES.join(", ")}.`, 2);
   }
+  const allowed_types = Array.from(new Set(requireStringArrayField(obj, "allowed_types", file).map((s) => s.trim()))).filter((s) => s.length > 0);
+  if (allowed_types.length === 0) {
+    throw new NovelCliError(`Invalid ${file}: 'hook_policy.allowed_types' must be a non-empty string array.`, 2);
+  }
   return {
     required: requireBoolField(obj, "required", file),
     min_strength,
-    allowed_types: requireStringArrayField(obj, "allowed_types", file),
+    allowed_types,
     fix_strategy
   };
 }

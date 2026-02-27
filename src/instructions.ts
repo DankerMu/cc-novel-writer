@@ -136,6 +136,7 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
   } else if (args.step.stage === "hook-fix") {
     agent = { kind: "subagent", name: "chapter-writer" };
     paths.chapter_draft = relIfExists(rel.staging.chapterMd, await pathExists(join(args.rootDir, rel.staging.chapterMd)));
+    paths.chapter_eval = relIfExists(rel.staging.evalJson, await pathExists(join(args.rootDir, rel.staging.evalJson)));
     inline.fix_mode = "hook-fix";
     inline.required_fixes = [
       {
@@ -155,17 +156,12 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
   } else if (args.step.stage === "review") {
     agent = { kind: "cli", name: "manual-review" };
     paths.chapter_draft = relIfExists(rel.staging.chapterMd, await pathExists(join(args.rootDir, rel.staging.chapterMd)));
-    paths.eval = relIfExists(rel.staging.evalJson, await pathExists(join(args.rootDir, rel.staging.evalJson)));
+    paths.chapter_eval = relIfExists(rel.staging.evalJson, await pathExists(join(args.rootDir, rel.staging.evalJson)));
     expected_outputs.push({ path: "(manual)", required: false, note: "Review required: hook policy still failing after bounded hook-fix." });
     next_actions.push({
       kind: "command",
-      command: `novel instructions chapter:${String(args.step.chapter).padStart(3, "0")}:hook-fix --json`,
-      note: "Option: run hook-fix again manually (not automatic) and then re-judge."
-    });
-    next_actions.push({
-      kind: "command",
       command: `novel instructions chapter:${String(args.step.chapter).padStart(3, "0")}:judge --json`,
-      note: "After manual edits, re-run QualityJudge."
+      note: "After manually editing the chapter ending, re-run QualityJudge."
     });
   } else if (args.step.stage === "commit") {
     agent = { kind: "cli", name: "novel" };

@@ -61,6 +61,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 - `paths.platform_profile` → 平台配置 JSON（可选；含字数区间、章末钩子策略、信息负载等；存在时优先遵守）
 - `paths.style_drift` → 风格漂移纠偏（可选，存在时读取）
 - `paths.chapter_contract` → L3 章节契约 JSON
+- `paths.chapter_eval` → 章节评估 JSON（可选；hook-fix/修订时提供，含 hook_type/hook_strength/evidence 等信息，便于定向修复）
 - `paths.volume_outline` → 本卷大纲全文
 - `paths.current_state` → 角色当前状态 JSON
 - `paths.world_rules` → L1 世界规则（可选）
@@ -115,7 +116,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
 15. **对话格式**：人物说话和内心活动统一使用中文双引号（""）。如 `XX说："我出去了。"` `XX心想："关我什么事。"` 禁止使用单引号、直角引号或英文引号
 16. **禁止分隔线**：禁止使用 `---`、`***`、`* * *` 等 markdown 水平分隔线做场景切换。场景过渡用空行 + 叙述衔接，不用视觉分隔符
 
-> **注意**：约束 11、12 为默认风格策略，适用于快节奏网文。如项目风格偏向悬疑铺陈/史诗感/抒情向，可在 `style-profile.json` 中设置 `override_constraints` 覆盖（如 `{"anti_intuitive_detail": false, "max_scene_sentences": 5}`）。
+> **注意**：约束 12、13 为默认风格策略，适用于快节奏网文。如项目风格偏向悬疑铺陈/史诗感/抒情向，可在 `style-profile.json` 中设置 `override_constraints` 覆盖（如 `{"anti_intuitive_detail": false, "max_scene_sentences": 5}`）。
 
 > **注意**：完整去 AI 化（黑名单扫描、句式重复检测）由 StyleRefiner 在后处理阶段执行，ChapterWriter 专注创作质量。
 
@@ -159,5 +160,6 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep"]
   - `required_fixes`（inline）：`[{target, instruction}]` 格式的最小修订指令列表
   - `high_confidence_violations`（inline）：高置信度违约条目
   - `paths.chapter_draft`：指向现有正文
-  - 读取优先级调整：先读 `chapter_draft`（现有正文），再读 `required_fixes` 定位需修改段落，最后读 style_profile 确保修订风格一致。定向修改指定段落，保持其余内容不变
+  - `paths.chapter_eval`：可选，存在时读取以获取 hook/证据等上下文
+  - 读取优先级调整：先读 `chapter_draft`（现有正文），再读 `chapter_eval`（如存在）+ `required_fixes` 定位需修改段落，最后读 style_profile 确保修订风格一致。定向修改指定段落，保持其余内容不变
   - **hook-fix 微修模式**（当 `required_fixes` 明确要求修复章末钩子时）：只允许改动最后 1–2 段（或末尾 ~10%），不得新增关键事件/新设定/新命名角色；目标是在不影响既有 state/crossref 的前提下补强章末钩子

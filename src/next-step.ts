@@ -19,6 +19,63 @@ function normalizeStage(stage: unknown): string | null {
   return null;
 }
 
+async function checkHookPolicyForStage(args: {
+  projectRootDir: string;
+  stagePrefix: "refined" | "judged";
+  inflightChapter: number;
+  pipelineStage: string;
+  evidence: Record<string, unknown>;
+  hookFixCount: number;
+  evalRelPath: string;
+}): Promise<NextStepResult | null> {
+  const loadedProfile = await loadPlatformProfile(args.projectRootDir);
+  const hookPolicy = loadedProfile?.profile.hook_policy;
+  if (!hookPolicy?.required) return null;
+
+  let evalRaw: unknown;
+  try {
+    evalRaw = await readJsonFile(join(args.projectRootDir, args.evalRelPath));
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "judge" }),
+      reason: `${args.stagePrefix}:hook_eval_read_failed`,
+      inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+      evidence: { ...args.evidence, hookFixCount: args.hookFixCount, error: message }
+    };
+  }
+
+  const check = checkHookPolicy({ hookPolicy, evalRaw });
+
+  if (check.status === "invalid_eval") {
+    return {
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "judge" }),
+      reason: `${args.stagePrefix}:hook_eval_invalid:${check.reason}`,
+      inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+      evidence: { ...args.evidence, hookFixCount: args.hookFixCount, hook_check: check }
+    };
+  }
+
+  if (check.status === "fail") {
+    if (args.hookFixCount < 1) {
+      return {
+        step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "hook-fix" }),
+        reason: `${args.stagePrefix}:hook_policy_fail:hook-fix:${check.reason}`,
+        inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+        evidence: { ...args.evidence, hookFixCount: args.hookFixCount, hook_check: check }
+      };
+    }
+    return {
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "review" }),
+      reason: `${args.stagePrefix}:hook_policy_fail:manual_review:${check.reason}`,
+      inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+      evidence: { ...args.evidence, hookFixCount: args.hookFixCount, hook_check: check }
+    };
+  }
+
+  return null;
+}
+
 export async function computeNextStep(projectRootDir: string, checkpoint: Checkpoint): Promise<NextStepResult> {
   const inflightChapter = typeof checkpoint.inflight_chapter === "number" ? checkpoint.inflight_chapter : null;
   const stage = normalizeStage(checkpoint.pipeline_stage);
@@ -114,49 +171,16 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
       };
     }
 
-    const loadedProfile = await loadPlatformProfile(projectRootDir);
-    const hookPolicy = loadedProfile?.profile.hook_policy;
-    if (hookPolicy?.required) {
-      let evalRaw: unknown;
-      try {
-        evalRaw = await readJsonFile(join(projectRootDir, rel.staging.evalJson));
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "judge" }),
-          reason: "refined:hook_eval_read_failed",
-          inflight: { chapter: inflightChapter, pipeline_stage: stage },
-          evidence: { ...evidence, hookFixCount, error: message }
-        };
-      }
-
-      const check = checkHookPolicy({ hookPolicy, evalRaw });
-      if (check.status === "invalid_eval") {
-        return {
-          step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "judge" }),
-          reason: `refined:hook_eval_invalid:${check.reason}`,
-          inflight: { chapter: inflightChapter, pipeline_stage: stage },
-          evidence: { ...evidence, hookFixCount, hook_check: check }
-        };
-      }
-
-      if (check.status === "fail") {
-        if (hookFixCount < 1) {
-          return {
-            step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "hook-fix" }),
-            reason: `refined:hook_policy_fail:hook-fix:${check.reason}`,
-            inflight: { chapter: inflightChapter, pipeline_stage: stage },
-            evidence: { ...evidence, hookFixCount, hook_check: check }
-          };
-        }
-        return {
-          step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "review" }),
-          reason: `refined:hook_policy_fail:manual_review:${check.reason}`,
-          inflight: { chapter: inflightChapter, pipeline_stage: stage },
-          evidence: { ...evidence, hookFixCount, hook_check: check }
-        };
-      }
-    }
+    const hookGate = await checkHookPolicyForStage({
+      projectRootDir,
+      stagePrefix: "refined",
+      inflightChapter,
+      pipelineStage: stage,
+      evidence,
+      hookFixCount,
+      evalRelPath: rel.staging.evalJson
+    });
+    if (hookGate) return hookGate;
 
     return {
       step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "commit" }),
@@ -176,49 +200,16 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
       };
     }
 
-    const loadedProfile = await loadPlatformProfile(projectRootDir);
-    const hookPolicy = loadedProfile?.profile.hook_policy;
-    if (hookPolicy?.required) {
-      let evalRaw: unknown;
-      try {
-        evalRaw = await readJsonFile(join(projectRootDir, rel.staging.evalJson));
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "judge" }),
-          reason: "judged:hook_eval_read_failed",
-          inflight: { chapter: inflightChapter, pipeline_stage: stage },
-          evidence: { ...evidence, hookFixCount, error: message }
-        };
-      }
-      const check = checkHookPolicy({ hookPolicy, evalRaw });
-
-      if (check.status === "invalid_eval") {
-        return {
-          step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "judge" }),
-          reason: `judged:hook_eval_invalid:${check.reason}`,
-          inflight: { chapter: inflightChapter, pipeline_stage: stage },
-          evidence: { ...evidence, hookFixCount, hook_check: check }
-        };
-      }
-
-      if (check.status === "fail") {
-        if (hookFixCount < 1) {
-          return {
-            step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "hook-fix" }),
-            reason: `judged:hook_policy_fail:hook-fix:${check.reason}`,
-            inflight: { chapter: inflightChapter, pipeline_stage: stage },
-            evidence: { ...evidence, hookFixCount, hook_check: check }
-          };
-        }
-        return {
-          step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "review" }),
-          reason: `judged:hook_policy_fail:manual_review:${check.reason}`,
-          inflight: { chapter: inflightChapter, pipeline_stage: stage },
-          evidence: { ...evidence, hookFixCount, hook_check: check }
-        };
-      }
-    }
+    const hookGate = await checkHookPolicyForStage({
+      projectRootDir,
+      stagePrefix: "judged",
+      inflightChapter,
+      pipelineStage: stage,
+      evidence,
+      hookFixCount,
+      evalRelPath: rel.staging.evalJson
+    });
+    if (hookGate) return hookGate;
 
     return {
       step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "commit" }),
