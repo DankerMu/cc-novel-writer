@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "description": "网文套路词 / 模板腔 lint 词库（独立于 ai-blacklist；支持分级 severity + whitelist/exemptions）",
+  "last_updated": "2026-02-27",
+
+  "words": ["下一刻", "只见", "冷笑一声", "淡淡道", "不屑一顾", "轰然", "刹那间", "与此同时"],
+
+  "categories": {
+    "transition_cliche": ["与此同时", "下一刻", "刹那间"],
+    "expression_cliche": ["冷笑一声", "淡淡道", "不屑一顾"],
+    "sound_effect_cliche": ["轰然"],
+    "visual_cliche": ["只见"]
+  },
+
+  "severity": {
+    "_comment": "Severity levels: warn | soft | hard. Executors MAY apply platform-profile-driven gating rules for hard terms.",
+    "default": "warn",
+    "per_category": {
+      "transition_cliche": "warn",
+      "expression_cliche": "soft",
+      "sound_effect_cliche": "warn",
+      "visual_cliche": "warn"
+    },
+    "per_word": {
+      "淡淡道": "soft",
+      "不屑一顾": "soft"
+    }
+  },
+
+  "whitelist": [],
+
+  "exemptions": {
+    "_comment": "Structured exemptions to reduce false positives. Executors may ignore unsupported fields.",
+    "exact": [],
+    "regex": [],
+    "notes": []
+  },
+
+  "update_log": []
+}
+

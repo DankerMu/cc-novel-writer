@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "description": "platform-profile.json 默认模板库（init 阶段按平台选择并写入项目根目录的 platform-profile.json；平台绑定不可变）",
+  "last_updated": "2026-02-27",
+  "_comment": "Each entry under defaults is a full platform-profile.json object aligned with schemas/platform-profile.schema.json. Init SHOULD overwrite created_at and MAY apply user-confirmed overrides.",
+  "defaults": {
+    "qidian": {
+      "$schema": "schemas/platform-profile.schema.json",
+      "schema_version": 1,
+      "platform": "qidian",
+      "created_at": "2026-02-27T00:00:00Z",
+      "_comment_created_at": "Init SHOULD overwrite this with the actual creation timestamp.",
+      "word_count": {
+        "target_min": 2500,
+        "target_max": 3500,
+        "hard_min": 1800,
+        "hard_max": 4500
+      },
+      "hook_policy": {
+        "required": true,
+        "min_strength": 3,
+        "allowed_types": ["question", "threat_reveal", "twist_reveal", "emotional_cliff", "next_objective"],
+        "fix_strategy": "hook-fix"
+      },
+      "info_load": {
+        "max_new_entities_per_chapter": 6,
+        "max_unknown_entities_per_chapter": 3,
+        "max_new_terms_per_1k_words": 6
+      },
+      "compliance": {
+        "banned_words": [],
+        "duplicate_name_policy": "soft",
+        "script_paths": {
+          "lint_blacklist": "scripts/lint-blacklist.sh",
+          "lint_cliche": "scripts/lint-cliche.sh"
+        }
+      },
+      "scoring": {
+        "genre_drive_type": "plot",
+        "weight_profile_id": "plot:v1"
+      },
+      "retention": null,
+      "readability": null,
+      "naming": null
+    },
+    "tomato": {
+      "$schema": "schemas/platform-profile.schema.json",
+      "schema_version": 1,
+      "platform": "tomato",
+      "created_at": "2026-02-27T00:00:00Z",
+      "_comment_created_at": "Init SHOULD overwrite this with the actual creation timestamp.",
+      "word_count": {
+        "target_min": 1500,
+        "target_max": 2500,
+        "hard_min": 1000,
+        "hard_max": 3500
+      },
+      "hook_policy": {
+        "required": true,
+        "min_strength": 3,
+        "allowed_types": ["question", "threat_reveal", "twist_reveal", "emotional_cliff", "next_objective"],
+        "fix_strategy": "hook-fix"
+      },
+      "info_load": {
+        "max_new_entities_per_chapter": 5,
+        "max_unknown_entities_per_chapter": 3,
+        "max_new_terms_per_1k_words": 5
+      },
+      "compliance": {
+        "banned_words": [],
+        "duplicate_name_policy": "soft",
+        "script_paths": {
+          "lint_blacklist": "scripts/lint-blacklist.sh",
+          "lint_cliche": "scripts/lint-cliche.sh"
+        }
+      },
+      "scoring": {
+        "genre_drive_type": "plot",
+        "weight_profile_id": "plot:v1"
+      },
+      "retention": null,
+      "readability": null,
+      "naming": null
+    }
+  }
+}
+
