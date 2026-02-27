@@ -70,6 +70,9 @@ novel-project/
     ├── audit.jsonl                # 安全拦截审计（append-only）
     ├── chapter-001-log.json
     ├── unknown-entities.jsonl
+    ├── platform-constraints/       # 平台约束报告（M6）
+    │   ├── latest.json
+    │   └── platform-constraints-chapter-001.json
     ├── continuity/                 # 一致性检查报告（NER）
     │   ├── latest.json
     │   └── continuity-report-vol-01-ch001-ch010.json

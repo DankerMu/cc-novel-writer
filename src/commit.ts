@@ -5,8 +5,10 @@ import { readCheckpoint, type Checkpoint, writeCheckpoint } from "./checkpoint.j
 import { NovelCliError } from "./errors.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { withWriteLock } from "./lock.js";
+import { attachPlatformConstraintsToEval, computePlatformConstraints, hashText, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
+import { loadPlatformProfile } from "./platform-profile.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
-import { chapterRelPaths, pad2 } from "./steps.js";
+import { chapterRelPaths, pad2, pad3 } from "./steps.js";
 import { isPlainObject } from "./type-guards.js";
 
 type CommitArgs = {
@@ -363,6 +365,9 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   const warnings: string[] = [];
   const plan: string[] = [];
 
+  const loadedProfile = await loadPlatformProfile(args.rootDir);
+  if (!loadedProfile) warnings.push("Missing platform-profile.json; platform constraints will be skipped.");
+
   const rel = chapterRelPaths(args.chapter);
   await ensureFilePresent(args.rootDir, rel.staging.chapterMd);
   await ensureFilePresent(args.rootDir, rel.staging.summaryMd);
@@ -409,15 +414,25 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   // Update foreshadowing/global.json
   plan.push(`UPDATE ${rel.final.foreshadowGlobalJson} (from foreshadow ops)`);
 
-  // Update checkpoint.
-  plan.push(`UPDATE .checkpoint.json (commit chapter ${args.chapter})`);
-
   // Cleanup staging delta.
   plan.push(`REMOVE ${rel.staging.deltaJson}`);
+
+  if (loadedProfile) {
+    plan.push(`WRITE logs/platform-constraints/platform-constraints-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
+    plan.push(`PATCH ${rel.final.evalJson} (attach platform_constraints metadata)`);
+  }
+
+  // Update checkpoint.
+  plan.push(`UPDATE .checkpoint.json (commit chapter ${args.chapter})`);
 
   if (args.dryRun) {
     return { plan, warnings };
   }
+
+  const chapterAbs = join(args.rootDir, rel.staging.chapterMd);
+  const precomputedNer = loadedProfile
+    ? await precomputeInfoLoadNer({ rootDir: args.rootDir, chapter: args.chapter, chapterAbsPath: chapterAbs })
+    : null;
 
   await withWriteLock(args.rootDir, { chapter: args.chapter }, async () => {
     const checkpointAbs = join(args.rootDir, ".checkpoint.json");
@@ -425,6 +440,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     const globalAbs = join(args.rootDir, rel.final.foreshadowGlobalJson);
     const changelogAbs = join(args.rootDir, rel.final.stateChangelogJsonl);
     const deltaAbs = join(args.rootDir, rel.staging.deltaJson);
+    const evalStagingAbs = join(args.rootDir, rel.staging.evalJson);
 
     const originalCheckpoint = await readTextFile(checkpointAbs);
     const originalStateExists = await pathExists(stateAbs);
@@ -434,8 +450,20 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     const originalChangelogExists = await pathExists(changelogAbs);
     const originalChangelogSize = originalChangelogExists ? (await stat(changelogAbs)).size : 0;
     const originalDelta = await readTextFile(deltaAbs);
+    const originalEval = loadedProfile ? await readTextFile(evalStagingAbs) : null;
+
+    const platformConstraintsLatestAbs = join(args.rootDir, "logs/platform-constraints/latest.json");
+    const platformConstraintsHistoryAbs = join(
+      args.rootDir,
+      `logs/platform-constraints/platform-constraints-chapter-${pad3(args.chapter)}.json`
+    );
+    const originalPlatformConstraintsLatestExists = loadedProfile ? await pathExists(platformConstraintsLatestAbs) : false;
+    const originalPlatformConstraintsLatest = originalPlatformConstraintsLatestExists ? await readTextFile(platformConstraintsLatestAbs) : null;
+    const originalPlatformConstraintsHistoryExists = loadedProfile ? await pathExists(platformConstraintsHistoryAbs) : false;
+    const originalPlatformConstraintsHistory = originalPlatformConstraintsHistoryExists ? await readTextFile(platformConstraintsHistoryAbs) : null;
 
     const moved: Array<{ from: string; to: string }> = [];
+    let platformConstraintsWritten = false;
 
     const rollback = async (): Promise<void> => {
       // Roll back moved files (best-effort).
@@ -494,6 +522,39 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       } catch {
         // ignore
       }
+
+      try {
+        if (originalEval !== null) {
+          await ensureDir(dirname(evalStagingAbs));
+          await writeFile(evalStagingAbs, originalEval, "utf8");
+        }
+      } catch {
+        // ignore
+      }
+
+      if (platformConstraintsWritten) {
+        try {
+          if (originalPlatformConstraintsLatestExists && originalPlatformConstraintsLatest !== null) {
+            await ensureDir(dirname(platformConstraintsLatestAbs));
+            await writeFile(platformConstraintsLatestAbs, originalPlatformConstraintsLatest, "utf8");
+          } else {
+            await removePath(platformConstraintsLatestAbs);
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          if (originalPlatformConstraintsHistoryExists && originalPlatformConstraintsHistory !== null) {
+            await ensureDir(dirname(platformConstraintsHistoryAbs));
+            await writeFile(platformConstraintsHistoryAbs, originalPlatformConstraintsHistory, "utf8");
+          } else {
+            await removePath(platformConstraintsHistoryAbs);
+          }
+        } catch {
+          // ignore
+        }
+      }
     };
 
     try {
@@ -510,6 +571,44 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       const { applied: appliedOps, foreshadowOps } = applyStateOps(state, normalizedOps, warnings);
       state.state_version = state.state_version + 1;
       state.last_updated_chapter = args.chapter;
+
+      let platformConstraintsReport: Awaited<ReturnType<typeof computePlatformConstraints>> | null = null;
+      if (loadedProfile) {
+        const chapterText = await readTextFile(chapterAbs);
+
+        let infoLoadNer = precomputedNer;
+        if (precomputedNer?.status === "pass" && precomputedNer.chapter_fingerprint) {
+          const s = await stat(chapterAbs);
+          const fpNow = { size: s.size, mtime_ms: s.mtimeMs, content_hash: hashText(chapterText) };
+          const fpPrev = precomputedNer.chapter_fingerprint;
+          if (fpNow.size !== fpPrev.size || fpNow.mtime_ms !== fpPrev.mtime_ms || fpNow.content_hash !== fpPrev.content_hash) {
+            infoLoadNer = {
+              status: "skipped",
+              error: "Chapter changed during commit; skipping info-load NER.",
+              chapter_fingerprint: null,
+              current_index: null,
+              recent_texts: null
+            };
+          }
+        }
+
+        platformConstraintsReport = await computePlatformConstraints({
+          rootDir: args.rootDir,
+          chapter: args.chapter,
+          chapterAbsPath: chapterAbs,
+          chapterText,
+          platformProfile: loadedProfile.profile,
+          state,
+          ...(infoLoadNer ? { infoLoadNer } : {})
+        });
+
+        if (platformConstraintsReport.has_hard_violations) {
+          const hardIssues = platformConstraintsReport.issues.filter((i) => i.severity === "hard");
+          const hardSummaries = hardIssues.map((i) => i.summary).slice(0, 3);
+          const suffix = hardIssues.length > 3 ? " …" : "";
+          throw new NovelCliError(`Platform constraints hard violation: ${hardSummaries.join(" | ")}${suffix}`, 2);
+        }
+      }
 
       // Moves first (rollbackable).
       await doRename(args.rootDir, rel.staging.chapterMd, rel.final.chapterMd);
@@ -531,6 +630,18 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       await updateForeshadowing({ rootDir: args.rootDir, checkpoint, delta, foreshadowOps, warnings, dryRun: false });
 
       await removePath(join(args.rootDir, rel.staging.deltaJson));
+
+      if (loadedProfile && platformConstraintsReport) {
+        platformConstraintsWritten = true;
+        const { historyRel } = await writePlatformConstraintsLogs({ rootDir: args.rootDir, chapter: args.chapter, report: platformConstraintsReport });
+        await attachPlatformConstraintsToEval({
+          evalAbsPath: join(args.rootDir, rel.final.evalJson),
+          evalRelPath: rel.final.evalJson,
+          platform: loadedProfile.profile.platform,
+          reportRelPath: historyRel,
+          report: platformConstraintsReport
+        });
+      }
 
       const updatedCheckpoint: Checkpoint = { ...checkpoint };
       if (updatedCheckpoint.last_completed_chapter >= args.chapter) {
