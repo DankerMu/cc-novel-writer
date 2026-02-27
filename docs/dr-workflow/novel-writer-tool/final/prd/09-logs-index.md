@@ -145,3 +145,12 @@
 - Owning specs：
   - `openspec/changes/m7-retention-and-readability-guards/specs/name-conflict-lint/spec.md`
   - `openspec/changes/m7-retention-and-readability-guards/tasks.md`（落盘约定）
+
+#### 12) Platform constraints（平台约束：每章报告）
+
+- 目录：`logs/platform-constraints/`
+- Latest：`logs/platform-constraints/latest.json`
+- History：`logs/platform-constraints/platform-constraints-chapter-{C:03d}.json`
+- Owning specs：
+  - `openspec/changes/m6-platform-optimization/specs/platform-constraints/spec.md`
+  - `openspec/changes/m6-platform-optimization/specs/platform-profile/spec.md`

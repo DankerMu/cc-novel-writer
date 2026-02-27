@@ -5,6 +5,8 @@ import { readCheckpoint, type Checkpoint, writeCheckpoint } from "./checkpoint.j
 import { NovelCliError } from "./errors.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { withWriteLock } from "./lock.js";
+import { attachPlatformConstraintsToEval, computePlatformConstraints, writePlatformConstraintsLogs } from "./platform-constraints.js";
+import { loadPlatformProfile } from "./platform-profile.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, pad2 } from "./steps.js";
 import { isPlainObject } from "./type-guards.js";
@@ -363,6 +365,9 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   const warnings: string[] = [];
   const plan: string[] = [];
 
+  const loadedProfile = await loadPlatformProfile(args.rootDir);
+  if (!loadedProfile) warnings.push("Missing platform-profile.json; platform constraints will be skipped.");
+
   const rel = chapterRelPaths(args.chapter);
   await ensureFilePresent(args.rootDir, rel.staging.chapterMd);
   await ensureFilePresent(args.rootDir, rel.staging.summaryMd);
@@ -414,6 +419,11 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
 
   // Cleanup staging delta.
   plan.push(`REMOVE ${rel.staging.deltaJson}`);
+
+  if (loadedProfile) {
+    plan.push(`WRITE logs/platform-constraints/platform-constraints-chapter-${String(args.chapter).padStart(3, "0")}.json (+ latest.json)`);
+    plan.push(`PATCH ${rel.staging.evalJson} (attach platform_constraints metadata)`);
+  }
 
   if (args.dryRun) {
     return { plan, warnings };
@@ -510,6 +520,37 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       const { applied: appliedOps, foreshadowOps } = applyStateOps(state, normalizedOps, warnings);
       state.state_version = state.state_version + 1;
       state.last_updated_chapter = args.chapter;
+
+      if (loadedProfile) {
+        const chapterAbs = join(args.rootDir, rel.staging.chapterMd);
+        const chapterText = await readTextFile(chapterAbs);
+        const report = await computePlatformConstraints({
+          rootDir: args.rootDir,
+          chapter: args.chapter,
+          chapterAbsPath: chapterAbs,
+          chapterText,
+          platformProfile: loadedProfile.profile,
+          state
+        });
+
+        const { historyRel } = await writePlatformConstraintsLogs({ rootDir: args.rootDir, chapter: args.chapter, report });
+        await attachPlatformConstraintsToEval({
+          evalAbsPath: join(args.rootDir, rel.staging.evalJson),
+          evalRelPath: rel.staging.evalJson,
+          platform: loadedProfile.profile.platform,
+          reportRelPath: historyRel,
+          report
+        });
+
+        if (report.has_hard_violations) {
+          const hardSummaries = report.issues
+            .filter((i) => i.severity === "hard")
+            .map((i) => i.summary)
+            .slice(0, 3);
+          const suffix = report.issues.length > 3 ? " …" : "";
+          throw new NovelCliError(`Platform constraints hard violation: ${hardSummaries.join(" | ")}${suffix}`, 2);
+        }
+      }
 
       // Moves first (rollbackable).
       await doRename(args.rootDir, rel.staging.chapterMd, rel.final.chapterMd);
