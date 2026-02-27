@@ -52,6 +52,8 @@ At minimum, it SHALL include:
   - `weight_profile_id` (string)
   - `weight_overrides` (optional object)
 
+The canonical machine-readable JSON Schema for `platform-profile.json` is `schemas/platform-profile.schema.json` (SSOT).
+
 #### Scenario: Platform profile includes constraints used by validators
 - **WHEN** the system loads `platform-profile.json` for platform `qidian`
 - **THEN** it can derive word count constraints, hook requirements, info-load thresholds, and compliance rules from the file
@@ -69,5 +71,6 @@ During initialization, the system SHALL allow the user to override key threshold
 ## References
 
 - `docs/dr-workflow/novel-writer-tool/final/prd/09-data.md`
+- `schemas/platform-profile.schema.json`
 - `openspec/changes/m6-platform-optimization/proposal.md`
 - `openspec/changes/m6-platform-optimization/specs/chapter-hook-system/spec.md`

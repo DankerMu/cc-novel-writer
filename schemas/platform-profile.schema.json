@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": 1,
+  "title": "platform-profile.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "platform",
+    "created_at",
+    "word_count",
+    "hook_policy",
+    "info_load",
+    "compliance",
+    "scoring"
+  ],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^_.*$": { "$ref": "#/$defs/comment_value" }
+  },
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Schema version of platform-profile.json (SSOT in schemas/platform-profile.schema.json)."
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["qidian", "tomato"],
+      "description": "Immutable platform binding chosen at init."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when the profile was created."
+    },
+
+    "word_count": { "$ref": "#/$defs/word_count_policy" },
+    "hook_policy": { "$ref": "#/$defs/hook_policy" },
+    "info_load": { "$ref": "#/$defs/info_load_policy" },
+    "compliance": { "$ref": "#/$defs/compliance_policy" },
+    "scoring": { "$ref": "#/$defs/scoring_policy" },
+
+    "retention": { "$ref": "#/$defs/retention_policy" },
+    "readability": { "$ref": "#/$defs/readability_policy" },
+    "naming": { "$ref": "#/$defs/naming_policy" }
+  },
+  "$defs": {
+    "comment_value": {
+      "description": "Allows _comment/_note style metadata fields for human readability.",
+      "type": ["string", "number", "integer", "boolean", "object", "array", "null"]
+    },
+    "severity_policy": {
+      "type": "string",
+      "enum": ["warn", "soft", "hard"],
+      "description": "warn: advisory; soft: requires revision unless overridden; hard: blocks progression when enabled."
+    },
+    "genre_drive_type": {
+      "type": "string",
+      "enum": ["plot", "character", "suspense", "slice_of_life"]
+    },
+    "word_count_policy": {
+      "type": "object",
+      "required": ["target_min", "target_max", "hard_min", "hard_max"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "target_min": { "type": "integer", "minimum": 0 },
+        "target_max": { "type": "integer", "minimum": 0 },
+        "hard_min": { "type": "integer", "minimum": 0 },
+        "hard_max": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "hook_policy": {
+      "type": "object",
+      "required": ["required", "min_strength", "allowed_types", "fix_strategy"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "required": { "type": "boolean" },
+        "min_strength": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "allowed_types": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "fix_strategy": {
+          "type": "string",
+          "enum": ["hook-fix"],
+          "description": "Bounded enum; unknown values MUST fail validation."
+        }
+      }
+    },
+    "info_load_policy": {
+      "type": "object",
+      "required": ["max_new_entities_per_chapter", "max_unknown_entities_per_chapter", "max_new_terms_per_1k_words"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "max_new_entities_per_chapter": { "type": "integer", "minimum": 0 },
+        "max_unknown_entities_per_chapter": { "type": "integer", "minimum": 0 },
+        "max_new_terms_per_1k_words": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "compliance_policy": {
+      "type": "object",
+      "required": ["banned_words", "duplicate_name_policy"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "banned_words": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "duplicate_name_policy": { "$ref": "#/$defs/severity_policy" },
+        "script_paths": {
+          "type": "object",
+          "description": "Optional mapping for deterministic linters (tool_name -> relative path).",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "scoring_policy": {
+      "type": "object",
+      "required": ["genre_drive_type", "weight_profile_id"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "genre_drive_type": { "$ref": "#/$defs/genre_drive_type" },
+        "weight_profile_id": { "type": "string", "minLength": 1 },
+        "weight_overrides": {
+          "type": "object",
+          "description": "Optional per-dimension weight overrides (dimension_name -> weight).",
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "retention_policy": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "title_policy": { "$ref": "#/$defs/title_policy" },
+        "hook_ledger": { "$ref": "#/$defs/hook_ledger_policy" }
+      }
+    },
+    "title_policy": {
+      "type": "object",
+      "required": ["enabled", "min_chars", "max_chars", "forbidden_patterns", "auto_fix"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "min_chars": { "type": "integer", "minimum": 0 },
+        "max_chars": { "type": "integer", "minimum": 0 },
+        "forbidden_patterns": { "type": "array", "items": { "type": "string" } },
+        "required_patterns": { "type": "array", "items": { "type": "string" } },
+        "auto_fix": { "type": "boolean" }
+      }
+    },
+    "hook_ledger_policy": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "fulfillment_window_chapters",
+        "diversity_window_chapters",
+        "max_same_type_streak",
+        "min_distinct_types_in_window",
+        "overdue_policy"
+      ],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "fulfillment_window_chapters": { "type": "integer", "minimum": 1 },
+        "diversity_window_chapters": { "type": "integer", "minimum": 1 },
+        "max_same_type_streak": { "type": "integer", "minimum": 1 },
+        "min_distinct_types_in_window": { "type": "integer", "minimum": 1 },
+        "overdue_policy": { "$ref": "#/$defs/severity_policy" }
+      }
+    },
+    "readability_policy": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "mobile": { "$ref": "#/$defs/mobile_readability_policy" }
+      }
+    },
+    "mobile_readability_policy": {
+      "type": "object",
+      "required": ["enabled", "max_paragraph_chars", "max_consecutive_exposition_paragraphs", "blocking_severity"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "max_paragraph_chars": { "type": "integer", "minimum": 0 },
+        "max_consecutive_exposition_paragraphs": { "type": "integer", "minimum": 0 },
+        "blocking_severity": { "type": "string", "enum": ["hard_only", "soft_and_hard"] }
+      }
+    },
+    "naming_conflict_type": {
+      "type": "string",
+      "enum": ["duplicate", "near_duplicate", "alias_collision"]
+    },
+    "naming_policy": {
+      "type": ["object", "null"],
+      "required": ["enabled", "near_duplicate_threshold", "blocking_conflict_types"],
+      "additionalProperties": false,
+      "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "near_duplicate_threshold": { "type": "number", "minimum": 0 },
+        "blocking_conflict_types": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/naming_conflict_type" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "exemptions": {
+          "type": "object",
+          "description": "Optional whitelist/exemptions for intentional overlaps.",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}
+
