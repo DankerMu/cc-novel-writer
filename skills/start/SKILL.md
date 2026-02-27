@@ -196,6 +196,70 @@ Skill → 状态映射：
 
 > 关键：每条路径的补充信息必须在 Step B 内收齐，不得延迟到 Step E 再问。Step E 仅执行 StyleAnalyzer 派发，不再与用户交互。
 
+##### Step B.4: 平台画像 + 驱动类型（M6 gate，1-3 轮交互）
+
+目标：在写入 `brief.md` 与 `platform-profile.json` 之前，完成一次**显式 review gate**，把平台绑定、题材驱动类型、关键阈值确认下来（对齐 `NOVEL_ASK` 语义：可审计、可恢复、跨执行器一致）。
+
+**B.4.1 平台绑定（immutable）**
+
+- 如果项目根目录已存在 `platform-profile.json`：平台已经绑定，**不得更改**。跳过提问，直接读取其中的 `platform` 作为平台。
+- 否则：使用 AskUserQuestion 让用户选择平台（2 选项）：
+  - `qidian`（Recommended）
+  - `tomato`
+
+**B.4.2 选择叙事驱动类型（genre_drive_type）**
+
+使用 AskUserQuestion 让用户选择 1 个 `genre_drive_type`（4 选项）：
+- `plot`（Recommended）— 情节驱动
+- `character` — 角色驱动
+- `suspense` — 悬念/留存驱动
+- `slice_of_life` — 日常/氛围驱动
+
+**B.4.3 关键阈值（word_count / hook_policy / info_load）确认与可选覆盖**
+
+1) 从 `${CLAUDE_PLUGIN_ROOT}/templates/platform-profile.json` 读取对应平台默认值（`defaults.{platform}`）并生成一份**候选 platform profile**（暂存在变量，不写盘）：
+- 将 `created_at` 设置为当前时间（ISO-8601）
+- 将 `scoring.genre_drive_type` 设为上一步选择的 `genre_drive_type`
+- 从 `${CLAUDE_PLUGIN_ROOT}/templates/genre-weight-profiles.json` 读取 `default_profile_by_drive_type`，设置 `scoring.weight_profile_id`
+
+2) 用 AskUserQuestion 询问是否覆盖默认阈值：
+```
+是否需要调整平台默认阈值？
+
+选项：
+1. 使用默认值 (Recommended)
+2. 我要微调阈值
+```
+
+3) 若用户选择微调：让用户用**严格 JSON** 提供 overrides（只允许覆盖 `word_count` / `hook_policy` / `info_load` 的字段；其余字段不得改动）：
+```json
+{
+  "word_count": { "target_min": 2500, "target_max": 3500 },
+  "hook_policy": { "min_strength": 3 },
+  "info_load": { "max_new_entities_per_chapter": 6 }
+}
+```
+解析失败或字段类型不合法则要求用户重填（不得“猜测用户意图”）；解析成功后将 overrides **合并到候选 platform profile**，得到最终将要写盘的 profile。
+
+**B.4.4 显式 review gate（确认后才允许写盘）**
+
+将平台/驱动类型/阈值（以**最终 profile**为准）汇总成 5-10 行摘要展示给用户，并用 AskUserQuestion 要求确认：
+```
+将写入以下平台配置（确认后不可更改平台）：
+- platform: {platform}
+- genre_drive_type: {genre_drive_type}
+- word_count: target {target_min}-{target_max}, hard {hard_min}-{hard_max}
+- hook_policy: required={required}, min_strength={min_strength}
+- info_load: new_entities≤{...}, unknown_entities≤{...}, new_terms_per_1k≤{...}
+
+选项：
+1. 确认并继续 (Recommended)
+2. 返回微调阈值
+3. 重新选择平台/驱动类型
+```
+
+> 通过该 gate 后：Step C 才允许写入 `platform-profile.json` 与 `brief.md`，并将 gate 的 QuestionSpec/AnswerSpec 落盘到 `staging/novel-ask/` 供审计与恢复。
+
 ##### Step B.5: Brief 交互完善（1-2 轮交互）
 
 用 Step A/B 已收集的信息预填 `brief-template.md`，**将预填结果展示给用户**并请求补充：
@@ -206,6 +270,9 @@ Skill → 状态映射：
    - `protagonist_identity` ← Step A 主角概念
    - `style_source` ← Step B source_type
    - `reference_works` ← Step B reference_author（若有）
+   - `platform` ← Step B.4 平台绑定（若已有 `platform-profile.json`，以其为准）
+   - `genre_drive_type` ← Step B.4 选择结果（若已有 `platform-profile.json`，以其为准）
+   - `platform_constraints_summary` ← Step B.4 候选 platform profile 的关键阈值摘要（可由 init 自动聚合生成）
 
 2. **使用 AskUserQuestion 请求用户补充关键字段**（1 轮，允许自由输入）：
    - **书名**（可留空让系统生成）
@@ -222,6 +289,8 @@ Skill → 状态映射：
    - 核心冲突：{core_conflict}
    - 基调：{tone}
    - 节奏：{pacing}
+   - 平台：{platform}
+   - 驱动类型：{genre_drive_type}
    - 风格来源：{style_source}
 
    选项：
@@ -236,16 +305,21 @@ Skill → 状态映射：
 
 1. 创建项目目录结构（参考 `docs/dr-workflow/novel-writer-tool/final/prd/09-data.md` §9.1）
 2. 从 `${CLAUDE_PLUGIN_ROOT}/templates/` 复制模板文件到项目目录（至少生成以下文件）：
-   - `brief.md`：从 `brief-template.md` 复制并用用户输入填充占位符
+   - `brief.md`：从 `brief-template.md` 复制并用用户输入填充占位符（包含 `platform` / `genre_drive_type` / `platform_constraints_summary`）
    - `style-profile.json`：从 `style-profile-template.json` 复制（后续由 StyleAnalyzer 填充）
    - `ai-blacklist.json`：从 `ai-blacklist.json` 复制
+   - `platform-profile.json`：从 `templates/platform-profile.json` 的默认库生成（按 Step B.4 的 platform/genre_drive_type 与 overrides；`platform` 字段写入后不可变；若文件已存在则只允许校验/读取，禁止覆盖/改平台）
 3. **初始化最小可运行文件**（模板复制后立即创建，确保后续 Agent 可正常读取）：
    - `.checkpoint.json`：`{"last_completed_chapter": 0, "current_volume": 0, "orchestrator_state": "QUICK_START", "pipeline_stage": null, "inflight_chapter": null, "quick_start_step": "C", "revision_count": 0, "pending_actions": [], "last_checkpoint_time": "<now>"}`
    - `state/current-state.json`：`{"schema_version": 1, "state_version": 0, "last_updated_chapter": 0, "characters": {}, "world_state": {}, "active_foreshadowing": []}`
    - `foreshadowing/global.json`：`{"foreshadowing": []}`
    - `storylines/storyline-spec.json`：`{"spec_version": 1, "rules": []}` （WorldBuilder 初始化后由入口 Skill 填充默认 LS-001~005）
    - `storylines/storylines.json`：`{"storylines": [], "relationships": [], "storyline_types": ["type:main_arc", "type:faction_conflict", "type:conspiracy", "type:mystery", "type:character_arc", "type:parallel_timeline"]}` （WorldBuilder 在 Step D 填充具体故事线）
-   - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`staging/foreshadowing/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
+   - 创建空目录：`staging/chapters/`、`staging/summaries/`、`staging/state/`、`staging/storylines/`、`staging/evaluations/`、`staging/foreshadowing/`、`staging/novel-ask/`、`chapters/`、`summaries/`、`evaluations/`、`logs/`
+   - （平台配置 gate；NOVEL_ASK-compatible）写入：
+     - `staging/novel-ask/init.platform_profile.question.json`（QuestionSpec：platform/genre_drive_type/overrides_json）
+     - `staging/novel-ask/init.platform_profile.answers.json`（AnswerSpec：回答 + answered_at/answered_by）
+     - 仅当 Step B.4 的 review gate 已确认，才允许写入以上 gate 产物与 `platform-profile.json`（不得先写盘后确认）
 
 ##### Step D: 世界观 + 角色 + 故事线
 
@@ -317,7 +391,7 @@ Skill → 状态映射：
 - 每个 Step 开始前，先检查该步骤的产物是否已存在（例如 Step D 检查 `world/rules.json`），避免重复生成
 - quick start 完成后更新 `.checkpoint.json`：`current_volume = 1, last_completed_chapter = 3, orchestrator_state = “VOL_PLANNING”`，删除 `quick_start_step`
 
-> 注意：Step A/B/B.5 不持久化 checkpoint（仅收集用户输入和确认 brief，约 3-5 分钟）。若在 Step C 写入 checkpoint 之前中断，用户将回到 INIT 状态重新创建项目，这是可接受的重做成本。
+> 注意：Step A/B/B.4/B.5 不持久化 checkpoint（仅收集用户输入和确认 brief/平台 gate，约 3-5 分钟）。若在 Step C 写入 checkpoint 之前中断，用户将回到 INIT 状态重新创建项目，这是可接受的重做成本。
 
 #### 继续写作
 - 等同执行 `/novel:continue 1` 的逻辑
@@ -347,6 +421,8 @@ Skill → 状态映射：
 #### 更新设定
 
 确认更新类型（世界观/角色/关系） → 变更前快照 → 派发 WorldBuilder/CharacterWeaver 增量更新（含退场保护三重检查） → 变更后差异分析写入 `pending_actions` → 输出传播摘要。
+
+> 平台绑定不可变：`platform-profile.json.platform` 一旦写入不得更改；若用户要求“换平台”，必须拒绝并建议新建项目。
 
 详见 `references/setting-update.md`。
 
