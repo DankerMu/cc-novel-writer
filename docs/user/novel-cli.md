@@ -57,6 +57,13 @@ novel instructions "chapter:003:draft" --json --write-manifest
 - `packet.manifest`：context manifest（以路径为主）
 - `packet.expected_outputs[]`：该步必须写入的 `staging/**` 目标文件
 
+可选：若 packet 同时包含 `novel_ask` + `answer_path`，则该 step 在执行 agent 之前存在一个**交互式 gate**：
+
+- 执行器必须先采集答案并写入 AnswerSpec JSON 到 `answer_path`（并通过校验），才允许继续执行 agent
+- 若 `answer_path` 已存在且校验通过，则直接跳过提问（可恢复/可审计）
+
+详见 [交互式门控（NOVEL_ASK）](interactive-gates.md)。
+
 执行器跑完后应回到终端断点（不要自动 commit）。
 
 ### 4) 校验并推进 checkpoint
