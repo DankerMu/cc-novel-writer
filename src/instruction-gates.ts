@@ -1,9 +1,7 @@
-import { isAbsolute, join } from "node:path";
-
 import { NovelCliError } from "./errors.js";
 import { pathExists, readJsonFile } from "./fs-utils.js";
 import { parseNovelAskAnswerSpec, parseNovelAskQuestionSpec, validateNovelAskAnswerAgainstQuestionSpec, type NovelAskAnswerSpec, type NovelAskQuestionSpec } from "./novel-ask.js";
-import { assertInsideProjectRoot, rejectPathTraversalInput } from "./safe-path.js";
+import { rejectPathTraversalInput, resolveProjectRelativePath } from "./safe-path.js";
 
 export type NovelAskGate = {
   novel_ask: NovelAskQuestionSpec;
@@ -23,20 +21,15 @@ export function extractNovelAskGate(packet: { novel_ask?: NovelAskQuestionSpec; 
     throw new NovelCliError("Invalid instruction packet: 'answer_path' must be a non-empty string.", 2);
   }
 
-  return { novel_ask: packet.novel_ask as NovelAskQuestionSpec, answer_path };
-}
-
-function resolveAnswerPath(rootDir: string, answer_path: string): string {
-  if (isAbsolute(answer_path)) throw new NovelCliError("Invalid answer_path: must be a project-relative path.", 2);
   rejectPathTraversalInput(answer_path, "answer_path");
-  const abs = join(rootDir, answer_path);
-  assertInsideProjectRoot(rootDir, abs);
-  return abs;
+
+  const novel_ask = parseNovelAskQuestionSpec(packet.novel_ask);
+  return { novel_ask, answer_path };
 }
 
 export async function loadNovelAskAnswerIfPresent(rootDir: string, gate: NovelAskGate): Promise<NovelAskAnswerSpec | null> {
   const questionSpec = parseNovelAskQuestionSpec(gate.novel_ask);
-  const absAnswer = resolveAnswerPath(rootDir, gate.answer_path);
+  const absAnswer = resolveProjectRelativePath(rootDir, gate.answer_path, "answer_path");
 
   if (!(await pathExists(absAnswer))) return null;
 
@@ -69,4 +62,3 @@ export async function requireNovelAskAnswer(rootDir: string, gate: NovelAskGate)
   }
   return answer;
 }
-

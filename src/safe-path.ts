@@ -1,4 +1,4 @@
-import { sep } from "node:path";
+import { isAbsolute, join, sep } from "node:path";
 
 import { NovelCliError } from "./errors.js";
 
@@ -18,3 +18,15 @@ export function assertInsideProjectRoot(projectRootAbs: string, absolutePath: st
   }
 }
 
+export function resolveProjectRelativePath(projectRootAbs: string, relPath: string, label: string): string {
+  if (typeof relPath !== "string" || relPath.trim().length === 0) {
+    throw new NovelCliError(`Invalid ${label}: must be a non-empty string.`, 2);
+  }
+  if (isAbsolute(relPath)) {
+    throw new NovelCliError(`Invalid ${label}: must be a project-relative path.`, 2);
+  }
+  rejectPathTraversalInput(relPath, label);
+  const abs = join(projectRootAbs, relPath);
+  assertInsideProjectRoot(projectRootAbs, abs);
+  return abs;
+}

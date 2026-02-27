@@ -1,10 +1,10 @@
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 
 import type { Checkpoint } from "./checkpoint.js";
 import { NovelCliError } from "./errors.js";
 import { ensureDir, pathExists, readTextFile, writeJsonFile } from "./fs-utils.js";
 import { parseNovelAskQuestionSpec, type NovelAskQuestionSpec } from "./novel-ask.js";
-import { assertInsideProjectRoot, rejectPathTraversalInput } from "./safe-path.js";
+import { resolveProjectRelativePath } from "./safe-path.js";
 import { chapterRelPaths, formatStepId, pad2, type Step } from "./steps.js";
 
 export type InstructionPacket = {
@@ -136,30 +136,21 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
   }
 
   const gate = args.novelAskGate ?? null;
+  const gateSpec = gate ? parseNovelAskQuestionSpec(gate.novel_ask) : null;
   if (gate) {
-    if (typeof gate.answer_path !== "string" || gate.answer_path.trim().length === 0) {
-      throw new NovelCliError("Invalid novelAskGate.answer_path: must be a non-empty string.", 2);
-    }
-    if (isAbsolute(gate.answer_path)) {
-      throw new NovelCliError("Invalid novelAskGate.answer_path: must be a project-relative path.", 2);
-    }
-    rejectPathTraversalInput(gate.answer_path, "novelAskGate.answer_path");
-    assertInsideProjectRoot(args.rootDir, join(args.rootDir, gate.answer_path));
-
-    const novelAsk = parseNovelAskQuestionSpec(gate.novel_ask);
+    resolveProjectRelativePath(args.rootDir, gate.answer_path, "novelAskGate.answer_path");
     expected_outputs.unshift({
       path: gate.answer_path,
       required: true,
       note: "AnswerSpec JSON record for the NOVEL_ASK gate (written before main step execution)."
     });
-    gate.novel_ask = novelAsk;
   }
 
   const packet: InstructionPacket = {
     version: 1,
     step: stepId,
     agent,
-    ...(gate ? { novel_ask: gate.novel_ask, answer_path: gate.answer_path } : {}),
+    ...(gate ? { novel_ask: gateSpec as NovelAskQuestionSpec, answer_path: gate.answer_path } : {}),
     manifest: {
       mode: embedMode === "off" ? "paths" : "paths+embed",
       inline,
