@@ -10,7 +10,7 @@ import {
   writeClicheLintLogs
 } from "./cliche-lint.js";
 import { NovelCliError } from "./errors.js";
-import { hashText } from "./fingerprint.js";
+import { fingerprintsMatch, hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { withWriteLock } from "./lock.js";
 import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
@@ -649,7 +649,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
         if (precomputedNer?.status === "pass" && precomputedNer.chapter_fingerprint && chapterFingerprintNow) {
           const fpNow = chapterFingerprintNow;
           const fpPrev = precomputedNer.chapter_fingerprint;
-          if (fpNow.size !== fpPrev.size || fpNow.mtime_ms !== fpPrev.mtime_ms || fpNow.content_hash !== fpPrev.content_hash) {
+          if (!fingerprintsMatch(fpNow, fpPrev)) {
             infoLoadNer = {
               status: "skipped",
               error: "Chapter changed during commit; skipping info-load NER.",
@@ -687,9 +687,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           pre.report &&
           pre.chapter_fingerprint &&
           chapterFingerprintNow &&
-          pre.chapter_fingerprint.size === chapterFingerprintNow.size &&
-          pre.chapter_fingerprint.mtime_ms === chapterFingerprintNow.mtime_ms &&
-          pre.chapter_fingerprint.content_hash === chapterFingerprintNow.content_hash
+          fingerprintsMatch(pre.chapter_fingerprint, chapterFingerprintNow)
         ) {
           clicheLintReport = pre.report;
         } else {

@@ -3,7 +3,7 @@ import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 
 import { NovelCliError } from "./errors.js";
-import { fingerprintFile, fingerprintTextFile, fingerprintsMatch, type FileFingerprint as SharedFileFingerprint } from "./fingerprint.js";
+import { fingerprintFile, fingerprintTextFile, fingerprintsMatch, type FileFingerprint } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, writeJsonFile } from "./fs-utils.js";
 import type { PlatformProfile, SeverityPolicy } from "./platform-profile.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
@@ -11,8 +11,6 @@ import { pad3 } from "./steps.js";
 import { isPlainObject } from "./type-guards.js";
 
 const execFileAsync = promisify(execFile);
-
-export type FileFingerprint = SharedFileFingerprint;
 
 export type WebNovelClicheLintConfig = {
   schema_version: number;
@@ -48,6 +46,7 @@ export type ClicheLintReport = {
   config: { schema_version: number; last_updated: string | null };
   mode: "script" | "fallback";
   script?: { rel_path: string };
+  script_error?: string;
   chars: number;
   total_hits: number;
   hits_per_kchars: number;
@@ -550,6 +549,12 @@ export async function computeClicheLintReport(args: {
       scriptRelPath
     });
     if (attempted.status === "ok") return attempted.report;
+    if (attempted.status === "error") {
+      const report = computeFallbackReport({ chapter: args.chapter, chapterText: args.chapterText, config: args.config });
+      const scriptRel = scriptRelPath.trim();
+      const scriptPrefix = scriptRel.length > 0 ? `${scriptRel}: ` : "";
+      return { ...report, script_error: `${scriptPrefix}${attempted.error}` };
+    }
   }
   return computeFallbackReport({ chapter: args.chapter, chapterText: args.chapterText, config: args.config });
 }
@@ -573,11 +578,16 @@ export async function precomputeClicheLintReport(args: {
       scriptRelPath
     });
 
-    const error =
-      attempted.status === "error" ? `Deterministic cliché lint script failed; used fallback. ${attempted.error}` : undefined;
+    const scriptRel = scriptRelPath.trim();
+    const scriptPrefix = scriptRel.length > 0 ? `${scriptRel}: ` : "";
+    const scriptError = attempted.status === "error" ? `${scriptPrefix}${attempted.error}` : undefined;
 
-    const report =
-      attempted.status === "ok" ? attempted.report : computeFallbackReport({ chapter: args.chapter, chapterText: before.text, config: args.config });
+    const report = attempted.status === "ok"
+      ? attempted.report
+      : {
+          ...computeFallbackReport({ chapter: args.chapter, chapterText: before.text, config: args.config }),
+          ...(scriptError ? { script_error: scriptError } : {})
+        };
 
     const afterFp = await fingerprintFile(args.chapterAbsPath);
     if (!fingerprintsMatch(before.fingerprint, afterFp)) {
@@ -588,6 +598,7 @@ export async function precomputeClicheLintReport(args: {
         report: null
       };
     }
+    const error = scriptError ? `Deterministic cliché lint script failed; used fallback. ${scriptError}` : undefined;
     return { status: "pass", ...(error ? { error } : {}), chapter_fingerprint: afterFp, report };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
