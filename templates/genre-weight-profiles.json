@@ -11,7 +11,8 @@
     "pacing",
     "style_naturalness",
     "emotional_impact",
-    "storyline_coherence"
+    "storyline_coherence",
+    "hook_strength"
   ],
 
   "normalization": {
@@ -34,53 +35,56 @@
       "weights": {
         "plot_logic": 0.22,
         "character": 0.16,
-        "immersion": 0.14,
-        "foreshadowing": 0.12,
-        "pacing": 0.1,
-        "style_naturalness": 0.12,
-        "emotional_impact": 0.07,
-        "storyline_coherence": 0.07
+        "immersion": 0.13,
+        "foreshadowing": 0.11,
+        "pacing": 0.08,
+        "style_naturalness": 0.11,
+        "emotional_impact": 0.06,
+        "storyline_coherence": 0.07,
+        "hook_strength": 0.06
       }
     },
     "character:v1": {
       "drive_type": "character",
       "weights": {
-        "plot_logic": 0.14,
+        "plot_logic": 0.13,
         "character": 0.24,
         "immersion": 0.16,
-        "foreshadowing": 0.1,
-        "pacing": 0.07,
-        "style_naturalness": 0.13,
+        "foreshadowing": 0.09,
+        "pacing": 0.06,
+        "style_naturalness": 0.12,
         "emotional_impact": 0.1,
-        "storyline_coherence": 0.06
+        "storyline_coherence": 0.05,
+        "hook_strength": 0.05
       }
     },
     "suspense:v1": {
       "drive_type": "suspense",
       "weights": {
-        "plot_logic": 0.2,
-        "character": 0.14,
-        "immersion": 0.13,
-        "foreshadowing": 0.13,
-        "pacing": 0.13,
-        "style_naturalness": 0.11,
-        "emotional_impact": 0.07,
-        "storyline_coherence": 0.09
+        "plot_logic": 0.17,
+        "character": 0.12,
+        "immersion": 0.11,
+        "foreshadowing": 0.12,
+        "pacing": 0.11,
+        "style_naturalness": 0.1,
+        "emotional_impact": 0.06,
+        "storyline_coherence": 0.09,
+        "hook_strength": 0.12
       }
     },
     "slice_of_life:v1": {
       "drive_type": "slice_of_life",
       "weights": {
-        "plot_logic": 0.14,
+        "plot_logic": 0.13,
         "character": 0.2,
         "immersion": 0.18,
-        "foreshadowing": 0.08,
-        "pacing": 0.06,
+        "foreshadowing": 0.07,
+        "pacing": 0.05,
         "style_naturalness": 0.16,
         "emotional_impact": 0.1,
-        "storyline_coherence": 0.08
+        "storyline_coherence": 0.08,
+        "hook_strength": 0.03
       }
     }
   }
 }
-

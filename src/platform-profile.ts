@@ -177,7 +177,9 @@ function parseScoringPolicy(raw: unknown, file: string): ScoringPolicy {
     const wo = obj.weight_overrides as Record<string, unknown>;
     const overrides: Record<string, number> = {};
     for (const [k, v] of Object.entries(wo)) {
-      if (typeof v !== "number" || !Number.isFinite(v)) throw new NovelCliError(`Invalid ${file}: 'scoring.weight_overrides.${k}' must be a number.`, 2);
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
+        throw new NovelCliError(`Invalid ${file}: 'scoring.weight_overrides.${k}' must be a finite number >= 0.`, 2);
+      }
       overrides[k] = v;
     }
     out.weight_overrides = overrides;

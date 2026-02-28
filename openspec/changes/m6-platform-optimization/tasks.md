@@ -32,9 +32,9 @@
 
 ## 6. Dynamic Weight Profiles
 
-- [ ] 6.1 Implement weight profile loading from `genre-weight-profiles.json` + `platform-profile.json.scoring`
-- [ ] 6.2 Normalize/validate weights and surface config errors without hanging the pipeline
-- [ ] 6.3 Record effective weight profile and per-dimension weights in `evaluations/chapter-*-eval.json`
+- [x] 6.1 Implement weight profile loading from `genre-weight-profiles.json` + `platform-profile.json.scoring`
+- [x] 6.2 Normalize/validate weights and surface config errors without hanging the pipeline
+- [x] 6.3 Record effective weight profile and per-dimension weights in `evaluations/chapter-*-eval.json`
 
 ## 7. ConsistencyAuditor (Sliding Window)
 
