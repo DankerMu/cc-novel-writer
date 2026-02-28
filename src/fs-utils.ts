@@ -88,7 +88,14 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
         backedUp = true;
       } catch (moveErr: unknown) {
         const moveCode = (moveErr as { code?: string }).code;
-        if (moveCode !== "ENOENT") throw moveErr;
+        if (moveCode !== "ENOENT") {
+          cleanupTmp = false;
+          const message = moveErr instanceof Error ? moveErr.message : String(moveErr);
+          throw new NovelCliError(
+            `Failed to write file atomically (tmp preserved; failed to move existing file aside). path=${path} tmp=${tmpPath}. ${message}`,
+            1
+          );
+        }
       }
 
       try {
@@ -101,12 +108,15 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
           }
         }
       } catch (finalErr: unknown) {
+        const finalMessage = finalErr instanceof Error ? finalErr.message : String(finalErr);
         let restored = false;
+        let restoreMessage: string | null = null;
         if (backedUp) {
           try {
             await retryIo(() => rename(backupPath, path), 8);
             restored = true;
-          } catch {
+          } catch (restoreErr: unknown) {
+            restoreMessage = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
             restored = false;
           }
         } else {
@@ -115,13 +125,14 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
 
         if (!backedUp) {
           cleanupTmp = false;
-          throw new NovelCliError(`Failed to write file atomically (tmp preserved). path=${path} tmp=${tmpPath}`, 1);
+          throw new NovelCliError(`Failed to write file atomically (tmp preserved). path=${path} tmp=${tmpPath}. ${finalMessage}`, 1);
         }
 
         if (!restored) {
           cleanupTmp = false;
+          const restoreSuffix = restoreMessage ? ` restore_error=${restoreMessage}` : "";
           throw new NovelCliError(
-            `Failed to write file atomically; restore failed (backup preserved). path=${path} backup=${backupPath} tmp=${tmpPath}`,
+            `Failed to write file atomically; restore failed (backup+tmp preserved). path=${path} backup=${backupPath} tmp=${tmpPath}. write_error=${finalMessage}${restoreSuffix}`,
             1
           );
         }

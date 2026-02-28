@@ -504,53 +504,61 @@ async function quarantinePendingVolumeEndAuditMarker(args: { rootDir: string; re
 }
 
 async function listPendingVolumeEndAuditMarkers(rootDir: string, warnings: string[]): Promise<Array<{ rel: string; marker: PendingVolumeEndAuditMarker }>> {
-  const dirRel = "logs/continuity";
-  const dirAbs = join(rootDir, dirRel);
-  if (!(await pathExists(dirAbs))) return [];
+  const listed = await withPendingVolumeEndMarkerLock(rootDir, warnings, async () => {
+    const dirRel = "logs/continuity";
+    const dirAbs = join(rootDir, dirRel);
+    if (!(await pathExists(dirAbs))) return [];
 
-  const entries = await readdir(dirAbs, { withFileTypes: true }).catch((err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    warnings.push(`Continuity audits: failed to list pending markers in ${dirRel}. ${message}`);
-    return null;
-  });
-  if (!entries) return [];
-  const out: Array<{ rel: string; marker: PendingVolumeEndAuditMarker }> = [];
-  for (const e of entries) {
-    if (!e.isFile()) continue;
-    const m = /^pending-volume-end-vol-(\d+)\.json$/u.exec(e.name);
-    if (!m) continue;
-    const rel = `${dirRel}/${e.name}`;
-    const digits = m[1] ?? "";
-    const volumeFromName = Number.parseInt(digits, 10);
-    if (!Number.isInteger(volumeFromName) || volumeFromName < 0 || pad2(volumeFromName) !== digits) {
-      warnings.push(`Ignoring invalid pending volume-end audit marker filename: ${rel}`);
-      await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
-      continue;
-    }
-    let raw: unknown;
-    try {
-      raw = await readJsonFile(join(rootDir, rel));
-    } catch (err: unknown) {
+    const entries = await readdir(dirAbs, { withFileTypes: true }).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
-      warnings.push(`Failed to read pending volume-end audit marker: ${rel}. ${message}`);
-      await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
-      continue;
+      warnings.push(`Continuity audits: failed to list pending markers in ${dirRel}. ${message}`);
+      return null;
+    });
+    if (!entries) return [];
+    const out: Array<{ rel: string; marker: PendingVolumeEndAuditMarker }> = [];
+    for (const e of entries) {
+      if (!e.isFile()) continue;
+      const m = /^pending-volume-end-vol-(\d+)\.json$/u.exec(e.name);
+      if (!m) continue;
+      const rel = `${dirRel}/${e.name}`;
+      const digits = m[1] ?? "";
+      const volumeFromName = Number.parseInt(digits, 10);
+      if (!Number.isInteger(volumeFromName) || volumeFromName < 0 || pad2(volumeFromName) !== digits) {
+        warnings.push(`Ignoring invalid pending volume-end audit marker filename: ${rel}`);
+        await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
+        continue;
+      }
+      let raw: unknown;
+      try {
+        raw = await readJsonFile(join(rootDir, rel));
+      } catch (err: unknown) {
+        const abs = join(rootDir, rel);
+        if (!(await pathExists(abs))) continue;
+        const message = err instanceof Error ? err.message : String(err);
+        warnings.push(`Failed to read pending volume-end audit marker: ${rel}. ${message}`);
+        if (message.startsWith("Invalid JSON:")) {
+          await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
+        }
+        continue;
+      }
+      const parsed = parsePendingVolumeEndAuditMarker(raw);
+      if (!parsed) {
+        warnings.push(`Ignoring invalid pending volume-end audit marker: ${rel}`);
+        await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
+        continue;
+      }
+      if (parsed.volume !== volumeFromName) {
+        warnings.push(`Ignoring pending volume-end marker with mismatched volume: ${rel} (name=${volumeFromName} json=${parsed.volume})`);
+        await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
+        continue;
+      }
+      out.push({ rel, marker: parsed });
     }
-    const parsed = parsePendingVolumeEndAuditMarker(raw);
-    if (!parsed) {
-      warnings.push(`Ignoring invalid pending volume-end audit marker: ${rel}`);
-      await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
-      continue;
-    }
-    if (parsed.volume !== volumeFromName) {
-      warnings.push(`Ignoring pending volume-end marker with mismatched volume: ${rel} (name=${volumeFromName} json=${parsed.volume})`);
-      await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
-      continue;
-    }
-    out.push({ rel, marker: parsed });
-  }
-  out.sort((a, b) => a.marker.volume - b.marker.volume || a.marker.chapter_range[0] - b.marker.chapter_range[0]);
-  return out;
+    out.sort((a, b) => a.marker.volume - b.marker.volume || a.marker.chapter_range[0] - b.marker.chapter_range[0]);
+    return out;
+  });
+
+  return listed ?? [];
 }
 
 async function ensurePendingVolumeEndAuditMarker(args: {
@@ -585,7 +593,6 @@ async function ensurePendingVolumeEndAuditMarker(args: {
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         args.warnings.push(`Failed to read pending volume-end audit marker: ${args.markerRel}. ${message}`);
-        await quarantinePendingVolumeEndAuditMarker({ rootDir: args.rootDir, rel: args.markerRel, warnings: args.warnings });
       }
     }
 
@@ -597,15 +604,7 @@ async function ensurePendingVolumeEndAuditMarker(args: {
       return false;
     }
 
-    try {
-      const parsed = parsePendingVolumeEndAuditMarker(await readJsonFile(markerAbs));
-      if (matchesDesired(parsed)) return true;
-    } catch {
-      // fall through
-    }
-
-    args.warnings.push(`Failed to validate pending volume-end audit marker after write: ${args.markerRel}`);
-    return false;
+    return true;
   });
 
   return ensured === true;
