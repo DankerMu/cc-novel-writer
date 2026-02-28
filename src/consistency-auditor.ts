@@ -537,6 +537,20 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
     return truncateSnippet(trimmed, maxLen);
   };
 
+  const safeInt = (v: unknown): number | null => {
+    return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null;
+  };
+
+  const safeSeverityCounts = (v: unknown): { high: number; medium: number; low: number } | null => {
+    if (!isPlainObject(v)) return null;
+    const o = v as Record<string, unknown>;
+    const high = safeInt(o.high);
+    const medium = safeInt(o.medium);
+    const low = safeInt(o.low);
+    if (high === null || medium === null || low === null) return null;
+    return { high, medium, low };
+  };
+
   for (const it of issuesRaw) {
     if (!isPlainObject(it)) continue;
     const issue = it as Record<string, unknown>;
@@ -610,6 +624,14 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
   const volume = typeof obj.volume === "number" && Number.isInteger(obj.volume) && obj.volume >= 0 ? obj.volume : null;
   const generated_at = typeof obj.generated_at === "string" ? obj.generated_at : null;
 
+  const chaptersChecked = safeInt(statsRaw.chapters_checked) ?? 0;
+  const issuesTotal = safeInt(statsRaw.issues_total) ?? 0;
+  const issuesBySeverity = safeSeverityCounts(statsRaw.issues_by_severity) ?? { high: 0, medium: 0, low: 0 };
+  const chaptersMissing = safeInt(statsRaw.chapters_missing);
+  const nerOk = safeInt(statsRaw.ner_ok);
+  const nerFailed = safeInt(statsRaw.ner_failed);
+  const nerFailedSample = safeString(statsRaw.ner_failed_sample, 160);
+
   const summary: Record<string, unknown> = {
     schema_version: obj.schema_version,
     ...(generated_at ? { generated_at } : {}),
@@ -617,11 +639,13 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
     ...(volume !== null ? { volume } : {}),
     chapter_range,
     stats: {
-      chapters_checked: statsRaw.chapters_checked,
-      issues_total: statsRaw.issues_total,
-      issues_by_severity: statsRaw.issues_by_severity,
-      ...(typeof statsRaw.ner_ok === "number" && Number.isInteger(statsRaw.ner_ok) ? { ner_ok: statsRaw.ner_ok } : {}),
-      ...(typeof statsRaw.ner_failed === "number" && Number.isInteger(statsRaw.ner_failed) ? { ner_failed: statsRaw.ner_failed } : {})
+      chapters_checked: chaptersChecked,
+      issues_total: issuesTotal,
+      issues_by_severity: issuesBySeverity,
+      ...(chaptersMissing !== null ? { chapters_missing: chaptersMissing } : {}),
+      ...(nerOk !== null ? { ner_ok: nerOk } : {}),
+      ...(nerFailed !== null ? { ner_failed: nerFailed } : {}),
+      ...(nerFailedSample ? { ner_failed_sample: nerFailedSample } : {})
     },
     issues: issues.slice(0, MAX_ISSUES)
   };
