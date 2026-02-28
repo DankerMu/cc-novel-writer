@@ -73,7 +73,7 @@
 #### 4) Continuity（一致性/连续性报告）
 
 - 目录：`logs/continuity/`
-- Latest：`logs/continuity/latest.json`（单调更新：按 chapter_range end 前进，且同 end 时 `volume_end` 优先于 `periodic`）
+- Latest：`logs/continuity/latest.json`（单调更新：按 chapter_range end 前进；同 end 时 `volume_end` 优先于 `periodic`；仍相同则取更新的 `generated_at`）
 - History：`logs/continuity/continuity-report-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
 - Internal（运行时/补偿标记；可忽略）：  
   - `logs/continuity/.latest.lock/`（并发锁，写入 `latest.json` 时短暂存在）  

@@ -3,6 +3,29 @@ import { dirname } from "node:path";
 
 import { NovelCliError } from "./errors.js";
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableWindowsIoError(err: unknown): boolean {
+  const code = (err as { code?: string }).code;
+  return code === "EBUSY" || code === "EPERM" || code === "EACCES";
+}
+
+async function retryIo<T>(op: () => Promise<T>, attempts: number): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await op();
+    } catch (err: unknown) {
+      last = err;
+      if (!isRetryableWindowsIoError(err) || i === attempts - 1) throw err;
+      await sleep(40 * (i + 1));
+    }
+  }
+  throw last;
+}
+
 export async function pathExists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -47,6 +70,7 @@ export async function writeTextFile(path: string, contents: string): Promise<voi
 
 export async function writeTextFileAtomic(path: string, contents: string): Promise<void> {
   const tmpPath = `${path}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  let cleanupTmp = true;
   try {
     await ensureDir(dirname(path));
     await writeFile(tmpPath, contents, "utf8");
@@ -60,7 +84,7 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
       const backupPath = `${path}.bak-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       let backedUp = false;
       try {
-        await rename(path, backupPath);
+        await retryIo(() => rename(path, backupPath), 5);
         backedUp = true;
       } catch (moveErr: unknown) {
         const moveCode = (moveErr as { code?: string }).code;
@@ -68,7 +92,7 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
       }
 
       try {
-        await rename(tmpPath, path);
+        await retryIo(() => rename(tmpPath, path), 8);
         if (backedUp) {
           try {
             await rm(backupPath, { force: true });
@@ -77,24 +101,44 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
           }
         }
       } catch (finalErr: unknown) {
+        let restored = false;
         if (backedUp) {
           try {
-            await rename(backupPath, path);
+            await retryIo(() => rename(backupPath, path), 8);
+            restored = true;
           } catch {
-            // ignore
+            restored = false;
           }
+        } else {
+          restored = true;
+        }
+
+        if (!backedUp) {
+          cleanupTmp = false;
+          throw new NovelCliError(`Failed to write file atomically (tmp preserved). path=${path} tmp=${tmpPath}`, 1);
+        }
+
+        if (!restored) {
+          cleanupTmp = false;
+          throw new NovelCliError(
+            `Failed to write file atomically; restore failed (backup preserved). path=${path} backup=${backupPath} tmp=${tmpPath}`,
+            1
+          );
         }
         throw finalErr;
       }
     }
   } catch (err: unknown) {
+    if (err instanceof NovelCliError) throw err;
     const message = err instanceof Error ? err.message : String(err);
-    throw new NovelCliError(`Failed to write file atomically: ${path}. ${message}`);
+    throw new NovelCliError(`Failed to write file atomically: ${path}. ${message}`, 1);
   } finally {
-    try {
-      await rm(tmpPath, { force: true });
-    } catch {
-      // ignore
+    if (cleanupTmp) {
+      try {
+        await rm(tmpPath, { force: true });
+      } catch {
+        // ignore
+      }
     }
   }
 }

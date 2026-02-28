@@ -402,7 +402,13 @@ function sleep(ms: number): Promise<void> {
 async function withPendingVolumeEndMarkerLock<T>(rootDir: string, warnings: string[], fn: () => Promise<T>): Promise<T | null> {
   const parentAbs = join(rootDir, "logs/continuity");
   const lockAbs = join(parentAbs, ".pending-volume-end.lock");
-  await ensureDir(parentAbs);
+  try {
+    await ensureDir(parentAbs);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    warnings.push(`Continuity audits: failed to create marker directory. ${message}`);
+    return null;
+  }
 
   const started = Date.now();
   const MAX_WAIT_MS = 2_000;
@@ -414,7 +420,11 @@ async function withPendingVolumeEndMarkerLock<T>(rootDir: string, warnings: stri
       break;
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
-      if (code !== "EEXIST") throw err;
+      if (code !== "EEXIST") {
+        const message = err instanceof Error ? err.message : String(err);
+        warnings.push(`Continuity audits: failed to acquire pending marker lock. ${message}`);
+        return null;
+      }
 
       let isStale = false;
       try {
@@ -434,7 +444,7 @@ async function withPendingVolumeEndMarkerLock<T>(rootDir: string, warnings: stri
       }
 
       if (Date.now() - started > MAX_WAIT_MS) {
-        warnings.push("Continuity audits: timed out waiting for pending marker lock; skipping marker update.");
+        warnings.push("Continuity audits: timed out waiting for pending marker lock; skipping pending marker operation.");
         return null;
       }
       await sleep(50);
@@ -443,6 +453,10 @@ async function withPendingVolumeEndMarkerLock<T>(rootDir: string, warnings: stri
 
   try {
     return await fn();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    warnings.push(`Continuity audits: pending marker operation failed. ${message}`);
+    return null;
   } finally {
     try {
       await removePath(lockAbs);
@@ -1144,6 +1158,18 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     }
     isVolumeEnd = volumeRange !== null && args.chapter === volumeRange.end;
     shouldPeriodicContinuityAudit = args.chapter % 5 === 0 && !isVolumeEnd;
+  }
+
+  // Ensure the current volume-end marker as early as possible (crash compensation),
+  // so a later crash during other audits still leaves a durable rerun flag.
+  if (isVolumeEnd && volumeRange) {
+    await ensurePendingVolumeEndAuditMarker({
+      rootDir: args.rootDir,
+      markerRel: pendingVolumeEndMarkerRel(volume),
+      volume,
+      chapterRange: [volumeRange.start, volumeRange.end],
+      warnings
+    });
   }
 
   // Crash compensation for volume-end audits:
