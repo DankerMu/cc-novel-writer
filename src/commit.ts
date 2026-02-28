@@ -858,7 +858,9 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           const nerOk = typeof report.stats.ner_ok === "number" ? report.stats.ner_ok : null;
           const nerFailed = typeof report.stats.ner_failed === "number" ? report.stats.ner_failed : null;
           if (nerOk === 0 && typeof nerFailed === "number" && nerFailed > 0) {
-            warnings.push(`Continuity audit degraded (periodic): NER failed for ${nerFailed} chapters; report may be empty.`);
+            const sample = typeof report.stats.ner_failed_sample === "string" ? report.stats.ner_failed_sample : null;
+            const suffix = sample ? ` (sample: ${sample})` : "";
+            warnings.push(`Continuity audit degraded (periodic): NER failed for ${nerFailed} chapters; report may be empty.${suffix}`);
           }
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
@@ -873,7 +875,9 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           const nerOk = typeof report.stats.ner_ok === "number" ? report.stats.ner_ok : null;
           const nerFailed = typeof report.stats.ner_failed === "number" ? report.stats.ner_failed : null;
           if (nerOk === 0 && typeof nerFailed === "number" && nerFailed > 0) {
-            warnings.push(`Continuity audit degraded (volume_end): NER failed for ${nerFailed} chapters; report may be empty.`);
+            const sample = typeof report.stats.ner_failed_sample === "string" ? report.stats.ner_failed_sample : null;
+            const suffix = sample ? ` (sample: ${sample})` : "";
+            warnings.push(`Continuity audit degraded (volume_end): NER failed for ${nerFailed} chapters; report may be empty.${suffix}`);
           }
         }
       } catch (err: unknown) {

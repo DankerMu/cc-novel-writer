@@ -85,7 +85,9 @@ function idSafe(s: string): string {
 function truncateSnippet(snippet: string, maxLen: number = 160): string {
   const trimmed = snippet.trim();
   if (trimmed.length <= maxLen) return trimmed;
-  return `${trimmed.slice(0, maxLen)}…`;
+  if (maxLen <= 0) return "";
+  if (maxLen === 1) return "…";
+  return `${trimmed.slice(0, maxLen - 1)}…`;
 }
 
 function compareStrings(a: string, b: string): number {

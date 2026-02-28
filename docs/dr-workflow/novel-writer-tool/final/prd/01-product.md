@@ -15,7 +15,7 @@
 
 ### 2.1 交付格式
 
-本产品以 **Claude Code Plugin** 形式交付（plugin name: `novel`），包含 4 个技能（Skills）和 8 个专业 Agent。其中 3 个技能为用户入口（`/novel:start`、`/novel:continue`、`/novel:status`），1 个为共享知识库。Plugin skills 遵循官方命名空间规则 `/{plugin-name}:{skill-name}`。[DR-018](../../v4/dr/dr-018-plugin-api.md) [DR-020](../../v4/dr/dr-020-single-command-ux.md)
+本产品以 **Claude Code Plugin** 形式交付（plugin name: `novel`），包含 4 个技能（Skills）和 9 个专业 Agent。其中 3 个技能为用户入口（`/novel:start`、`/novel:continue`、`/novel:status`），1 个为共享知识库。Plugin skills 遵循官方命名空间规则 `/{plugin-name}:{skill-name}`。[DR-018](../../v4/dr/dr-018-plugin-api.md) [DR-020](../../v4/dr/dr-020-single-command-ux.md)
 
 ```
 cc-novel-writer/
@@ -33,7 +33,7 @@ cc-novel-writer/
 │       └── references/
 │           ├── style-guide.md         # 去 AI 化规则详解
 │           └── quality-rubric.md      # 8 维度评分标准
-├── agents/                            # 8 个专业 Agent（自动派生）
+├── agents/                            # 9 个专业 Agent（自动派生）
 │   ├── world-builder.md               # 世界观构建
 │   ├── character-weaver.md            # 角色网络
 │   ├── plot-architect.md              # 情节架构
@@ -41,7 +41,8 @@ cc-novel-writer/
 │   ├── summarizer.md                  # 摘要生成
 │   ├── style-analyzer.md              # 风格提取
 │   ├── style-refiner.md               # 去 AI 化润色
-│   └── quality-judge.md               # 质量评估
+│   ├── quality-judge.md               # 质量评估
+│   └── consistency-auditor.md         # 一致性审计（stride=5, window=10）
 ├── hooks/
 │   └── hooks.json                     # 事件钩子配置（SessionStart 等）
 ├── scripts/
