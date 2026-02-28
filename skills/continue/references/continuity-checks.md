@@ -114,6 +114,9 @@
 - `type`：枚举值为 `"character_mapping"` / `"relationship_jump"` / `"location_contradiction"` / `"timeline_contradiction"`。
 - `severity`：枚举值为 `"high"` / `"medium"` / `"low"`。
 - `confidence`：枚举值为 `"high"` / `"medium"` / `"low"`。
+- `stats.chapters_missing`（可选）：章节文件缺失数（在 `chapter_range` 内但对应 `chapters/chapter-*.md` 不存在）。
+- `stats.ner_ok / stats.ner_failed`（可选）：NER 成功/失败的章节数（用于降级诊断；不影响 schema 最小要求）。
+- `stats.ner_failed_sample`（可选）：首个 NER 失败原因的截断字符串（便于快速定位脚本缺失/解析失败）。
 
 稳定性（回归友好）要求：
 - `issues[].id` 必须可由 **type + 关键实体 + time_marker** 确定性生成（同批次重复运行应保持一致）。
@@ -156,7 +159,7 @@
 
 优先使用 L3 契约的并发状态（`volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json.storyline_context.concurrent_state`）：
 
-- 尝试从 concurrent_state 文本中解析章节号（常见格式：`（ch25）`），regex：`\\(ch(\\d+)\\)`。
+- 尝试从 concurrent_state 文本中解析章节号（常见格式：`（ch25）` / `(ch25)`），regex：`/[（(]\s*ch\s*(\d+)\s*[）)]/giu`。
 - 为"当前章"与"并发线引用章"分别取 `primary_time_marker`（来自各自章节的 NER time_markers）。
 - **矛盾判定**（保守）：
   - 若双方都为高置信 time_marker，且包含明确的"年/季节"差异（例如 `第三年冬` vs `第三年夏`）→ `timeline_contradiction`（severity=high, confidence=high）

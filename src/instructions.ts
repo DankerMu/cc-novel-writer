@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { Checkpoint } from "./checkpoint.js";
 import { NovelCliError } from "./errors.js";
 import { ensureDir, pathExists, readTextFile, writeJsonFile } from "./fs-utils.js";
+import { loadContinuityLatestSummary } from "./consistency-auditor.js";
 import { computeEffectiveScoringWeights, loadGenreWeightProfiles } from "./scoring-weights.js";
 import { parseNovelAskQuestionSpec, type NovelAskQuestionSpec } from "./novel-ask.js";
 import { loadPlatformProfile } from "./platform-profile.js";
@@ -144,6 +145,9 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
         source: { platform_profile: loadedPlatform.relPath, genre_weight_profiles: loadedWeights.relPath }
       };
     }
+
+    // Optional: inject compact continuity summary for LS-001 evidence (non-blocking).
+    inline.continuity_report_summary = await loadContinuityLatestSummary(args.rootDir);
 
     expected_outputs.push({
       path: rel.staging.evalJson,

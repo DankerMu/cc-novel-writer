@@ -14,6 +14,7 @@ import { fingerprintsMatch, hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { checkHookPolicy } from "./hook-policy.js";
 import { withWriteLock } from "./lock.js";
+import { computeContinuityReport, tryResolveVolumeChapterRange, writeContinuityLogs, writeVolumeContinuityReport, type ContinuityReport } from "./consistency-auditor.js";
 import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
 import { attachScoringWeightsToEval, loadGenreWeightProfiles } from "./scoring-weights.js";
@@ -372,6 +373,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   }
 
   const checkpoint = await readCheckpoint(args.rootDir);
+  const volume = checkpoint.current_volume;
   const warnings: string[] = [];
   const plan: string[] = [];
 
@@ -450,6 +452,26 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
 
   if (loadedGenreWeights) {
     plan.push(`PATCH ${rel.final.evalJson} (attach scoring_weights metadata + per-dimension weights)`);
+  }
+
+  // Optional: periodic continuity audits (non-blocking) on a fixed cadence.
+  if (args.chapter % 5 === 0) {
+    const start = Math.max(1, args.chapter - 9);
+    const end = args.chapter;
+    plan.push(`WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(start)}-ch${pad3(end)}.json (+ latest.json)`);
+  }
+
+  // Optional: volume-end full continuity audit (non-blocking) when this is the last planned chapter of the volume.
+  try {
+    const volumeRange = await tryResolveVolumeChapterRange({ rootDir: args.rootDir, volume });
+    if (volumeRange && args.chapter === volumeRange.end) {
+      plan.push(`WRITE volumes/vol-${pad2(volume)}/continuity-report.json`);
+      plan.push(
+        `WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(volumeRange.start)}-ch${pad3(volumeRange.end)}.json (+ latest.json)`
+      );
+    }
+  } catch {
+    // ignore (plan is best-effort)
   }
 
   // Update checkpoint.
@@ -811,6 +833,57 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       updatedCheckpoint.hook_fix_count = 0;
       updatedCheckpoint.last_checkpoint_time = new Date().toISOString();
       await writeCheckpoint(args.rootDir, updatedCheckpoint);
+
+      // M6.7: sliding-window consistency audits (non-blocking).
+      // Every 5 committed chapters, audit the last 10 chapters; at volume end, run a full-volume audit.
+      const runAudit = async (scope: "periodic" | "volume_end", start: number, end: number): Promise<ContinuityReport> => {
+        const report = await computeContinuityReport({
+          rootDir: args.rootDir,
+          volume,
+          scope,
+          chapterRange: { start, end }
+        });
+        await writeContinuityLogs({ rootDir: args.rootDir, report });
+        if (scope === "volume_end") {
+          await writeVolumeContinuityReport({ rootDir: args.rootDir, report });
+        }
+        return report;
+      };
+
+      if (args.chapter % 5 === 0) {
+        try {
+          const start = Math.max(1, args.chapter - 9);
+          const end = args.chapter;
+          const report = await runAudit("periodic", start, end);
+          const nerOk = typeof report.stats.ner_ok === "number" ? report.stats.ner_ok : null;
+          const nerFailed = typeof report.stats.ner_failed === "number" ? report.stats.ner_failed : null;
+          if (nerOk === 0 && typeof nerFailed === "number" && nerFailed > 0) {
+            const sample = typeof report.stats.ner_failed_sample === "string" ? report.stats.ner_failed_sample : null;
+            const suffix = sample ? ` (sample: ${sample})` : "";
+            warnings.push(`Continuity audit degraded (periodic): NER failed for ${nerFailed} chapters; report may be empty.${suffix}`);
+          }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          warnings.push(`Continuity audit skipped (periodic): ${message}`);
+        }
+      }
+
+      try {
+        const volumeRange = await tryResolveVolumeChapterRange({ rootDir: args.rootDir, volume });
+        if (volumeRange && args.chapter === volumeRange.end) {
+          const report = await runAudit("volume_end", volumeRange.start, volumeRange.end);
+          const nerOk = typeof report.stats.ner_ok === "number" ? report.stats.ner_ok : null;
+          const nerFailed = typeof report.stats.ner_failed === "number" ? report.stats.ner_failed : null;
+          if (nerOk === 0 && typeof nerFailed === "number" && nerFailed > 0) {
+            const sample = typeof report.stats.ner_failed_sample === "string" ? report.stats.ner_failed_sample : null;
+            const suffix = sample ? ` (sample: ${sample})` : "";
+            warnings.push(`Continuity audit degraded (volume_end): NER failed for ${nerFailed} chapters; report may be empty.${suffix}`);
+          }
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        warnings.push(`Continuity audit skipped (volume_end): ${message}`);
+      }
     } catch (err) {
       await rollback();
       throw err;

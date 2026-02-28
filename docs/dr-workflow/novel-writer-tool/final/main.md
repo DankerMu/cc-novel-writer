@@ -12,7 +12,7 @@
 |------|------|------|
 | [prd/01-product.md](prd/01-product.md) | S1 产品概述 + S2 产品形态（Plugin 架构）+ S3 用户画像 | ~179 |
 | [prd/02-architecture.md](prd/02-architecture.md) | S4 系统架构（Agent 团队 + 协作模式 + 模型策略） | ~48 |
-| [prd/03-agents.md](prd/03-agents.md) | S5 Agent Prompt 设计（8 个 Agent 的角色/目标/约束/格式） | ~254 |
+| [prd/03-agents.md](prd/03-agents.md) | S5 Agent Prompt 设计（9 个 Agent 的角色/目标/约束/格式） | ~254 |
 | [prd/04-workflow.md](prd/04-workflow.md) | S6.1-6.4 核心工作流（快速起步 + 卷制循环 + 全局维护 + 质量门控） | ~76 |
 | [prd/05-spec-system.md](prd/05-spec-system.md) | S6.5 规范驱动写作体系（L1/L2/L3 三层 Spec + 变更传播 + 双轨验收） | ~141 |
 | [prd/06-storylines.md](prd/06-storylines.md) | S6.6 多线叙事体系（数据模型 + 卷级调度 + 防串线 + LS 规范） | ~256 |
@@ -28,7 +28,7 @@
 |------|------|------|
 | [spec/01-overview.md](spec/01-overview.md) | 文件清单（20 个）+ 开发顺序 + plugin.json + Hooks 配置 | ~125 |
 | [spec/02-skills.md](spec/02-skills.md) | 3 个入口 Skill 完整定义（/novel:start、/novel:continue、/novel:status） | ~322 |
-| [spec/03-agents.md](spec/03-agents.md) | Agent 通用约束 + 8 个 Agent 索引（链接到独立文件） | ~20 |
+| [spec/03-agents.md](spec/03-agents.md) | Agent 通用约束 + 9 个 Agent 索引（链接到独立文件） | ~20 |
 | [spec/04-quality.md](spec/04-quality.md) | 核心方法论 SKILL.md + 去 AI 化规则详解 + 8 维度评分标准 | ~348 |
 | [spec/05-templates.md](spec/05-templates.md) | 3 个模板（brief-template + ai-blacklist + style-profile-template） | ~178 |
 | [spec/06-extensions.md](spec/06-extensions.md) | 确定性工具扩展接口（M3+ 预留：4 扩展点 + CLI 约定 + MCP 路径） | ~55 |
@@ -45,6 +45,7 @@
 | [spec/agents/style-analyzer.md](spec/agents/style-analyzer.md) | StyleAnalyzer — 风格指纹提取 | Sonnet |
 | [spec/agents/style-refiner.md](spec/agents/style-refiner.md) | StyleRefiner — 去 AI 化润色 | Opus |
 | [spec/agents/quality-judge.md](spec/agents/quality-judge.md) | QualityJudge — 双轨验收（合规 + 8 维度评分） | Sonnet |
+| [spec/agents/consistency-auditor.md](spec/agents/consistency-auditor.md) | ConsistencyAuditor — 滑动窗口一致性审计（stride=5, window=10）+ 卷末全卷审计 | Sonnet |
 
 ### 里程碑
 
@@ -56,7 +57,7 @@
 
 ## 核心设计要素速览
 
-- **产品形态**：Claude Code Plugin（name: `novel`），3 入口 Skill + 8 Agent + 1 共享知识库
+- **产品形态**：Claude Code Plugin（name: `novel`），3 入口 Skill + 9 Agent + 1 共享知识库
 - **工作流**：卷制滚动（VOL_PLANNING → WRITING ⟲ → VOL_REVIEW），每章流水线含内嵌门控
 - **Spec 体系**：L1 世界规则（hard）→ L2 角色契约 → L3 章节契约，QualityJudge 双轨验收
 - **多线叙事**：storylines.json + 卷级 schedule + 章级 context 注入，三层防串线，≤4 活跃线

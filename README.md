@@ -1,6 +1,6 @@
 # novel — 中文网文多 Agent 协作创作系统
 
-Claude Code 插件，8 个 AI Agent 协作完成网文创作全流程：世界观构建 → 卷级规划 → 章节续写 → 风格润色 → 质量验收。内置去 AI 化四层策略和 Spec-Driven 规范体系，产出接近人类写手的长篇中文网络小说。
+Claude Code 插件，9 个 AI Agent 协作完成网文创作全流程：世界观构建 → 卷级规划 → 章节续写 → 风格润色 → 质量验收 → 周期性一致性审计。内置去 AI 化四层策略和 Spec-Driven 规范体系，产出接近人类写手的长篇中文网络小说。
 
 ## 快速开始
 
@@ -71,7 +71,7 @@ claude --plugin-dir ~/cc-novel-writer
 网文采用「边写边想」模式，以卷（30-50 章）为单位滚动推进：
 
 ```
-卷规划 → 日更续写（每章流水线） → 定期检查（每 10 章） → 卷末回顾 → 下一卷
+卷规划 → 日更续写（每章流水线） → 定期检查（每 5 章一次，窗口=10） → 卷末回顾 → 下一卷
 ```
 
 每章经过完整流水线：
@@ -81,7 +81,7 @@ ChapterWriter → Summarizer → StyleRefiner → QualityJudge
     续写           摘要+状态       去AI润色        双轨验收
 ```
 
-### 8 Agent 协作体系
+### 9 Agent 协作体系
 
 | Agent | 模型 | 职责 |
 |-------|------|------|
@@ -93,6 +93,7 @@ ChapterWriter → Summarizer → StyleRefiner → QualityJudge
 | **StyleAnalyzer** | Sonnet | 用户样本 → 风格指纹 (`style-profile.json`) |
 | **StyleRefiner** | Opus | 去 AI 化润色（黑名单替换 + 风格匹配） |
 | **QualityJudge** | Sonnet | 双轨验收：合规检查 + 8 维度评分 |
+| **ConsistencyAuditor** | Sonnet | 滑动窗口一致性审计（stride=5, window=10）+ 卷末全卷审计 |
 
 ### Spec-Driven 四层规范
 
@@ -129,9 +130,10 @@ ChapterWriter → Summarizer → StyleRefiner → QualityJudge
 
 ```
 .claude-plugin/plugin.json     插件入口
-agents/                        8 个 Agent 定义
+agents/                        9 个 Agent 定义
   chapter-writer.md
   character-weaver.md
+  consistency-auditor.md
   plot-architect.md
   quality-judge.md
   style-analyzer.md
@@ -179,7 +181,7 @@ docs/
     storylines.md                多线叙事指南
   test/                        测试清单
   prd/                         产品需求文档（11 章）
-  spec/                        技术规范（6 章 + 8 Agent 独立定义）
+  spec/                        技术规范（6 章 + 9 Agent 独立定义）
 ```
 
 ## 评估与回归
@@ -215,7 +217,7 @@ PR 合入 `main` 自动触发：
 
 | 里程碑 | 描述 | 状态 |
 |--------|------|------|
-| **M1** | 续写引擎基础（8 Agent + 3 Entry Skill + 模板） | 已完成 |
+| **M1** | 续写引擎基础（9 Agent + 3 Entry Skill + 模板） | 已完成 |
 | **M2** | Context 组装与状态机（Orchestrator + Spec 注入 + Hooks） | 已完成 |
 | **M3** | 质量门控与分析（5 档门控 + 双裁判 + NER + 伏笔 + 回归） | 已完成 |
 | **M4** | 端到端打磨（Quick Start + 跨卷 + E2E 基准） | 进行中 |

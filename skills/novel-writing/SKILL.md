@@ -18,7 +18,7 @@ description: >
 
 1. **卷规划**：PlotArchitect 生成本卷大纲 + 伏笔计划 + L3 章节契约
 2. **日更续写**：ChapterWriter → Summarizer → StyleRefiner → QualityJudge（单章流水线）
-3. **定期检查**：每 10 章执行一致性检查 + 伏笔盘点 + 风格漂移监控
+3. **定期检查**：一致性滑窗审计（每 5 章一次，窗口 10 章）+ 伏笔盘点（每 10 章）+ 风格漂移监控（每 5 章）
 4. **卷末回顾**：全卷一致性报告 → 下卷铺垫建议 → 用户审核
 
 核心循环状态机：`VOL_PLANNING → WRITING ⟲ (每章含内嵌门控+修订) → VOL_REVIEW → VOL_PLANNING`

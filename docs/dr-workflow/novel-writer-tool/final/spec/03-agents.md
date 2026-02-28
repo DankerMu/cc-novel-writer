@@ -4,7 +4,7 @@
 >
 > - AskUserQuestion **仅可在入口 Skill（Section 3）中调用**，所有 Agent 均不得直接向用户提问。
 > - 当 Agent 产出需要用户确认时，必须以结构化 JSON 返回（含 `type: "requires_user_decision"` + `recommendation` + `options` + `rationale`），由调用方（入口 Skill）解析后统一 AskUserQuestion。
-> - 8 个 Agent 的 `tools` 字段均不包含 AskUserQuestion，这是硬约束。
+> - 9 个 Agent 的 `tools` 字段均不包含 AskUserQuestion，这是硬约束。
 
 ### Agent 清单
 
@@ -18,3 +18,4 @@
 | 4.6 | StyleAnalyzer | [style-analyzer.md](agents/style-analyzer.md) | Sonnet | 风格指纹提取 |
 | 4.7 | StyleRefiner | [style-refiner.md](agents/style-refiner.md) | Opus | 去 AI 化润色 |
 | 4.8 | QualityJudge | [quality-judge.md](agents/quality-judge.md) | Sonnet | 双轨验收（L1/L2/L3/LS 合规 + 8 维度评分） |
+| 4.9 | ConsistencyAuditor | [consistency-auditor.md](agents/consistency-auditor.md) | Sonnet | 滑动窗口一致性审计（stride=5, window=10）+ 卷末全卷审计 |
