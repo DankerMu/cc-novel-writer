@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import { NovelCliError } from "./errors.js";
@@ -45,8 +45,41 @@ export async function writeTextFile(path: string, contents: string): Promise<voi
   }
 }
 
+export async function writeTextFileAtomic(path: string, contents: string): Promise<void> {
+  const tmpPath = `${path}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    await ensureDir(dirname(path));
+    await writeFile(tmpPath, contents, "utf8");
+    try {
+      await rename(tmpPath, path);
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      // Windows cannot rename over an existing file; delete then rename (still safe under an external lock).
+      if (code === "EEXIST" || code === "EPERM") {
+        await rm(path, { force: true });
+        await rename(tmpPath, path);
+      } else {
+        throw err;
+      }
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new NovelCliError(`Failed to write file atomically: ${path}. ${message}`);
+  } finally {
+    try {
+      await rm(tmpPath, { force: true });
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export async function writeJsonFile(path: string, payload: unknown): Promise<void> {
   await writeTextFile(path, `${JSON.stringify(payload, null, 2)}\n`);
+}
+
+export async function writeJsonFileAtomic(path: string, payload: unknown): Promise<void> {
+  await writeTextFileAtomic(path, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
 export async function removePath(path: string): Promise<void> {
@@ -57,4 +90,3 @@ export async function removePath(path: string): Promise<void> {
     throw new NovelCliError(`Failed to remove path: ${path}. ${message}`);
   }
 }
-

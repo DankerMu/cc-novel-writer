@@ -1,7 +1,7 @@
-import { readdir } from "node:fs/promises";
+import { mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import { ensureDir, pathExists, readJsonFile, readTextFile, writeJsonFile } from "./fs-utils.js";
+import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFileAtomic } from "./fs-utils.js";
 import type { NerMention, NerOutput } from "./ner.js";
 import { runNer } from "./ner.js";
 import { pad2, pad3 } from "./steps.js";
@@ -330,6 +330,10 @@ export async function computeContinuityReport(args: {
   for (const group of locationGroups.values()) {
     if (group.locations.size < 2) continue;
     const locList = Array.from(group.locations.keys()).sort(compareStrings);
+    const highLocs = Array.from(group.locations.entries())
+      .filter(([, ev]) => ev.time_marker_confidence === "high")
+      .map(([loc]) => loc);
+    const isHigh = new Set(highLocs).size >= 2;
     const evidenceList = locList
       .map((loc) => {
         const ev = group.locations.get(loc)!;
@@ -337,8 +341,6 @@ export async function computeContinuityReport(args: {
       })
       .slice(0, 5);
 
-    const highLocs = evidenceList.filter((e) => e.time_marker_confidence === "high");
-    const isHigh = new Set(highLocs.map((e) => e.loc)).size >= 2;
     const severity: Severity = isHigh ? "high" : "medium";
     const confidence: Confidence = isHigh ? "high" : "medium";
 
@@ -476,6 +478,57 @@ export async function computeContinuityReport(args: {
   return report;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withContinuityLatestLock<T>(rootDir: string, fn: () => Promise<T>): Promise<T | null> {
+  const lockAbs = join(rootDir, "logs/continuity/.latest.lock");
+  const started = Date.now();
+  const MAX_WAIT_MS = 2_000;
+  const STALE_MS = 60_000;
+
+  for (;;) {
+    try {
+      await mkdir(lockAbs);
+      break;
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      if (code !== "EEXIST") throw err;
+
+      let isStale = false;
+      try {
+        const s = await stat(lockAbs);
+        isStale = Date.now() - s.mtimeMs > STALE_MS;
+      } catch {
+        isStale = false;
+      }
+
+      if (isStale) {
+        try {
+          await removePath(lockAbs);
+        } catch {
+          // ignore
+        }
+        continue;
+      }
+
+      if (Date.now() - started > MAX_WAIT_MS) return null;
+      await sleep(50);
+    }
+  }
+
+  try {
+    return await fn();
+  } finally {
+    try {
+      await removePath(lockAbs);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export async function writeContinuityLogs(args: {
   rootDir: string;
   report: ContinuityReport;
@@ -488,7 +541,7 @@ export async function writeContinuityLogs(args: {
   const historyRel = `${dirRel}/continuity-report-vol-${pad2(args.report.volume)}-ch${pad3(start)}-ch${pad3(end)}.json`;
   const latestRel = `${dirRel}/latest.json`;
 
-  await writeJsonFile(join(args.rootDir, historyRel), args.report);
+  await writeJsonFileAtomic(join(args.rootDir, historyRel), args.report);
 
   const latestAbs = join(args.rootDir, latestRel);
   const scopeRank = (scope: unknown): number => (scope === "volume_end" ? 1 : 0);
@@ -506,28 +559,34 @@ export async function writeContinuityLogs(args: {
     return { end: b, scope_rank: scopeRank(obj.scope), generated_at };
   };
 
-  let shouldWriteLatest = true;
-  if (await pathExists(latestAbs)) {
-    try {
-      const existing = parseLatest(await readJsonFile(latestAbs));
-      const next = { end, scope_rank: scopeRank(args.report.scope), generated_at: args.report.generated_at };
-      if (existing) {
-        if (existing.end > next.end) {
-          shouldWriteLatest = false;
-        } else if (existing.end === next.end && existing.scope_rank > next.scope_rank) {
-          shouldWriteLatest = false;
-        } else if (existing.end === next.end && existing.scope_rank === next.scope_rank) {
-          // If timestamps are comparable, keep the newer one; otherwise, overwrite.
-          if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
+  try {
+    await withContinuityLatestLock(args.rootDir, async () => {
+      let shouldWriteLatest = true;
+      if (await pathExists(latestAbs)) {
+        try {
+          const existing = parseLatest(await readJsonFile(latestAbs));
+          const next = { end, scope_rank: scopeRank(args.report.scope), generated_at: args.report.generated_at };
+          if (existing) {
+            if (existing.end > next.end) {
+              shouldWriteLatest = false;
+            } else if (existing.end === next.end && existing.scope_rank > next.scope_rank) {
+              shouldWriteLatest = false;
+            } else if (existing.end === next.end && existing.scope_rank === next.scope_rank) {
+              // If timestamps are comparable, keep the newer one; otherwise, overwrite.
+              if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
+            }
+          }
+        } catch {
+          shouldWriteLatest = true;
         }
       }
-    } catch {
-      shouldWriteLatest = true;
-    }
-  }
 
-  if (shouldWriteLatest) {
-    await writeJsonFile(latestAbs, args.report);
+      if (shouldWriteLatest) {
+        await writeJsonFileAtomic(latestAbs, args.report);
+      }
+    });
+  } catch {
+    // Best-effort only; history logs are the source of truth.
   }
 
   return { latestRel, historyRel };
@@ -538,7 +597,7 @@ export async function writeVolumeContinuityReport(args: {
   report: ContinuityReport;
 }): Promise<{ volumeRel: string }> {
   const rel = `volumes/vol-${pad2(args.report.volume)}/continuity-report.json`;
-  await writeJsonFile(join(args.rootDir, rel), args.report);
+  await writeJsonFileAtomic(join(args.rootDir, rel), args.report);
   return { volumeRel: rel };
 }
 

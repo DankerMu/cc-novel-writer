@@ -169,7 +169,7 @@
 
 ## 4) 提供给 QualityJudge 的结构化输入（LS-001）
 
-入口 Skill 在调用 QualityJudge 前，应将"一致性报告中与当前章相关的 timeline/location issues"裁剪为小体积摘要注入：
+入口 Skill 在调用 QualityJudge 前，应将"一致性报告中与当前章相关的 high/medium issues（优先 timeline/location；其余类型如 mapping/relationship 为预留，若未来出现也可透传）"裁剪为小体积摘要注入：
 
 ```json
 {
