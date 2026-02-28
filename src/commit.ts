@@ -14,7 +14,7 @@ import { fingerprintsMatch, hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { checkHookPolicy } from "./hook-policy.js";
 import { withWriteLock } from "./lock.js";
-import { computeContinuityReport, tryResolveVolumeChapterRange, writeContinuityLogs, writeVolumeContinuityReport } from "./consistency-auditor.js";
+import { computeContinuityReport, tryResolveVolumeChapterRange, writeContinuityLogs, writeVolumeContinuityReport, type ContinuityReport } from "./consistency-auditor.js";
 import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
 import { attachScoringWeightsToEval, loadGenreWeightProfiles } from "./scoring-weights.js";
@@ -836,7 +836,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
 
       // M6.7: sliding-window consistency audits (non-blocking).
       // Every 5 committed chapters, audit the last 10 chapters; at volume end, run a full-volume audit.
-      const runAudit = async (scope: "periodic" | "volume_end", start: number, end: number): Promise<void> => {
+      const runAudit = async (scope: "periodic" | "volume_end", start: number, end: number): Promise<ContinuityReport> => {
         const report = await computeContinuityReport({
           rootDir: args.rootDir,
           volume,
@@ -847,13 +847,19 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
         if (scope === "volume_end") {
           await writeVolumeContinuityReport({ rootDir: args.rootDir, report });
         }
+        return report;
       };
 
       if (args.chapter % 5 === 0) {
         try {
           const start = Math.max(1, args.chapter - 9);
           const end = args.chapter;
-          await runAudit("periodic", start, end);
+          const report = await runAudit("periodic", start, end);
+          const nerOk = typeof report.stats.ner_ok === "number" ? report.stats.ner_ok : null;
+          const nerFailed = typeof report.stats.ner_failed === "number" ? report.stats.ner_failed : null;
+          if (nerOk === 0 && typeof nerFailed === "number" && nerFailed > 0) {
+            warnings.push(`Continuity audit degraded (periodic): NER failed for ${nerFailed} chapters; report may be empty.`);
+          }
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           warnings.push(`Continuity audit skipped (periodic): ${message}`);
@@ -863,7 +869,12 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       try {
         const volumeRange = await tryResolveVolumeChapterRange({ rootDir: args.rootDir, volume });
         if (volumeRange && args.chapter === volumeRange.end) {
-          await runAudit("volume_end", volumeRange.start, volumeRange.end);
+          const report = await runAudit("volume_end", volumeRange.start, volumeRange.end);
+          const nerOk = typeof report.stats.ner_ok === "number" ? report.stats.ner_ok : null;
+          const nerFailed = typeof report.stats.ner_failed === "number" ? report.stats.ner_failed : null;
+          if (nerOk === 0 && typeof nerFailed === "number" && nerFailed > 0) {
+            warnings.push(`Continuity audit degraded (volume_end): NER failed for ${nerFailed} chapters; report may be empty.`);
+          }
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);

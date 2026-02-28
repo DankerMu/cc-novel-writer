@@ -156,7 +156,7 @@
 
 优先使用 L3 契约的并发状态（`volumes/vol-{V:02d}/chapter-contracts/chapter-{C:03d}.json.storyline_context.concurrent_state`）：
 
-- 尝试从 concurrent_state 文本中解析章节号（常见格式：`（ch25）`），regex：`\\(ch(\\d+)\\)`。
+- 尝试从 concurrent_state 文本中解析章节号（常见格式：`（ch25）` / `(ch25)`），regex：`/[（(]\s*ch\s*(\d+)\s*[）)]/i`。
 - 为"当前章"与"并发线引用章"分别取 `primary_time_marker`（来自各自章节的 NER time_markers）。
 - **矛盾判定**（保守）：
   - 若双方都为高置信 time_marker，且包含明确的"年/季节"差异（例如 `第三年冬` vs `第三年夏`）→ `timeline_contradiction`（severity=high, confidence=high）

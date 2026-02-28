@@ -14,7 +14,7 @@
    - `style-drift.json`（如存在：active + drifts + detected_chapter）
    - `ai-blacklist.json`（version/last_updated/words/whitelist/update_log）
    - `style-profile.json`（preferred_expressions；用于解释黑名单豁免）
-2. **一致性检查（NER，周期性每 10 章）**：
+2. **一致性检查（NER，窗口=10；自动每 5 章滑窗审计）**：
    - 章节范围：`[max(1, last_completed_chapter-9), last_completed_chapter]`
    - 实体抽取（优先确定性脚本，失败回退 LLM）：
      - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh`：

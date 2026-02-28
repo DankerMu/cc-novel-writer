@@ -43,8 +43,12 @@ export type ContinuityReport = {
   issues: ContinuityIssue[];
   stats: {
     chapters_checked: number;
+    chapters_missing?: number;
     issues_total: number;
     issues_by_severity: { high: number; medium: number; low: number };
+    ner_ok?: number;
+    ner_failed?: number;
+    ner_failed_sample?: string;
   };
 };
 
@@ -235,6 +239,10 @@ export async function computeContinuityReport(args: {
 
   const nerCache = new Map<number, NerCacheEntry>();
   let chaptersChecked = 0;
+  let chaptersMissing = 0;
+  let nerOk = 0;
+  let nerFailed = 0;
+  let firstNerFailure: string | null = null;
 
   const chapterFacts: Array<{
     chapter: number;
@@ -245,9 +253,17 @@ export async function computeContinuityReport(args: {
 
   for (let c = start; c <= end; c += 1) {
     const entry = await getNerForChapter({ rootDir: args.rootDir, chapter: c, cache: nerCache });
-    if (entry.status === "missing") continue;
+    if (entry.status === "missing") {
+      chaptersMissing += 1;
+      continue;
+    }
     chaptersChecked += 1;
-    if (entry.status !== "ok") continue;
+    if (entry.status !== "ok") {
+      nerFailed += 1;
+      if (!firstNerFailure) firstNerFailure = entry.error;
+      continue;
+    }
+    nerOk += 1;
 
     const ner = entry.ner;
     const time_marker = pickPrimaryTimeMarker(ner);
@@ -446,8 +462,12 @@ export async function computeContinuityReport(args: {
     issues,
     stats: {
       chapters_checked: chaptersChecked,
+      chapters_missing: chaptersMissing,
       issues_total: issues.length,
-      issues_by_severity: bySeverity
+      issues_by_severity: bySeverity,
+      ner_ok: nerOk,
+      ner_failed: nerFailed,
+      ...(firstNerFailure ? { ner_failed_sample: truncateSnippet(firstNerFailure, 200) } : {})
     }
   };
 
@@ -504,6 +524,16 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
   const ls_001_signals: Array<Record<string, unknown>> = [];
   const MAX_ISSUES = 5;
   const MAX_LS_001_SIGNALS = 5;
+  const MAX_DESCRIPTION = 240;
+  const MAX_ID = 240;
+  const MAX_SUGGESTION = 180;
+
+  const safeString = (v: unknown, maxLen: number): string | null => {
+    if (typeof v !== "string") return null;
+    const trimmed = v.trim();
+    if (trimmed.length === 0) return null;
+    return truncateSnippet(trimmed, maxLen);
+  };
 
   for (const it of issuesRaw) {
     if (!isPlainObject(it)) continue;
@@ -527,14 +557,17 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
       .filter((e): e is { chapter: number; snippet: string } => e !== null);
 
     const suggestionsRaw = Array.isArray(issue.suggestions) ? (issue.suggestions as unknown[]) : [];
-    const suggestion = typeof suggestionsRaw[0] === "string" ? (suggestionsRaw[0] as string) : null;
+    const suggestion = safeString(suggestionsRaw[0], MAX_SUGGESTION);
+
+    const id = safeString(issue.id, MAX_ID) ?? "";
+    const description = safeString(issue.description, MAX_DESCRIPTION) ?? "";
 
     const trimmed: Record<string, unknown> = {
-      id: issue.id,
+      id,
       type,
       severity,
       confidence,
-      description: issue.description,
+      description,
       evidence,
       ...(suggestion ? { suggestion } : {})
     };
@@ -542,7 +575,7 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
 
     if (type === "timeline_contradiction" && confidence === "high") {
       ls_001_signals.push({
-        issue_id: issue.id,
+        issue_id: id,
         confidence,
         evidence,
         ...(suggestion ? { suggestion } : {})
@@ -562,18 +595,31 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
 
   ls_001_signals.sort((a, b) => compareStrings(String(a.issue_id ?? ""), String(b.issue_id ?? "")));
 
-  const chapter_range = Array.isArray(obj.chapter_range) && obj.chapter_range.length === 2 ? obj.chapter_range : null;
+  let chapter_range: [number, number] | null = null;
+  if (Array.isArray(obj.chapter_range) && obj.chapter_range.length === 2) {
+    const a = obj.chapter_range[0];
+    const b = obj.chapter_range[1];
+    if (typeof a === "number" && typeof b === "number" && Number.isInteger(a) && Number.isInteger(b) && a > 0 && b >= a) {
+      chapter_range = [a, b];
+    }
+  }
+
+  const scope = typeof obj.scope === "string" && ["periodic", "volume_end"].includes(obj.scope) ? obj.scope : null;
+  const volume = typeof obj.volume === "number" && Number.isInteger(obj.volume) && obj.volume >= 0 ? obj.volume : null;
+  const generated_at = typeof obj.generated_at === "string" ? obj.generated_at : null;
 
   const summary: Record<string, unknown> = {
     schema_version: obj.schema_version,
-    generated_at: obj.generated_at,
-    scope: obj.scope,
-    volume: obj.volume,
+    ...(generated_at ? { generated_at } : {}),
+    ...(scope ? { scope } : {}),
+    ...(volume !== null ? { volume } : {}),
     chapter_range,
     stats: {
       chapters_checked: statsRaw.chapters_checked,
       issues_total: statsRaw.issues_total,
-      issues_by_severity: statsRaw.issues_by_severity
+      issues_by_severity: statsRaw.issues_by_severity,
+      ...(typeof statsRaw.ner_ok === "number" && Number.isInteger(statsRaw.ner_ok) ? { ner_ok: statsRaw.ner_ok } : {}),
+      ...(typeof statsRaw.ner_failed === "number" && Number.isInteger(statsRaw.ner_failed) ? { ner_failed: statsRaw.ner_failed } : {})
     },
     issues: issues.slice(0, MAX_ISSUES)
   };
