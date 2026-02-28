@@ -5,6 +5,8 @@ The system SHALL run a sliding-window consistency audit:
 - every 5 committed chapters, and
 - at volume end (full-volume audit)
 
+When a commit is the volume-end chapter, the system SHOULD run only the volume-end audit (skip the periodic window for that commit) to avoid redundant work.
+
 The default sliding-window parameters SHALL be:
 - stride = 5 chapters
 - window = 10 chapters (most recent 10)

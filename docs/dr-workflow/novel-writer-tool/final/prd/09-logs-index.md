@@ -13,7 +13,7 @@
 对“周期性/窗口性”或“每章”报告，统一采用：
 
 - `logs/<topic>/latest.json`：默认 **覆盖写**，用于快速注入/展示（便于 `/novel:status`）
-- `logs/<topic>/<history>.json`：**历史文件**，每次生成新文件，禁止覆盖（回归/审计友好）
+- `logs/<topic>/<history>.json`：**历史文件**，用于回归/审计；原则上避免覆盖。若采用“按范围/章节”的确定性命名，允许在 **同一 key**（同 range/chapter）上幂等覆盖（rerun），但不得覆盖其他 key。
 
 > 注：个别 topic 为避免并发回退或跨范围任务重跑导致 `latest.json` “倒退”，允许采用 **单调更新**（monotonic）语义：只在“更新更前沿的范围”时覆盖（例如 `logs/continuity/latest.json`）。
 
@@ -77,6 +77,7 @@
 - History：`logs/continuity/continuity-report-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
 - Internal（运行时/补偿标记；可忽略）：  
   - `logs/continuity/.latest.lock/`（并发锁，写入 `latest.json` 时短暂存在）  
+  - `logs/continuity/.pending-volume-end.lock/`（并发锁，读写 pending marker 时短暂存在）  
   - `logs/continuity/pending-volume-end-vol-{V:02d}.json`（卷末审计崩溃补偿标记；下次 commit 会补跑并清理）
 - Owning specs：
   - `skills/continue/references/continuity-checks.md`（schema SSOT）

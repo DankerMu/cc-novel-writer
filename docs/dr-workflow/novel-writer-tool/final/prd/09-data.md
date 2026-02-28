@@ -80,6 +80,7 @@ novel-project/
     │   └── cliche-lint-chapter-001.json
     ├── continuity/                 # 一致性检查报告（NER）
     │   ├── .latest.lock/           # （运行时）latest.json 并发锁目录
+    │   ├── .pending-volume-end.lock/  # （运行时）pending marker 并发锁目录
     │   ├── latest.json
     │   ├── pending-volume-end-vol-01.json  # （补偿标记）卷末审计崩溃时保留；下次 commit 补跑并清理
     │   └── continuity-report-vol-01-ch001-ch010.json

@@ -54,7 +54,7 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
       await rename(tmpPath, path);
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
-      if (code !== "EEXIST" && code !== "EPERM" && code !== "EACCES") throw err;
+      if (code !== "EEXIST" && code !== "EPERM" && code !== "EACCES" && code !== "EBUSY") throw err;
 
       // Windows cannot rename over an existing file; use a backup to avoid losing the last-good file.
       const backupPath = `${path}.bak-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
