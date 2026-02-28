@@ -249,45 +249,47 @@ export function computeEffectiveScoringWeights(args: {
   }
 
   // When hook policy is enabled, hook_strength should be a first-class dimension.
-  const dims = args.config.dimensions;
-  if (args.hookPolicy?.required && !dims.includes("hook_strength")) {
+  const configDims = args.config.dimensions;
+  if (args.hookPolicy?.required && !configDims.includes("hook_strength")) {
     throw new NovelCliError(
       `Invalid genre-weight-profiles.json: missing 'hook_strength' in dimensions while platform-profile.json.hook_policy.required=true.`,
       2
     );
   }
 
+  // Effective dimensions: hook_strength only participates when hooks are enabled.
+  const dims = args.hookPolicy?.required ? configDims : configDims.filter((d) => d !== "hook_strength");
+
   const overridesRaw = args.scoring.weight_overrides ?? null;
   const overrides: Record<string, number> | null = overridesRaw ? { ...overridesRaw } : null;
 
-  const allowedDims = new Set(dims);
+  const allowedDims = new Set(configDims);
+  const effectiveDims = new Set(dims);
   if (overrides) {
     for (const [dim, v] of Object.entries(overrides)) {
       if (!allowedDims.has(dim)) {
         throw new NovelCliError(
-          `Invalid platform-profile.json: scoring.weight_overrides has unknown dimension '${dim}' (allowed: ${dims.join(", ")}).`,
+          `Invalid platform-profile.json: scoring.weight_overrides has unknown dimension '${dim}' (allowed: ${configDims.join(", ")}).`,
           2
         );
       }
       overrides[dim] = requireFiniteNonNegativeNumber(v, "platform-profile.json", `scoring.weight_overrides.${dim}`);
+      if (dim === "hook_strength" && !args.hookPolicy?.required && overrides[dim]! > 0) {
+        throw new NovelCliError(
+          `Invalid platform-profile.json: scoring.weight_overrides.hook_strength=${overrides[dim]} but hook_policy.required=false. Set hook_strength override to 0 or enable hook_policy.required.`,
+          2
+        );
+      }
+      if (!effectiveDims.has(dim)) {
+        // Currently only possible for hook_strength when hook policy is disabled. Allowed as long as it is not positive.
+        continue;
+      }
     }
   }
 
   const rawWeights: Record<string, number> = {};
   for (const dim of dims) {
     rawWeights[dim] = typeof overrides?.[dim] === "number" ? overrides[dim]! : profile.weights[dim]!;
-  }
-
-  // If hooks are not enabled, hook_strength must not influence overall scoring.
-  if (!args.hookPolicy?.required && dims.includes("hook_strength")) {
-    const overrideWeight = overrides?.hook_strength;
-    if (typeof overrideWeight === "number" && overrideWeight > 0) {
-      throw new NovelCliError(
-        `Invalid platform-profile.json: scoring.weight_overrides.hook_strength=${overrideWeight} but hook_policy.required=false. Set hook_strength override to 0 or enable hook_policy.required.`,
-        2
-      );
-    }
-    rawWeights.hook_strength = 0;
   }
 
   const normalization = normalizeWeights({
@@ -364,6 +366,18 @@ export async function attachScoringWeightsToEval(args: {
   if (targets.length === 0) {
     throw new NovelCliError(
       `Invalid ${args.evalRelPath}: missing scores object (expected 'scores' or 'eval_used.scores'); cannot attach per-dimension weights.`,
+      2
+    );
+  }
+
+  const canonical = targets[0]!;
+  const missing: string[] = [];
+  for (const dim of effective.dimensions) {
+    if (!isPlainObject(canonical.scores[dim])) missing.push(dim);
+  }
+  if (missing.length > 0) {
+    throw new NovelCliError(
+      `Invalid ${args.evalRelPath}: missing score dimensions in ${canonical.path}: ${missing.join(", ")}. Re-run QualityJudge with the updated contract.`,
       2
     );
   }
