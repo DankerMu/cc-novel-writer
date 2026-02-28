@@ -510,6 +510,8 @@ async function withContinuityLatestLock<T>(rootDir: string, fn: () => Promise<T>
         } catch {
           // ignore
         }
+        if (Date.now() - started > MAX_WAIT_MS) return null;
+        await sleep(50);
         continue;
       }
 

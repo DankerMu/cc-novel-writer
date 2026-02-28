@@ -440,6 +440,11 @@ async function withPendingVolumeEndMarkerLock<T>(rootDir: string, warnings: stri
         } catch {
           // ignore
         }
+        if (Date.now() - started > MAX_WAIT_MS) {
+          warnings.push("Continuity audits: timed out removing stale pending marker lock; skipping pending marker operation.");
+          return null;
+        }
+        await sleep(50);
         continue;
       }
 
@@ -643,6 +648,12 @@ async function removePendingVolumeEndAuditMarkerIfUnchanged(args: {
       }
       args.warnings.push(`Pending volume-end marker changed during audit; keeping: ${args.markerRel}`);
     } catch (err: unknown) {
+      try {
+        await stat(markerAbs);
+      } catch (statErr: unknown) {
+        const code = (statErr as { code?: string }).code;
+        if (code === "ENOENT") return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       args.warnings.push(`Continuity audit finished but failed to validate pending marker: ${args.markerRel}. ${message}`);
     }
