@@ -14,6 +14,7 @@ import { fingerprintsMatch, hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { checkHookPolicy } from "./hook-policy.js";
 import { withWriteLock } from "./lock.js";
+import { computeContinuityReport, tryParseOutlineChapterRange, writeContinuityLogs, writeVolumeContinuityReport } from "./consistency-auditor.js";
 import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
 import { attachScoringWeightsToEval, loadGenreWeightProfiles } from "./scoring-weights.js";
@@ -372,6 +373,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   }
 
   const checkpoint = await readCheckpoint(args.rootDir);
+  const volume = checkpoint.current_volume;
   const warnings: string[] = [];
   const plan: string[] = [];
 
@@ -450,6 +452,26 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
 
   if (loadedGenreWeights) {
     plan.push(`PATCH ${rel.final.evalJson} (attach scoring_weights metadata + per-dimension weights)`);
+  }
+
+  // Optional: periodic continuity audits (non-blocking) on a fixed cadence.
+  if (args.chapter % 5 === 0) {
+    const start = Math.max(1, args.chapter - 9);
+    const end = args.chapter;
+    plan.push(`WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(start)}-ch${pad3(end)}.json (+ latest.json)`);
+  }
+
+  // Optional: volume-end full continuity audit (non-blocking) when outline.md indicates this is the last chapter of the volume.
+  try {
+    const outlineRange = await tryParseOutlineChapterRange({ rootDir: args.rootDir, volume });
+    if (outlineRange && args.chapter === outlineRange.end) {
+      plan.push(`WRITE volumes/vol-${pad2(volume)}/continuity-report.json`);
+      plan.push(
+        `WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(outlineRange.start)}-ch${pad3(outlineRange.end)}.json (+ latest.json)`
+      );
+    }
+  } catch {
+    // ignore (plan is best-effort)
   }
 
   // Update checkpoint.
@@ -811,6 +833,42 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       updatedCheckpoint.hook_fix_count = 0;
       updatedCheckpoint.last_checkpoint_time = new Date().toISOString();
       await writeCheckpoint(args.rootDir, updatedCheckpoint);
+
+      // M6.7: sliding-window consistency audits (non-blocking).
+      // Every 5 committed chapters, audit the last 10 chapters; at volume end, run a full-volume audit.
+      const runAudit = async (scope: "periodic" | "volume_end", start: number, end: number): Promise<void> => {
+        const report = await computeContinuityReport({
+          rootDir: args.rootDir,
+          volume,
+          scope,
+          chapterRange: { start, end }
+        });
+        await writeContinuityLogs({ rootDir: args.rootDir, report });
+        if (scope === "volume_end") {
+          await writeVolumeContinuityReport({ rootDir: args.rootDir, report });
+        }
+      };
+
+      if (args.chapter % 5 === 0) {
+        try {
+          const start = Math.max(1, args.chapter - 9);
+          const end = args.chapter;
+          await runAudit("periodic", start, end);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          warnings.push(`Continuity audit skipped (periodic): ${message}`);
+        }
+      }
+
+      try {
+        const outlineRange = await tryParseOutlineChapterRange({ rootDir: args.rootDir, volume });
+        if (outlineRange && args.chapter === outlineRange.end) {
+          await runAudit("volume_end", outlineRange.start, outlineRange.end);
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        warnings.push(`Continuity audit skipped (volume_end): ${message}`);
+      }
     } catch (err) {
       await rollback();
       throw err;

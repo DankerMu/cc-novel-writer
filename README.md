@@ -129,9 +129,10 @@ ChapterWriter → Summarizer → StyleRefiner → QualityJudge
 
 ```
 .claude-plugin/plugin.json     插件入口
-agents/                        8 个 Agent 定义
+agents/                        9 个 Agent 定义
   chapter-writer.md
   character-weaver.md
+  consistency-auditor.md
   plot-architect.md
   quality-judge.md
   style-analyzer.md
