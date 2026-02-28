@@ -54,12 +54,38 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
       await rename(tmpPath, path);
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
-      // Windows cannot rename over an existing file; delete then rename (still safe under an external lock).
-      if (code === "EEXIST" || code === "EPERM" || code === "EACCES") {
-        await rm(path, { force: true });
+      if (code !== "EEXIST" && code !== "EPERM" && code !== "EACCES") throw err;
+
+      // Windows cannot rename over an existing file; use a backup to avoid losing the last-good file.
+      const backupPath = `${path}.bak-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      let backedUp = false;
+      try {
+        await rename(path, backupPath);
+        backedUp = true;
+      } catch (moveErr: unknown) {
+        const moveCode = (moveErr as { code?: string }).code;
+        if (moveCode !== "ENOENT") throw moveErr;
+      }
+
+      try {
         await rename(tmpPath, path);
-      } else {
-        throw err;
+      } catch (finalErr: unknown) {
+        if (backedUp) {
+          try {
+            await rename(backupPath, path);
+          } catch {
+            // ignore
+          }
+        }
+        throw finalErr;
+      } finally {
+        if (backedUp) {
+          try {
+            await rm(backupPath, { force: true });
+          } catch {
+            // ignore
+          }
+        }
       }
     }
   } catch (err: unknown) {
