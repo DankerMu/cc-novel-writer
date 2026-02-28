@@ -2,5 +2,6 @@ exclude = [
   "reddit\\.com",
   "medium\\.com",
   "neurobiber",
-  "arxiv\\.org"
+  "arxiv\\.org",
+  "pmc\\.ncbi\\.nlm\\.nih\\.gov/articles/PMC12019761"
 ]
