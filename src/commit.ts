@@ -1,4 +1,4 @@
-import { appendFile, readdir, rename, stat, truncate, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, rename, stat, truncate, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { readCheckpoint, type Checkpoint, writeCheckpoint } from "./checkpoint.js";
@@ -395,6 +395,63 @@ function parsePendingVolumeEndAuditMarker(raw: unknown): PendingVolumeEndAuditMa
   return { schema_version: 1, created_at, volume, chapter_range: [start, end] };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withPendingVolumeEndMarkerLock<T>(rootDir: string, warnings: string[], fn: () => Promise<T>): Promise<T | null> {
+  const parentAbs = join(rootDir, "logs/continuity");
+  const lockAbs = join(parentAbs, ".pending-volume-end.lock");
+  await ensureDir(parentAbs);
+
+  const started = Date.now();
+  const MAX_WAIT_MS = 2_000;
+  const STALE_MS = 60_000;
+
+  for (;;) {
+    try {
+      await mkdir(lockAbs);
+      break;
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      if (code !== "EEXIST") throw err;
+
+      let isStale = false;
+      try {
+        const s = await stat(lockAbs);
+        isStale = Date.now() - s.mtimeMs > STALE_MS;
+      } catch {
+        isStale = false;
+      }
+
+      if (isStale) {
+        try {
+          await removePath(lockAbs);
+        } catch {
+          // ignore
+        }
+        continue;
+      }
+
+      if (Date.now() - started > MAX_WAIT_MS) {
+        warnings.push("Continuity audits: timed out waiting for pending marker lock; skipping marker update.");
+        return null;
+      }
+      await sleep(50);
+    }
+  }
+
+  try {
+    return await fn();
+  } finally {
+    try {
+      await removePath(lockAbs);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 type ContinuityReportHeader = {
   schema_version: 1;
   scope: "periodic" | "volume_end";
@@ -489,38 +546,40 @@ async function ensurePendingVolumeEndAuditMarker(args: {
   chapterRange: [number, number];
   warnings: string[];
 }): Promise<void> {
-  const markerAbs = join(args.rootDir, args.markerRel);
-  const desired: PendingVolumeEndAuditMarker = {
-    schema_version: 1,
-    created_at: new Date().toISOString(),
-    volume: args.volume,
-    chapter_range: args.chapterRange
-  };
+  await withPendingVolumeEndMarkerLock(args.rootDir, args.warnings, async () => {
+    const markerAbs = join(args.rootDir, args.markerRel);
+    const desired: PendingVolumeEndAuditMarker = {
+      schema_version: 1,
+      created_at: new Date().toISOString(),
+      volume: args.volume,
+      chapter_range: args.chapterRange
+    };
 
-  if (await pathExists(markerAbs)) {
-    try {
-      const parsed = parsePendingVolumeEndAuditMarker(await readJsonFile(markerAbs));
-      if (
-        parsed &&
-        parsed.volume === desired.volume &&
-        parsed.chapter_range[0] === desired.chapter_range[0] &&
-        parsed.chapter_range[1] === desired.chapter_range[1]
-      ) {
-        return;
+    if (await pathExists(markerAbs)) {
+      try {
+        const parsed = parsePendingVolumeEndAuditMarker(await readJsonFile(markerAbs));
+        if (
+          parsed &&
+          parsed.volume === desired.volume &&
+          parsed.chapter_range[0] === desired.chapter_range[0] &&
+          parsed.chapter_range[1] === desired.chapter_range[1]
+        ) {
+          return;
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        args.warnings.push(`Failed to read pending volume-end audit marker: ${args.markerRel}. ${message}`);
+        await quarantinePendingVolumeEndAuditMarker({ rootDir: args.rootDir, rel: args.markerRel, warnings: args.warnings });
       }
+    }
+
+    try {
+      await writeJsonFileAtomic(markerAbs, desired);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      args.warnings.push(`Failed to read pending volume-end audit marker: ${args.markerRel}. ${message}`);
-      await quarantinePendingVolumeEndAuditMarker({ rootDir: args.rootDir, rel: args.markerRel, warnings: args.warnings });
+      args.warnings.push(`Failed to write pending volume-end audit marker: ${args.markerRel}. ${message}`);
     }
-  }
-
-  try {
-    await writeJsonFileAtomic(markerAbs, desired);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    args.warnings.push(`Failed to write pending volume-end audit marker: ${args.markerRel}. ${message}`);
-  }
+  });
 }
 
 async function removePendingVolumeEndAuditMarkerIfUnchanged(args: {
@@ -530,24 +589,26 @@ async function removePendingVolumeEndAuditMarkerIfUnchanged(args: {
   chapterRange: [number, number];
   warnings: string[];
 }): Promise<void> {
-  const markerAbs = join(args.rootDir, args.markerRel);
-  if (!(await pathExists(markerAbs))) return;
-  try {
-    const parsed = parsePendingVolumeEndAuditMarker(await readJsonFile(markerAbs));
-    if (
-      parsed &&
-      parsed.volume === args.volume &&
-      parsed.chapter_range[0] === args.chapterRange[0] &&
-      parsed.chapter_range[1] === args.chapterRange[1]
-    ) {
-      await removePath(markerAbs);
-      return;
+  await withPendingVolumeEndMarkerLock(args.rootDir, args.warnings, async () => {
+    const markerAbs = join(args.rootDir, args.markerRel);
+    if (!(await pathExists(markerAbs))) return;
+    try {
+      const parsed = parsePendingVolumeEndAuditMarker(await readJsonFile(markerAbs));
+      if (
+        parsed &&
+        parsed.volume === args.volume &&
+        parsed.chapter_range[0] === args.chapterRange[0] &&
+        parsed.chapter_range[1] === args.chapterRange[1]
+      ) {
+        await removePath(markerAbs);
+        return;
+      }
+      args.warnings.push(`Pending volume-end marker changed during audit; keeping: ${args.markerRel}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      args.warnings.push(`Continuity audit finished but failed to validate pending marker: ${args.markerRel}. ${message}`);
     }
-    args.warnings.push(`Pending volume-end marker changed during audit; keeping: ${args.markerRel}`);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    args.warnings.push(`Continuity audit finished but failed to validate pending marker: ${args.markerRel}. ${message}`);
-  }
+  });
 }
 
 export async function commitChapter(args: CommitArgs): Promise<CommitResult> {

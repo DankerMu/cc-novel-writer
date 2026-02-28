@@ -69,6 +69,13 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
 
       try {
         await rename(tmpPath, path);
+        if (backedUp) {
+          try {
+            await rm(backupPath, { force: true });
+          } catch {
+            // ignore
+          }
+        }
       } catch (finalErr: unknown) {
         if (backedUp) {
           try {
@@ -78,14 +85,6 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
           }
         }
         throw finalErr;
-      } finally {
-        if (backedUp) {
-          try {
-            await rm(backupPath, { force: true });
-          } catch {
-            // ignore
-          }
-        }
       }
     }
   } catch (err: unknown) {
