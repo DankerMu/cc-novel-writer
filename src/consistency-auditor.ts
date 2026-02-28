@@ -335,7 +335,7 @@ export async function computeContinuityReport(args: {
         const ev = group.locations.get(loc)!;
         return { loc, ...ev };
       })
-      .slice(0, 4);
+      .slice(0, 5);
 
     const highLocs = evidenceList.filter((e) => e.time_marker_confidence === "high");
     const isHigh = new Set(highLocs.map((e) => e.loc)).size >= 2;
@@ -489,7 +489,46 @@ export async function writeContinuityLogs(args: {
   const latestRel = `${dirRel}/latest.json`;
 
   await writeJsonFile(join(args.rootDir, historyRel), args.report);
-  await writeJsonFile(join(args.rootDir, latestRel), args.report);
+
+  const latestAbs = join(args.rootDir, latestRel);
+  const scopeRank = (scope: unknown): number => (scope === "volume_end" ? 1 : 0);
+  const parseLatest = (raw: unknown): { end: number; scope_rank: number; generated_at: string | null } | null => {
+    if (!isPlainObject(raw)) return null;
+    const obj = raw as Record<string, unknown>;
+    if (obj.schema_version !== 1) return null;
+    const range = obj.chapter_range;
+    if (!Array.isArray(range) || range.length !== 2) return null;
+    const a = range[0];
+    const b = range[1];
+    if (typeof a !== "number" || typeof b !== "number") return null;
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 1 || b < a) return null;
+    const generated_at = typeof obj.generated_at === "string" ? obj.generated_at : null;
+    return { end: b, scope_rank: scopeRank(obj.scope), generated_at };
+  };
+
+  let shouldWriteLatest = true;
+  if (await pathExists(latestAbs)) {
+    try {
+      const existing = parseLatest(await readJsonFile(latestAbs));
+      const next = { end, scope_rank: scopeRank(args.report.scope), generated_at: args.report.generated_at };
+      if (existing) {
+        if (existing.end > next.end) {
+          shouldWriteLatest = false;
+        } else if (existing.end === next.end && existing.scope_rank > next.scope_rank) {
+          shouldWriteLatest = false;
+        } else if (existing.end === next.end && existing.scope_rank === next.scope_rank) {
+          // If timestamps are comparable, keep the newer one; otherwise, overwrite.
+          if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
+        }
+      }
+    } catch {
+      shouldWriteLatest = true;
+    }
+  }
+
+  if (shouldWriteLatest) {
+    await writeJsonFile(latestAbs, args.report);
+  }
 
   return { latestRel, historyRel };
 }
@@ -529,6 +568,7 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
   const MAX_DESCRIPTION = 240;
   const MAX_ID = 240;
   const MAX_SUGGESTION = 180;
+  const ALLOWED_TYPES = new Set<string>(["timeline_contradiction", "location_contradiction", "character_mapping", "relationship_jump"]);
 
   const safeString = (v: unknown, maxLen: number): string | null => {
     if (typeof v !== "string") return null;
@@ -558,7 +598,7 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
     const severity = typeof issue.severity === "string" ? issue.severity : "";
     const confidence = typeof issue.confidence === "string" ? issue.confidence : "";
     if (!["high", "medium"].includes(severity)) continue;
-    if (!["timeline_contradiction", "location_contradiction"].includes(type)) continue;
+    if (!ALLOWED_TYPES.has(type)) continue;
 
     const evidenceRaw = Array.isArray(issue.evidence) ? (issue.evidence as unknown[]) : [];
     const evidence = evidenceRaw
