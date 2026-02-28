@@ -14,7 +14,7 @@ import { fingerprintsMatch, hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
 import { checkHookPolicy } from "./hook-policy.js";
 import { withWriteLock } from "./lock.js";
-import { computeContinuityReport, tryParseOutlineChapterRange, writeContinuityLogs, writeVolumeContinuityReport } from "./consistency-auditor.js";
+import { computeContinuityReport, tryResolveVolumeChapterRange, writeContinuityLogs, writeVolumeContinuityReport } from "./consistency-auditor.js";
 import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
 import { attachScoringWeightsToEval, loadGenreWeightProfiles } from "./scoring-weights.js";
@@ -461,13 +461,13 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     plan.push(`WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(start)}-ch${pad3(end)}.json (+ latest.json)`);
   }
 
-  // Optional: volume-end full continuity audit (non-blocking) when outline.md indicates this is the last chapter of the volume.
+  // Optional: volume-end full continuity audit (non-blocking) when this is the last planned chapter of the volume.
   try {
-    const outlineRange = await tryParseOutlineChapterRange({ rootDir: args.rootDir, volume });
-    if (outlineRange && args.chapter === outlineRange.end) {
+    const volumeRange = await tryResolveVolumeChapterRange({ rootDir: args.rootDir, volume });
+    if (volumeRange && args.chapter === volumeRange.end) {
       plan.push(`WRITE volumes/vol-${pad2(volume)}/continuity-report.json`);
       plan.push(
-        `WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(outlineRange.start)}-ch${pad3(outlineRange.end)}.json (+ latest.json)`
+        `WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(volumeRange.start)}-ch${pad3(volumeRange.end)}.json (+ latest.json)`
       );
     }
   } catch {
@@ -861,9 +861,9 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       }
 
       try {
-        const outlineRange = await tryParseOutlineChapterRange({ rootDir: args.rootDir, volume });
-        if (outlineRange && args.chapter === outlineRange.end) {
-          await runAudit("volume_end", outlineRange.start, outlineRange.end);
+        const volumeRange = await tryResolveVolumeChapterRange({ rootDir: args.rootDir, volume });
+        if (volumeRange && args.chapter === volumeRange.end) {
+          await runAudit("volume_end", volumeRange.start, volumeRange.end);
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);

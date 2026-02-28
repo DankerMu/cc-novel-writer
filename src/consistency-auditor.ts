@@ -372,7 +372,7 @@ export async function computeContinuityReport(args: {
     for (const other of storylineKeys) {
       const summary = cs.concurrent_state[other] ?? "";
       const refs: number[] = [];
-      const re = /\(ch(\d+)\)/gu;
+      const re = /[（(]\s*ch\s*(\d+)\s*[）)]/giu;
       let m: RegExpExecArray | null;
       while ((m = re.exec(summary)) !== null) {
         const n = Number.parseInt(m[1] ?? "", 10);
@@ -502,6 +502,8 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
 
   const issues: Array<Record<string, unknown>> = [];
   const ls_001_signals: Array<Record<string, unknown>> = [];
+  const MAX_ISSUES = 5;
+  const MAX_LS_001_SIGNALS = 5;
 
   for (const it of issuesRaw) {
     if (!isPlainObject(it)) continue;
@@ -558,6 +560,8 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
     return compareStrings(String(a.id ?? ""), String(b.id ?? ""));
   });
 
+  ls_001_signals.sort((a, b) => compareStrings(String(a.issue_id ?? ""), String(b.issue_id ?? "")));
+
   const chapter_range = Array.isArray(obj.chapter_range) && obj.chapter_range.length === 2 ? obj.chapter_range : null;
 
   const summary: Record<string, unknown> = {
@@ -571,10 +575,11 @@ export function summarizeContinuityForJudge(raw: unknown): Record<string, unknow
       issues_total: statsRaw.issues_total,
       issues_by_severity: statsRaw.issues_by_severity
     },
-    issues
+    issues: issues.slice(0, MAX_ISSUES)
   };
 
-  if (ls_001_signals.length > 0) summary.ls_001_signals = ls_001_signals;
+  const signals = ls_001_signals.slice(0, MAX_LS_001_SIGNALS);
+  if (signals.length > 0) summary.ls_001_signals = signals;
 
   return summary;
 }
@@ -597,4 +602,27 @@ export async function tryParseOutlineChapterRange(args: { rootDir: string; volum
   if (nums.length === 0) return null;
   nums.sort((a, b) => a - b);
   return { start: nums[0]!, end: nums[nums.length - 1]! };
+}
+
+export async function tryParseVolumeContractChapterRange(args: { rootDir: string; volume: number }): Promise<{ start: number; end: number } | null> {
+  const dirRel = `volumes/vol-${pad2(args.volume)}/chapter-contracts`;
+  const dirAbs = join(args.rootDir, dirRel);
+  if (!(await pathExists(dirAbs))) return null;
+
+  const entries = await readdir(dirAbs, { withFileTypes: true });
+  const nums: number[] = [];
+  for (const e of entries) {
+    if (!e.isFile()) continue;
+    const m = /^chapter-(\d{3})\.json$/u.exec(e.name);
+    if (!m) continue;
+    const n = Number.parseInt(m[1] ?? "", 10);
+    if (Number.isInteger(n) && n > 0) nums.push(n);
+  }
+  if (nums.length === 0) return null;
+  nums.sort((a, b) => a - b);
+  return { start: nums[0]!, end: nums[nums.length - 1]! };
+}
+
+export async function tryResolveVolumeChapterRange(args: { rootDir: string; volume: number }): Promise<{ start: number; end: number } | null> {
+  return (await tryParseOutlineChapterRange(args)) ?? (await tryParseVolumeContractChapterRange(args));
 }
