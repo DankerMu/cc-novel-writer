@@ -17,14 +17,28 @@ The default sliding-window parameters SHALL be:
 ### Requirement: ConsistencyAuditor outputs MUST be regression-friendly and compatible with continuity schema
 Consistency audit outputs SHALL be written under `logs/continuity/` and MUST be compatible with the continuity report schema defined in `skills/continue/references/continuity-checks.md` (at minimum fields and ordering rules).
 
-The system SHALL update:
-- `logs/continuity/latest.json` (current)
-- and append a historical report file for traceability
+The system SHALL write:
+- a historical report file for traceability, and
+- update `logs/continuity/latest.json` for fast injection (best-effort)
 
-#### Scenario: latest.json updated and history preserved
+`logs/continuity/latest.json` SHOULD be **monotonic** to avoid concurrency regressions:
+- prefer the report with the largest `chapter_range[1]` (end chapter)
+- if end chapter ties: prefer `scope="volume_end"` over `scope="periodic"`
+- if still ties: prefer the newer `generated_at` when comparable
+
+#### Scenario: latest.json is monotonic and history preserved
 - **WHEN** an audit completes successfully
-- **THEN** `logs/continuity/latest.json` reflects the newest audit
-- **AND** a `continuity-report-*.json` history file is written for that range
+- **THEN** a `continuity-report-*.json` history file is written for that range
+- **AND** `logs/continuity/latest.json` is updated only if it would move the summary forward (or keep the same end chapter with higher-priority scope)
+- **AND** failures to update `latest.json` MUST NOT break the commit (history files remain the source of truth)
+
+### Requirement: Volume-end audits SHALL be crash-compensated
+To avoid a “checkpoint committed but volume-end audit missing” gap, the system SHALL:
+- create a pending marker before running a `scope="volume_end"` audit
+- remove the marker only after successfully writing `volumes/vol-{V:02d}/continuity-report.json`
+
+The pending marker SHOULD be written under `logs/continuity/` as:
+- `pending-volume-end-vol-{V:02d}.json`
 
 ### Requirement: The system SHOULD include “logic drift” hints without hard-blocking by default
 In addition to hard continuity contradictions (location/timeline/relationship), the audit SHOULD emit low-severity hints for:

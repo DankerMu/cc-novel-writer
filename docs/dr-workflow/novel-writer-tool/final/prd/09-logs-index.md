@@ -12,8 +12,10 @@
 
 对“周期性/窗口性”或“每章”报告，统一采用：
 
-- `logs/<topic>/latest.json`：**覆盖写**，始终代表最新一次报告（便于 `/novel:status`/快速注入）
+- `logs/<topic>/latest.json`：默认 **覆盖写**，用于快速注入/展示（便于 `/novel:status`）
 - `logs/<topic>/<history>.json`：**历史文件**，每次生成新文件，禁止覆盖（回归/审计友好）
+
+> 注：个别 topic 为避免并发回退或跨范围任务重跑导致 `latest.json` “倒退”，允许采用 **单调更新**（monotonic）语义：只在“更新更前沿的范围”时覆盖（例如 `logs/continuity/latest.json`）。
 
 推荐的 history 命名规则：
 
@@ -71,8 +73,11 @@
 #### 4) Continuity（一致性/连续性报告）
 
 - 目录：`logs/continuity/`
-- Latest：`logs/continuity/latest.json`
+- Latest：`logs/continuity/latest.json`（单调更新：按 chapter_range end 前进，且同 end 时 `volume_end` 优先于 `periodic`）
 - History：`logs/continuity/continuity-report-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
+- Internal（运行时/补偿标记；可忽略）：  
+  - `logs/continuity/.latest.lock/`（并发锁，写入 `latest.json` 时短暂存在）  
+  - `logs/continuity/pending-volume-end-vol-{V:02d}.json`（卷末审计崩溃补偿标记；下次 commit 会补跑并清理）
 - Owning specs：
   - `skills/continue/references/continuity-checks.md`（schema SSOT）
   - `openspec/changes/m6-platform-optimization/specs/consistency-auditor/spec.md`（滑动窗口审计）

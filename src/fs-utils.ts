@@ -55,7 +55,7 @@ export async function writeTextFileAtomic(path: string, contents: string): Promi
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
       // Windows cannot rename over an existing file; delete then rename (still safe under an external lock).
-      if (code === "EEXIST" || code === "EPERM") {
+      if (code === "EEXIST" || code === "EPERM" || code === "EACCES") {
         await rm(path, { force: true });
         await rename(tmpPath, path);
       } else {

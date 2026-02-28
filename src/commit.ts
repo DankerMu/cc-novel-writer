@@ -437,13 +437,25 @@ async function listPendingVolumeEndAuditMarkers(rootDir: string, warnings: strin
   const dirAbs = join(rootDir, dirRel);
   if (!(await pathExists(dirAbs))) return [];
 
-  const entries = await readdir(dirAbs, { withFileTypes: true });
+  const entries = await readdir(dirAbs, { withFileTypes: true }).catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    warnings.push(`Continuity audits: failed to list pending markers in ${dirRel}. ${message}`);
+    return null;
+  });
+  if (!entries) return [];
   const out: Array<{ rel: string; marker: PendingVolumeEndAuditMarker }> = [];
   for (const e of entries) {
     if (!e.isFile()) continue;
-    const m = /^pending-volume-end-vol-(\d{2})\.json$/u.exec(e.name);
+    const m = /^pending-volume-end-vol-(\d{2,})\.json$/u.exec(e.name);
     if (!m) continue;
     const rel = `${dirRel}/${e.name}`;
+    const digits = m[1] ?? "";
+    const volumeFromName = Number.parseInt(digits, 10);
+    if (!Number.isInteger(volumeFromName) || volumeFromName < 0 || pad2(volumeFromName) !== digits) {
+      warnings.push(`Ignoring invalid pending volume-end audit marker filename: ${rel}`);
+      await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
+      continue;
+    }
     let raw: unknown;
     try {
       raw = await readJsonFile(join(rootDir, rel));
@@ -456,6 +468,11 @@ async function listPendingVolumeEndAuditMarkers(rootDir: string, warnings: strin
     const parsed = parsePendingVolumeEndAuditMarker(raw);
     if (!parsed) {
       warnings.push(`Ignoring invalid pending volume-end audit marker: ${rel}`);
+      await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
+      continue;
+    }
+    if (parsed.volume !== volumeFromName) {
+      warnings.push(`Ignoring pending volume-end marker with mismatched volume: ${rel} (name=${volumeFromName} json=${parsed.volume})`);
       await quarantinePendingVolumeEndAuditMarker({ rootDir, rel, warnings });
       continue;
     }

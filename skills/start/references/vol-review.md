@@ -8,7 +8,7 @@
    - 输出 timeline/location/relationship/mapping 等 issues（含 severity/confidence/evidence/suggestions）
    - 落盘：
      - 写入 `volumes/vol-{V:02d}/continuity-report.json`
-     - 同步写入/覆盖 `logs/continuity/latest.json`（供后续 `/novel:continue` 注入 QualityJudge LS-001）
+     - 同步尝试更新 `logs/continuity/latest.json`（单调前进；供后续 `/novel:continue` 注入 QualityJudge LS-001）
 3. **伏笔盘点 + 桥梁检查 + 节奏分析**（卷级汇总；不阻断）：
    - 章节范围：使用 Step 2 得到的 `[chapter_start, chapter_end]`
    - Read（如存在）：
