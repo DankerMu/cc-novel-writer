@@ -533,7 +533,12 @@ async function listPendingVolumeEndAuditMarkers(rootDir: string, warnings: strin
         raw = await readJsonFile(join(rootDir, rel));
       } catch (err: unknown) {
         const abs = join(rootDir, rel);
-        if (!(await pathExists(abs))) continue;
+        try {
+          await stat(abs);
+        } catch (statErr: unknown) {
+          const code = (statErr as { code?: string }).code;
+          if (code === "ENOENT") continue;
+        }
         const message = err instanceof Error ? err.message : String(err);
         warnings.push(`Failed to read pending volume-end audit marker: ${rel}. ${message}`);
         if (message.startsWith("Invalid JSON:")) {
