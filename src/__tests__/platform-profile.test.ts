@@ -83,6 +83,42 @@ test("parsePlatformProfile rejects naming.near_duplicate_threshold > 1", () => {
   assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /near_duplicate_threshold.*<= 1/i);
 });
 
+test("parsePlatformProfile rejects naming.near_duplicate_threshold when negative", () => {
+  const raw = {
+    ...makeBaseRaw(),
+    naming: { enabled: true, near_duplicate_threshold: -0.1, blocking_conflict_types: ["near_duplicate"] }
+  };
+
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /near_duplicate_threshold.*finite number/i);
+});
+
+test("parsePlatformProfile rejects naming.near_duplicate_threshold when non-finite", () => {
+  const raw = {
+    ...makeBaseRaw(),
+    naming: { enabled: true, near_duplicate_threshold: Number.POSITIVE_INFINITY, blocking_conflict_types: ["near_duplicate"] }
+  };
+
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /near_duplicate_threshold.*finite number/i);
+});
+
+test("parsePlatformProfile rejects naming.blocking_conflict_types when contains non-string items", () => {
+  const raw = {
+    ...makeBaseRaw(),
+    naming: { enabled: true, near_duplicate_threshold: 0.5, blocking_conflict_types: [123] }
+  };
+
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /blocking_conflict_types.*string array/i);
+});
+
+test("parsePlatformProfile rejects naming.exemptions when non-object", () => {
+  const raw = {
+    ...makeBaseRaw(),
+    naming: { enabled: true, near_duplicate_threshold: 0.5, blocking_conflict_types: ["duplicate"], exemptions: "foo" }
+  };
+
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /exemptions.*object/i);
+});
+
 test("parsePlatformProfile rejects invalid retention.title_policy regex patterns", () => {
   const raw = {
     ...makeBaseRaw(),
@@ -100,6 +136,32 @@ test("parsePlatformProfile rejects invalid retention.title_policy regex patterns
   };
 
   assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /forbidden_patterns\[0\].*regex/i);
+});
+
+test("parsePlatformProfile rejects invalid retention.title_policy required_patterns regex patterns", () => {
+  const raw = {
+    ...makeBaseRaw(),
+    retention: {
+      title_policy: {
+        enabled: true,
+        min_chars: 2,
+        max_chars: 30,
+        forbidden_patterns: [],
+        required_patterns: ["("],
+        auto_fix: false
+      },
+      hook_ledger: {
+        enabled: true,
+        fulfillment_window_chapters: 12,
+        diversity_window_chapters: 5,
+        max_same_type_streak: 2,
+        min_distinct_types_in_window: 2,
+        overdue_policy: "warn"
+      }
+    }
+  };
+
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /required_patterns\[0\].*regex/i);
 });
 
 test("parsePlatformProfile rejects retention.title_policy min_chars > max_chars", () => {
@@ -121,9 +183,47 @@ test("parsePlatformProfile rejects retention.title_policy min_chars > max_chars"
   assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /min_chars.*<=.*max_chars/i);
 });
 
+test("parsePlatformProfile rejects retention.title_policy min_chars when float", () => {
+  const raw = {
+    ...makeBaseRaw(),
+    retention: {
+      title_policy: { enabled: true, min_chars: 2.5, max_chars: 30, forbidden_patterns: [], auto_fix: false },
+      hook_ledger: {
+        enabled: true,
+        fulfillment_window_chapters: 12,
+        diversity_window_chapters: 5,
+        max_same_type_streak: 2,
+        min_distinct_types_in_window: 2,
+        overdue_policy: "warn"
+      }
+    }
+  };
+
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /min_chars.*int/i);
+});
+
 test("parsePlatformProfile rejects retention when non-object", () => {
   const raw = { ...makeBaseRaw(), retention: 42 };
   assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /'retention'.*object/i);
+});
+
+test("parsePlatformProfile rejects retention.hook_ledger overdue_policy when unknown", () => {
+  const raw = {
+    ...makeBaseRaw(),
+    retention: {
+      title_policy: { enabled: true, min_chars: 2, max_chars: 30, forbidden_patterns: [], auto_fix: false },
+      hook_ledger: {
+        enabled: true,
+        fulfillment_window_chapters: 12,
+        diversity_window_chapters: 5,
+        max_same_type_streak: 2,
+        min_distinct_types_in_window: 2,
+        overdue_policy: "block"
+      }
+    }
+  };
+
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /overdue_policy.*warn, soft, hard/i);
 });
 
 test("parsePlatformProfile rejects invalid readability.mobile blocking_severity", () => {
@@ -181,6 +281,16 @@ test("parsePlatformProfile rejects non-boolean values for enabled fields", () =>
   };
 
   assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /'naming\.enabled'.*boolean/i);
+});
+
+test("parsePlatformProfile rejects readability when non-object", () => {
+  const raw = { ...makeBaseRaw(), readability: 42 };
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /'readability'.*object/i);
+});
+
+test("parsePlatformProfile rejects naming when non-object", () => {
+  const raw = { ...makeBaseRaw(), naming: 42 };
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /'naming'.*object/i);
 });
 
 test("parsePlatformProfile rejects hook_policy when non-object", () => {
