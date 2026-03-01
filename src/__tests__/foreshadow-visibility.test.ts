@@ -39,6 +39,36 @@ test("computeForeshadowVisibilityReport includes items at the dormancy threshold
   assert.ok(!ids.includes("b"), "expected item below threshold to be excluded");
 });
 
+test("computeForeshadowVisibilityReport excludes resolved items (even if dormant)", () => {
+  const items: Array<Record<string, unknown> & { id: string }> = [
+    { id: "a", scope: "short", status: "resolved", last_updated_chapter: 0, description: "A" }
+  ];
+
+  const report = computeForeshadowVisibilityReport({
+    items,
+    asOfChapter: 100,
+    volume: 1,
+    platform: null,
+    genreDriveType: null
+  });
+
+  assert.deepEqual(report.dormant_items, []);
+  assert.equal(report.counts.dormant_total, 0);
+});
+
+test("computeForeshadowVisibilityReport returns empty dormant list for empty input", () => {
+  const report = computeForeshadowVisibilityReport({
+    items: [],
+    asOfChapter: 10,
+    volume: 1,
+    platform: null,
+    genreDriveType: null
+  });
+
+  assert.deepEqual(report.dormant_items, []);
+  assert.deepEqual(report.counts.dormant_by_scope, { short: 0, medium: 0, long: 0 });
+});
+
 test("loadForeshadowGlobalItems normalizes both list and object schemas", async () => {
   const rootDir = await mkdtemp(join(tmpdir(), "novel-foreshadow-test-"));
   await mkdir(join(rootDir, "foreshadowing"), { recursive: true });

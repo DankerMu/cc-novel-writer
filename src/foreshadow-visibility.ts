@@ -1,4 +1,3 @@
-import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 import { ensureDir, pathExists, readJsonFile, writeJsonFile } from "./fs-utils.js";
@@ -202,116 +201,26 @@ export async function writeForeshadowVisibilityLogs(args: {
     return { chapter, generated_at };
   };
 
-  const lockAbs = join(dirAbs, ".latest.lock");
-  const lockOwnerAbs = join(lockAbs, "owner.json");
-  const lockToken = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const LOCK_STALE_MS = 30_000;
-  const LOCK_TIMEOUT_MS = 2_000;
-  const sleep = async (ms: number): Promise<void> => {
-    await new Promise((r) => setTimeout(r, ms));
-  };
-  const lockMtimeMs = async (): Promise<number | null> => {
+  let shouldWriteLatest = true;
+  if (await pathExists(latestAbs)) {
     try {
-      return (await stat(lockAbs)).mtimeMs;
+      const existing = parseLatest(await readJsonFile(latestAbs));
+      const next = { chapter: args.report.as_of.chapter, generated_at: args.report.generated_at };
+      if (existing) {
+        if (existing.chapter > next.chapter) {
+          shouldWriteLatest = false;
+        } else if (existing.chapter === next.chapter) {
+          // If timestamps are comparable, keep the newer one; otherwise, overwrite.
+          if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
+        }
+      }
     } catch {
-      return null;
+      shouldWriteLatest = true;
     }
-  };
+  }
 
-  const acquireLock = async (): Promise<void> => {
-    const startMs = Date.now();
-    while (true) {
-      try {
-        await mkdir(lockAbs);
-        try {
-          await writeJsonFile(lockOwnerAbs, { token: lockToken, pid: process.pid, started_at: new Date().toISOString() });
-        } catch (err) {
-          await rm(lockAbs, { recursive: true, force: true });
-          throw err;
-        }
-        return;
-      } catch (err: unknown) {
-        const code = (err as { code?: string }).code;
-        if (code !== "EEXIST") throw err;
-
-        const mtimeMs = await lockMtimeMs();
-        if (mtimeMs !== null && Date.now() - mtimeMs > LOCK_STALE_MS) {
-          await rm(lockAbs, { recursive: true, force: true });
-          continue;
-        }
-
-        if (Date.now() - startMs > LOCK_TIMEOUT_MS) {
-          throw new Error(`Timed out acquiring foreshadow latest lock: ${lockAbs}`);
-        }
-
-        await sleep(50);
-        continue;
-      }
-    }
-  };
-
-  const stillOwnLock = async (): Promise<boolean> => {
-    try {
-      const raw = await readJsonFile(lockOwnerAbs);
-      if (!isPlainObject(raw)) return false;
-      const obj = raw as Record<string, unknown>;
-      return obj.token === lockToken;
-    } catch {
-      return false;
-    }
-  };
-
-  const releaseLock = async (): Promise<void> => {
-    try {
-      if (!(await stillOwnLock())) return;
-      await rm(lockAbs, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
-  };
-
-  await acquireLock();
-  try {
-    let existing: { chapter: number; generated_at: string | null } | null = null;
-    if (await pathExists(latestAbs)) {
-      try {
-        existing = parseLatest(await readJsonFile(latestAbs));
-      } catch {
-        existing = null;
-      }
-    }
-
-    const next = { chapter: args.report.as_of.chapter, generated_at: args.report.generated_at };
-    let shouldWriteLatest = true;
-    if (existing) {
-      if (existing.chapter > next.chapter) {
-        shouldWriteLatest = false;
-      } else if (existing.chapter === next.chapter) {
-        if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
-      }
-    }
-
-    if (shouldWriteLatest) {
-      if (!(await stillOwnLock())) return result;
-      const tmpAbs = join(dirAbs, `.tmp-foreshadowing-latest-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
-      await writeJsonFile(tmpAbs, args.report);
-      if (await stillOwnLock()) {
-        await rename(tmpAbs, latestAbs);
-      } else {
-        try {
-          await rm(tmpAbs, { force: true });
-        } catch {
-          // ignore
-        }
-      }
-      try {
-        if (await pathExists(tmpAbs)) await rm(tmpAbs, { force: true });
-      } catch {
-        // ignore
-      }
-    }
-  } finally {
-    await releaseLock();
+  if (shouldWriteLatest) {
+    await writeJsonFile(latestAbs, args.report);
   }
 
   return result;

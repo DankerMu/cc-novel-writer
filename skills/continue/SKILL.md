@@ -192,6 +192,7 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 - `entity_id_map`：从角色 JSON 构建的 slug↔display_name 映射（Step 2.3 已完成）
 - `foreshadowing_tasks`：跨文件聚合的伏笔子集（Step 2.5 已完成）
 - `foreshadow_light_touch_tasks`（可选）：基于 `foreshadowing/global.json` 的沉默度超阈值提醒（非剧透、不兑现；为空则省略）
+- `foreshadow_light_touch_degraded`（可选）：若为 true 表示“轻触提醒”注入降级（如伏笔数据不可读），不等同于“没有需要提醒的条目”
 - `storyline_context` / `concurrent_state` / `transition_hint`：从 contract/schedule 解析（Step 2.5 已完成）
 - `ai_blacklist_top10`：有效黑名单前 10 词（从 ai-blacklist.json 快速提取）
 - `style_drift_directives`：从 style-drift.json 提取的纠偏指令列表（Step 2.7；仅 active=true 时）
