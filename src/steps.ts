@@ -1,6 +1,6 @@
 import { NovelCliError } from "./errors.js";
 
-export const CHAPTER_STAGES = ["draft", "summarize", "refine", "judge", "hook-fix", "review", "commit"] as const;
+export const CHAPTER_STAGES = ["draft", "summarize", "refine", "judge", "title-fix", "hook-fix", "review", "commit"] as const;
 export type ChapterStage = (typeof CHAPTER_STAGES)[number];
 
 export type ChapterStep = {
@@ -17,6 +17,10 @@ export function pad3(n: number): string {
 
 export function pad2(n: number): string {
   return String(n).padStart(2, "0");
+}
+
+export function titleFixSnapshotRel(chapter: number): string {
+  return `staging/logs/title-fix-chapter-${pad3(chapter)}-before.md`;
 }
 
 export function formatStepId(step: Step): string {

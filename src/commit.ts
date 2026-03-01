@@ -21,6 +21,7 @@ import { loadPlatformProfile } from "./platform-profile.js";
 import { attachScoringWeightsToEval, loadGenreWeightProfiles } from "./scoring-weights.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, pad2, pad3 } from "./steps.js";
+import { computeTitlePolicyReport, writeTitlePolicyLogs } from "./title-policy.js";
 import { isPlainObject } from "./type-guards.js";
 
 type CommitArgs = {
@@ -557,6 +558,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
 
   if (loadedProfile) {
     plan.push(`WRITE logs/platform-constraints/platform-constraints-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
+    plan.push(`WRITE logs/retention/title-policy/title-policy-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
     plan.push(`PATCH ${rel.final.evalJson} (attach platform_constraints metadata)`);
   }
 
@@ -649,6 +651,13 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     const originalPlatformConstraintsHistoryExists = loadedProfile ? await pathExists(platformConstraintsHistoryAbs) : false;
     const originalPlatformConstraintsHistory = originalPlatformConstraintsHistoryExists ? await readTextFile(platformConstraintsHistoryAbs) : null;
 
+    const titlePolicyLatestAbs = join(args.rootDir, "logs/retention/title-policy/latest.json");
+    const titlePolicyHistoryAbs = join(args.rootDir, `logs/retention/title-policy/title-policy-chapter-${pad3(args.chapter)}.json`);
+    const originalTitlePolicyLatestExists = loadedProfile ? await pathExists(titlePolicyLatestAbs) : false;
+    const originalTitlePolicyLatest = originalTitlePolicyLatestExists ? await readTextFile(titlePolicyLatestAbs) : null;
+    const originalTitlePolicyHistoryExists = loadedProfile ? await pathExists(titlePolicyHistoryAbs) : false;
+    const originalTitlePolicyHistory = originalTitlePolicyHistoryExists ? await readTextFile(titlePolicyHistoryAbs) : null;
+
     const clicheLintLatestAbs = join(args.rootDir, "logs/cliche-lint/latest.json");
     const clicheLintHistoryAbs = join(args.rootDir, `logs/cliche-lint/cliche-lint-chapter-${pad3(args.chapter)}.json`);
     const originalClicheLintLatestExists = loadedCliche ? await pathExists(clicheLintLatestAbs) : false;
@@ -658,6 +667,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
 
     const moved: Array<{ from: string; to: string }> = [];
     let platformConstraintsWritten = false;
+    let titlePolicyWritten = false;
     let clicheLintWritten = false;
 
     const rollback = async (): Promise<void> => {
@@ -745,6 +755,30 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
             await writeFile(platformConstraintsHistoryAbs, originalPlatformConstraintsHistory, "utf8");
           } else {
             await removePath(platformConstraintsHistoryAbs);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (titlePolicyWritten) {
+        try {
+          if (originalTitlePolicyLatestExists && originalTitlePolicyLatest !== null) {
+            await ensureDir(dirname(titlePolicyLatestAbs));
+            await writeFile(titlePolicyLatestAbs, originalTitlePolicyLatest, "utf8");
+          } else {
+            await removePath(titlePolicyLatestAbs);
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          if (originalTitlePolicyHistoryExists && originalTitlePolicyHistory !== null) {
+            await ensureDir(dirname(titlePolicyHistoryAbs));
+            await writeFile(titlePolicyHistoryAbs, originalTitlePolicyHistory, "utf8");
+          } else {
+            await removePath(titlePolicyHistoryAbs);
           }
         } catch {
           // ignore
@@ -921,6 +955,12 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           reportRelPath: historyRel,
           report: platformConstraintsReport
         });
+
+        if (chapterText !== null) {
+          const titleReport = computeTitlePolicyReport({ chapter: args.chapter, chapterText, platformProfile: loadedProfile.profile });
+          titlePolicyWritten = true;
+          await writeTitlePolicyLogs({ rootDir: args.rootDir, chapter: args.chapter, report: titleReport });
+        }
       }
 
       if (loadedCliche && clicheLintReport) {
@@ -953,6 +993,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       updatedCheckpoint.inflight_chapter = null;
       updatedCheckpoint.revision_count = 0;
       updatedCheckpoint.hook_fix_count = 0;
+      updatedCheckpoint.title_fix_count = 0;
       updatedCheckpoint.last_checkpoint_time = new Date().toISOString();
       await writeCheckpoint(args.rootDir, updatedCheckpoint);
     } catch (err) {

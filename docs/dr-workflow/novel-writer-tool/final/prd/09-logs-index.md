@@ -135,6 +135,15 @@
 - Owning specs：
   - `openspec/changes/m7-retention-and-readability-guards/specs/hook-ledger/spec.md`
 
+#### 9.1) Title policy（章节标题策略：每章报告）
+
+- 目录：`logs/retention/title-policy/`
+- Latest：`logs/retention/title-policy/latest.json`
+- History：`logs/retention/title-policy/title-policy-chapter-{C:03d}.json`
+- Owning specs：
+  - `openspec/changes/m7-retention-and-readability-guards/specs/chapter-title-system/spec.md`
+  - `openspec/changes/m7-retention-and-readability-guards/tasks.md`（落盘约定）
+
 #### 10) Readability（移动端可读性 lint：每章报告）
 
 - 目录：`logs/readability/`
