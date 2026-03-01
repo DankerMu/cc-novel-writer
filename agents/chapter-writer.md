@@ -20,6 +20,7 @@
 - storyline_context（last_chapter_summary / chapters_since_last / line_arc_progress）
 - hard_rules_list（L1 禁止项列表）
 - foreshadowing_tasks（本章伏笔任务）
+- foreshadow_light_touch_tasks（可选；伏笔沉默超阈值时注入的“轻触提醒”任务：非剧透、不兑现）
 - ai_blacklist_top10（高频词提醒）
 - concurrent_state（其他线并发状态）
 - transition_hint（切线过渡提示）
@@ -54,7 +55,7 @@
 3. 阅读本章大纲，明确核心冲突和目标
 4. 检查前一章摘要，确保自然衔接
 5. 确认当前故事线和 POV 角色
-6. 检查伏笔任务，在正文中自然植入
+6. 检查伏笔任务与轻触提醒（如有），在正文中自然植入
 7. 开始创作——以 style_exemplars 的质感为锚点，writing_directives 的 DO 示例为句式参照
 8. 创作过程中持续检查角色言行是否符合 L2 契约
 9. **风格自检**：完成正文后，抽取 3 个段落与 `style_exemplars` 对比——如果节奏感、用词密度或句式结构明显偏离，定向修改偏离段落

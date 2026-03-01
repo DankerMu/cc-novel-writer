@@ -17,6 +17,8 @@
    - `volume_plan`: `{ "volume": V, "chapter_range": [plan_start, plan_end] }`
    - `prev_volume_review`：读取 `volumes/vol-{V-1:02d}/review.md`（如存在，以 `<DATA type="summary" ...>` 注入）
    - `global_foreshadowing`：读取 `foreshadowing/global.json`
+   - 可选：`foreshadow_light_touch_tasks`：读取 `logs/foreshadowing/latest.json`（如存在）并从其中 `dormant_items[]` 提取（按沉默章数降序，建议取前 10）。字段建议：
+     - `{id, scope, status, chapters_since_last_update, instruction}`，其中 `instruction` 使用报告中的 `planning_task`（非剧透，不兑现）
    - `storylines`：读取 `storylines/storylines.json`
    - `world_docs`：读取 `world/*.md`（以 `<DATA type="world_doc" ...>` 注入）+ `world/rules.json`（结构化 JSON）
    - `characters`：读取 `characters/active/*.md`（以 `<DATA type="character_profile" ...>` 注入）+ `characters/active/*.json`（L2 contracts 结构化 JSON）

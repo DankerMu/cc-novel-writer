@@ -12,6 +12,7 @@ import {
 import { NovelCliError } from "./errors.js";
 import { fingerprintsMatch, hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
+import { computeForeshadowVisibilityReport, loadForeshadowGlobalItems, writeForeshadowVisibilityLogs } from "./foreshadow-visibility.js";
 import { checkHookPolicy } from "./hook-policy.js";
 import { withWriteLock } from "./lock.js";
 import { computeContinuityReport, tryResolveVolumeChapterRange, writeContinuityLogs, writeVolumeContinuityReport, type ContinuityReport } from "./consistency-auditor.js";
@@ -260,14 +261,48 @@ async function updateForeshadowing(args: {
   warnings: string[];
   dryRun: boolean;
 }): Promise<void> {
+  if (args.foreshadowOps.length === 0) return;
+
   const globalRel = "foreshadowing/global.json";
   const globalAbs = join(args.rootDir, globalRel);
-  const globalRaw = (await pathExists(globalAbs)) ? await readJsonFile(globalAbs) : { foreshadowing: [] };
+  let globalRaw: unknown = { foreshadowing: [] };
+  if (await pathExists(globalAbs)) {
+    try {
+      globalRaw = await readJsonFile(globalAbs);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      args.warnings.push(`Failed to read ${globalRel}: ${message}. Skipping foreshadow merge for this commit.`);
+      return;
+    }
+  }
+
+  if (Array.isArray(globalRaw)) globalRaw = { foreshadowing: globalRaw };
+  if (!(isPlainObject(globalRaw) && Array.isArray((globalRaw as Record<string, unknown>).foreshadowing))) {
+    args.warnings.push(`Invalid ${globalRel}: expected a list or {foreshadowing:[...]}. Skipping foreshadow merge for this commit.`);
+    return;
+  }
+
   const global = normalizeForeshadowFile(globalRaw);
 
   const volumeRel = `volumes/vol-${pad2(args.checkpoint.current_volume)}/foreshadowing.json`;
   const volumeAbs = join(args.rootDir, volumeRel);
-  const volumeRaw = (await pathExists(volumeAbs)) ? await readJsonFile(volumeAbs) : null;
+  let volumeRaw: unknown = null;
+  if (await pathExists(volumeAbs)) {
+    try {
+      volumeRaw = await readJsonFile(volumeAbs);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      args.warnings.push(`Failed to read ${volumeRel}: ${message}. Proceeding without volume foreshadow metadata.`);
+      volumeRaw = null;
+    }
+  }
+
+  if (Array.isArray(volumeRaw)) volumeRaw = { foreshadowing: volumeRaw };
+  if (volumeRaw !== null && !(isPlainObject(volumeRaw) && Array.isArray((volumeRaw as Record<string, unknown>).foreshadowing))) {
+    args.warnings.push(`Ignoring invalid ${volumeRel}: expected a list or {foreshadowing:[...]}.`);
+    volumeRaw = null;
+  }
+
   const volume = normalizeForeshadowFile(volumeRaw);
   const volumeIndex = new Map(volume.foreshadowing.map((it) => [it.id, it]));
 
@@ -376,6 +411,16 @@ type PendingVolumeEndAuditMarker = {
 
 function pendingVolumeEndMarkerRel(volume: number): string {
   return `logs/continuity/pending-volume-end-vol-${pad2(volume)}.json`;
+}
+
+function resolveForeshadowVisibilityHistoryRange(args: {
+  chapter: number;
+  isVolumeEnd: boolean;
+  volumeRange: { start: number; end: number } | null;
+}): { start: number; end: number } | null {
+  if (args.isVolumeEnd && args.volumeRange) return { start: args.volumeRange.start, end: args.volumeRange.end };
+  if (args.chapter % 10 === 0) return { start: Math.max(1, args.chapter - 9), end: args.chapter };
+  return null;
 }
 
 function parsePendingVolumeEndAuditMarker(raw: unknown): PendingVolumeEndAuditMarker | null {
@@ -536,6 +581,18 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     plan.push(`WRITE volumes/vol-${pad2(volume)}/continuity-report.json`);
     plan.push(
       `WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(volumeRange.start)}-ch${pad3(volumeRange.end)}.json (+ latest.json)`
+    );
+  }
+
+  // Optional: foreshadow visibility maintenance (non-blocking).
+  // This generates a dormancy view + non-spoiler light-touch reminder tasks.
+  plan.push(`WRITE logs/foreshadowing/latest.json (monotonic)`);
+  const foreshadowHistoryRange = resolveForeshadowVisibilityHistoryRange({ chapter: args.chapter, isVolumeEnd, volumeRange });
+  if (foreshadowHistoryRange) {
+    plan.push(
+      `WRITE logs/foreshadowing/foreshadow-visibility-vol-${pad2(volume)}-ch${pad3(foreshadowHistoryRange.start)}-ch${pad3(
+        foreshadowHistoryRange.end
+      )}.json`
     );
   }
 
@@ -1001,6 +1058,27 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       const message = err instanceof Error ? err.message : String(err);
       warnings.push(`Continuity audit skipped (periodic): ${message}`);
     }
+  }
+
+  // Post-commit (outside write-lock): foreshadow visibility maintenance (non-blocking).
+  try {
+    const platform = loadedProfile?.profile.platform ?? null;
+    const genreDriveType = typeof loadedProfile?.profile.scoring?.genre_drive_type === "string" ? loadedProfile.profile.scoring.genre_drive_type : null;
+    const items = await loadForeshadowGlobalItems(args.rootDir);
+    const report = computeForeshadowVisibilityReport({
+      items,
+      asOfChapter: args.chapter,
+      volume,
+      platform,
+      genreDriveType
+    });
+
+    const historyRange = resolveForeshadowVisibilityHistoryRange({ chapter: args.chapter, isVolumeEnd, volumeRange });
+
+    await writeForeshadowVisibilityLogs({ rootDir: args.rootDir, report, historyRange });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    warnings.push(`Foreshadow visibility maintenance skipped: ${message}`);
   }
 
   return { plan, warnings };

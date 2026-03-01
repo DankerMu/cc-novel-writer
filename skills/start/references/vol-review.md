@@ -34,7 +34,7 @@
      - 落盘：写入 `volumes/vol-{V:02d}/storyline-rhythm.json`
    - 同步 latest（便于 `/novel:continue` 与 `/novel:status` 快速展示）：
      - 创建目录（幂等）：`mkdir -p logs/foreshadowing logs/storylines`
-     - 覆盖写入：`logs/foreshadowing/latest.json`、`logs/storylines/broken-bridges-latest.json`、`logs/storylines/rhythm-latest.json`
+     - 覆盖写入：`logs/foreshadowing/foreshadowing-check-latest.json`（避免覆盖 `logs/foreshadowing/latest.json`；后者用于 commit 阶段的“伏笔可见度报告”）、`logs/storylines/broken-bridges-latest.json`、`logs/storylines/rhythm-latest.json`
 4. 写入 `volumes/vol-{V:02d}/review.md`（在回顾中增加以下小节）：
    - 质量趋势与低分章节
    - 伏笔完成度与风险项（引用 `foreshadowing-report.json` 的关键统计 + overdue 列表）

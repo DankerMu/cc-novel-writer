@@ -14,6 +14,7 @@
 - 项目简介（brief.md，首卷必需；后续卷可选，已被 world docs 消化）
 - 上卷回顾（上卷大纲 + 一致性报告）
 - 全局伏笔状态（foreshadowing/global.json 内容）
+- 可选：伏笔“沉默度”轻触提醒（`foreshadow_light_touch_tasks`，来自 `logs/foreshadowing/latest.json` 的 dormant_items，非剧透，不兑现）
 - 故事线定义（storylines/storylines.json 内容）
 - 世界观文档和规则（以 `<DATA>` 标签包裹）
 - 角色档案和契约（characters/active/ 内容，以 `<DATA>` 标签包裹）
@@ -29,6 +30,7 @@
 2. 从 storylines.json 选取本卷活跃线（≤4 条），确定 primary/secondary/seasoning 角色
 3. 设计本卷核心弧线和章节结构
 4. 规划伏笔节奏（新增 + 推进 + 回收）
+   - 若提供了 `foreshadow_light_touch_tasks`：将其视为“轻触提醒”，在若干章中安排象征/道具/一句话的回响以保持读者记忆（不解释、不揭底、不兑现）
 5. 生成结构化大纲（每章 `###` 区块）
 6. 从大纲派生每章 L3 章节契约
 7. 生成故事线调度和伏笔计划

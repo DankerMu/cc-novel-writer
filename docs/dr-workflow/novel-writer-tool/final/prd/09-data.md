@@ -72,36 +72,38 @@ novel-project/
     ├── audit.jsonl                # 安全拦截审计（append-only）
     ├── chapter-001-log.json
     ├── unknown-entities.jsonl
-    ├── platform-constraints/       # 平台约束报告（M6）
+    ├── platform-constraints/      # 平台约束报告（M6）
     │   ├── latest.json
     │   └── platform-constraints-chapter-001.json
-    ├── cliche-lint/                # 网文套路词 / 模板腔 lint（M6）
+    ├── cliche-lint/               # 网文套路词 / 模板腔 lint（M6）
     │   ├── latest.json
     │   └── cliche-lint-chapter-001.json
-    ├── continuity/                 # 一致性检查报告（NER）
+    ├── continuity/                # 一致性检查报告（NER）
     │   ├── latest.json
     │   └── continuity-report-vol-01-ch001-ch010.json
-    ├── foreshadowing/              # 伏笔盘点报告
-    │   ├── latest.json
-    │   └── foreshadowing-check-vol-01-ch001-ch010.json
-    ├── storylines/                 # 故事线分析报告
+    ├── foreshadowing/             # 伏笔（可见度 + 盘点）
+    │   ├── latest.json                                   # 可见度 latest（commit 后自动生成）
+    │   ├── foreshadow-visibility-vol-01-ch001-ch010.json  # 可见度 history（可选）
+    │   ├── foreshadowing-check-latest.json               # 盘点 latest（/novel:start 回顾落盘）
+    │   └── foreshadowing-check-vol-01-ch001-ch010.json    # 盘点 history
+    ├── storylines/                # 故事线分析报告
     │   ├── rhythm-latest.json
     │   ├── rhythm-vol-01-ch001-ch010.json
     │   ├── broken-bridges-latest.json
     │   └── broken-bridges-vol-01-ch001-ch010.json
-    ├── engagement/                 # 参与度密度窗口报告（M7）
+    ├── engagement/                # 参与度密度窗口报告（M7）
     │   ├── latest.json
     │   └── engagement-report-vol-01-ch001-ch010.json
-    ├── promises/                   # 长周期承诺台账窗口报告（M7）
+    ├── promises/                  # 长周期承诺台账窗口报告（M7）
     │   ├── latest.json
     │   └── promise-ledger-report-vol-01-ch001-ch010.json
-    ├── retention/                  # 短周期留存钩子窗口报告（M7）
+    ├── retention/                 # 短周期留存钩子窗口报告（M7）
     │   ├── latest.json
     │   └── retention-report-vol-01-ch001-ch010.json
-    ├── readability/                # 移动端可读性 lint（M7）
+    ├── readability/               # 移动端可读性 lint（M7）
     │   ├── latest.json
     │   └── readability-report-chapter-001.json
-    └── naming/                     # 命名冲突 lint（M7）
+    └── naming/                    # 命名冲突 lint（M7）
         ├── latest.json
         └── naming-report-chapter-001.json
 ```

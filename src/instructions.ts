@@ -4,6 +4,7 @@ import type { Checkpoint } from "./checkpoint.js";
 import { NovelCliError } from "./errors.js";
 import { ensureDir, pathExists, readTextFile, writeJsonFile } from "./fs-utils.js";
 import { loadContinuityLatestSummary } from "./consistency-auditor.js";
+import { computeForeshadowVisibilityReport, loadForeshadowGlobalItems } from "./foreshadow-visibility.js";
 import { computeEffectiveScoringWeights, loadGenreWeightProfiles } from "./scoring-weights.js";
 import { parseNovelAskQuestionSpec, type NovelAskQuestionSpec } from "./novel-ask.js";
 import { loadPlatformProfile } from "./platform-profile.js";
@@ -97,6 +98,31 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
 
   if (args.step.stage === "draft") {
     agent = { kind: "subagent", name: "chapter-writer" };
+    // Optional: inject non-spoiler light-touch reminders for dormant foreshadowing items (best-effort).
+    try {
+      const loadedPlatform = await loadPlatformProfile(args.rootDir).catch(() => null);
+      const platform = loadedPlatform?.profile.platform ?? null;
+      const genreDriveType = typeof loadedPlatform?.profile.scoring?.genre_drive_type === "string" ? loadedPlatform.profile.scoring.genre_drive_type : null;
+
+      const items = await loadForeshadowGlobalItems(args.rootDir);
+      const report = computeForeshadowVisibilityReport({
+        items,
+        asOfChapter: args.step.chapter,
+        volume,
+        platform,
+        genreDriveType
+      });
+      const tasks = report.dormant_items.slice(0, 5).map((it) => ({
+        id: it.id,
+        scope: it.scope,
+        status: it.status,
+        chapters_since_last_update: it.chapters_since_last_update,
+        instruction: it.writing_task
+      }));
+      if (tasks.length > 0) inline.foreshadow_light_touch_tasks = tasks;
+    } catch {
+      inline.foreshadow_light_touch_degraded = true;
+    }
     expected_outputs.push({ path: rel.staging.chapterMd, required: true });
     next_actions.push({ kind: "command", command: `novel validate ${stepId}` });
     next_actions.push({ kind: "command", command: `novel advance ${stepId}` });

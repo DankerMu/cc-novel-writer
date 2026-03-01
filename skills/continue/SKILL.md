@@ -191,6 +191,8 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
 - `hard_rules_list`：从 rules.json 筛选的禁止项列表（Step 2.2 已完成）
 - `entity_id_map`：从角色 JSON 构建的 slug↔display_name 映射（Step 2.3 已完成）
 - `foreshadowing_tasks`：跨文件聚合的伏笔子集（Step 2.5 已完成）
+- `foreshadow_light_touch_tasks`（可选）：基于 `foreshadowing/global.json` 的沉默度超阈值提醒（非剧透、不兑现；为空则省略）
+- `foreshadow_light_touch_degraded`（可选）：若为 true 表示“轻触提醒”注入降级（如伏笔数据不可读），不等同于“没有需要提醒的条目”
 - `storyline_context` / `concurrent_state` / `transition_hint`：从 contract/schedule 解析（Step 2.5 已完成）
 - `ai_blacklist_top10`：有效黑名单前 10 词（从 ai-blacklist.json 快速提取）
 - `style_drift_directives`：从 style-drift.json 提取的纠偏指令列表（Step 2.7；仅 active=true 时）
@@ -325,7 +327,7 @@ for chapter_num in range(start, start + remaining_N):
 - 每完成 5 章（last_completed_chapter % 5 == 0）：输出质量简报（均分 + 低分章节 + 主要风险）+ 风格漂移检测结果（是否生成/清除 style-drift.json）+ 一致性滑窗审计（stride=5, window=10，更新 `logs/continuity/latest.json`），并提示用户可运行 `/novel:start` 进入“质量回顾/调整方向”
 - 每完成 10 章（last_completed_chapter % 10 == 0）：触发周期性盘点提醒（建议运行 `/novel:start` → “质量回顾”，将汇总展示：
   - 一致性报告：`logs/continuity/latest.json` 与 `logs/continuity/continuity-report-*.json`（每 5 章自动更新）
-  - 伏笔盘点与桥梁检查：`logs/foreshadowing/latest.json`、`logs/storylines/broken-bridges-latest.json`
+  - 伏笔可见度/盘点与桥梁检查：`logs/foreshadowing/latest.json`（可见度）/`logs/foreshadowing/foreshadowing-check-latest.json`（盘点）、`logs/storylines/broken-bridges-latest.json`
   - 故事线节奏分析：`logs/storylines/rhythm-latest.json`）
 - 到达本卷末尾章节：提示用户执行 `/novel:start` 进行卷末回顾
 

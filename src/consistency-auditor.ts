@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { ensureDir, pathExists, readJsonFile, readTextFile, writeJsonFile } from "./fs-utils.js";
@@ -503,15 +503,16 @@ export async function writeContinuityLogs(args: {
     const b = range[1];
     if (typeof a !== "number" || typeof b !== "number") return null;
     if (!Number.isInteger(a) || !Number.isInteger(b) || a < 1 || b < a) return null;
-    const generated_at = typeof obj.generated_at === "string" ? obj.generated_at : null;
+    const rawTs = typeof obj.generated_at === "string" ? obj.generated_at : null;
+    const generated_at = rawTs && Number.isFinite(Date.parse(rawTs)) ? rawTs : null;
     return { end: b, scope_rank: scopeRank(obj.scope), generated_at };
   };
 
+  const next = { end, scope_rank: scopeRank(args.report.scope), generated_at: args.report.generated_at };
   let shouldWriteLatest = true;
   if (await pathExists(latestAbs)) {
     try {
       const existing = parseLatest(await readJsonFile(latestAbs));
-      const next = { end, scope_rank: scopeRank(args.report.scope), generated_at: args.report.generated_at };
       if (existing) {
         if (existing.end > next.end) {
           shouldWriteLatest = false;
@@ -519,7 +520,11 @@ export async function writeContinuityLogs(args: {
           shouldWriteLatest = false;
         } else if (existing.end === next.end && existing.scope_rank === next.scope_rank) {
           // If timestamps are comparable, keep the newer one; otherwise, overwrite.
-          if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
+          if (existing.generated_at) {
+            const a = Date.parse(existing.generated_at);
+            const b = Date.parse(next.generated_at);
+            if (Number.isFinite(a) && Number.isFinite(b) && a >= b) shouldWriteLatest = false;
+          }
         }
       }
     } catch {
@@ -528,7 +533,34 @@ export async function writeContinuityLogs(args: {
   }
 
   if (shouldWriteLatest) {
-    await writeJsonFile(latestAbs, args.report);
+    // Atomic replace to avoid partial/corrupted JSON on interruption.
+    const tmpAbs = join(dirAbs, `.tmp-continuity-latest-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+    await writeJsonFile(tmpAbs, args.report);
+    try {
+      // Re-check right before publish to reduce (not eliminate) races without introducing a lock.
+      let stillWrite = true;
+      if (await pathExists(latestAbs)) {
+        try {
+          const existing2 = parseLatest(await readJsonFile(latestAbs));
+          if (existing2) {
+            if (existing2.end > next.end) {
+              stillWrite = false;
+            } else if (existing2.end === next.end && existing2.scope_rank > next.scope_rank) {
+              stillWrite = false;
+            } else if (existing2.end === next.end && existing2.scope_rank === next.scope_rank && existing2.generated_at) {
+              const a = Date.parse(existing2.generated_at);
+              const b = Date.parse(next.generated_at);
+              if (Number.isFinite(a) && Number.isFinite(b) && a >= b) stillWrite = false;
+            }
+          }
+        } catch {
+          stillWrite = true;
+        }
+      }
+      if (stillWrite) await rename(tmpAbs, latestAbs);
+    } finally {
+      await rm(tmpAbs, { force: true }).catch(() => {});
+    }
   }
 
   return { latestRel, historyRel };

@@ -77,14 +77,21 @@
   - `skills/continue/references/continuity-checks.md`（schema SSOT）
   - `openspec/changes/m6-platform-optimization/specs/consistency-auditor/spec.md`（滑动窗口审计）
 
-#### 5) Foreshadowing（伏笔可见性/盘点报告）
+#### 5) Foreshadowing（伏笔）
 
 - 目录：`logs/foreshadowing/`
-- Latest：`logs/foreshadowing/latest.json`
-- History：`logs/foreshadowing/foreshadowing-check-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
-- Owning specs：
-  - `openspec/changes/m6-platform-optimization/specs/foreshadow-visibility/spec.md`
-  - `skills/continue/references/foreshadowing.md`
+- 可见度（commit 后自动生成，非阻断）：
+  - Latest：`logs/foreshadowing/latest.json`
+  - History：`logs/foreshadowing/foreshadow-visibility-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
+  - Owning specs：
+    - `openspec/changes/m6-platform-optimization/specs/foreshadow-visibility/spec.md`
+- 盘点（/novel:start 质量回顾/卷末回顾落盘）：
+  - Latest：`logs/foreshadowing/foreshadowing-check-latest.json`
+  - History：`logs/foreshadowing/foreshadowing-check-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
+  - Owning specs：
+    - `skills/start/references/quality-review.md`
+    - `skills/start/references/vol-review.md`
+    - `skills/continue/references/foreshadowing.md`
 
 #### 6) Storylines（故事线分析：节奏/桥梁）
 
