@@ -129,6 +129,8 @@
 - `location_contradiction`：同一 time_marker 下角色在多个地点（高置信要求提供明确 time_marker + 角色 + 地点证据）。
 - `timeline_contradiction`：跨故事线并发状态（concurrent_state）与本章 time_marker/事件顺序矛盾（用于 LS-001 输入）。
 
+> 注：当前 TypeScript 确定性实现（`src/consistency-auditor.ts`）为最小可用版本，稳定产出 `location_contradiction` / `timeline_contradiction`；`character_mapping` / `relationship_jump` 为预留类型，后续再补全。
+
 ## 3) 检测规则建议（实现导向）
 
 本节提供"最小但不乱报"的实现建议，避免检查逻辑断链。你可以更严格，但不得牺牲可用性（误报过多会导致用户疲劳）。

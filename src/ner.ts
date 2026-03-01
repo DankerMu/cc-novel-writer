@@ -81,9 +81,12 @@ function runNerScriptPath(): string {
 
 export async function runNer(chapterAbs: string): Promise<NerOutput> {
   const script = runNerScriptPath();
-  const { stdout } = await execFileAsync("bash", [script, chapterAbs], { maxBuffer: 10 * 1024 * 1024 });
+  const { stdout } = await execFileAsync("bash", [script, chapterAbs], {
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: 60_000,
+    killSignal: "SIGKILL"
+  });
   const trimmed = stdout.trim();
   const raw = JSON.parse(trimmed) as unknown;
   return parseNerOutput(raw);
 }
-

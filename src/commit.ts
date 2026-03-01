@@ -1,4 +1,4 @@
-import { appendFile, rename, stat, truncate, writeFile } from "node:fs/promises";
+import { appendFile, readdir, rename, stat, truncate, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { readCheckpoint, type Checkpoint, writeCheckpoint } from "./checkpoint.js";
@@ -367,6 +367,65 @@ async function ensureFilePresent(rootDir: string, relPath: string): Promise<void
   if (!(await pathExists(abs))) throw new NovelCliError(`Missing required file: ${relPath}`, 2);
 }
 
+type PendingVolumeEndAuditMarker = {
+  schema_version: 1;
+  created_at: string;
+  volume: number;
+  chapter_range: [number, number];
+};
+
+function pendingVolumeEndMarkerRel(volume: number): string {
+  return `logs/continuity/pending-volume-end-vol-${pad2(volume)}.json`;
+}
+
+function parsePendingVolumeEndAuditMarker(raw: unknown): PendingVolumeEndAuditMarker | null {
+  if (!isPlainObject(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  if (obj.schema_version !== 1) return null;
+  const created_at = typeof obj.created_at === "string" ? obj.created_at : null;
+  const volume = typeof obj.volume === "number" && Number.isInteger(obj.volume) && obj.volume >= 0 ? obj.volume : null;
+  const range = obj.chapter_range;
+  if (!created_at || volume === null) return null;
+  if (!Array.isArray(range) || range.length !== 2) return null;
+  const start = range[0];
+  const end = range[1];
+  if (typeof start !== "number" || typeof end !== "number") return null;
+  if (!Number.isInteger(start) || !Number.isInteger(end)) return null;
+  if (start < 1 || end < start) return null;
+  return { schema_version: 1, created_at, volume, chapter_range: [start, end] };
+}
+
+async function listPendingVolumeEndAuditMarkers(rootDir: string, warnings: string[]): Promise<Array<{ rel: string; marker: PendingVolumeEndAuditMarker }>> {
+  const dirRel = "logs/continuity";
+  const dirAbs = join(rootDir, dirRel);
+  if (!(await pathExists(dirAbs))) return [];
+
+  const entries = await readdir(dirAbs, { withFileTypes: true });
+  const out: Array<{ rel: string; marker: PendingVolumeEndAuditMarker }> = [];
+  for (const e of entries) {
+    if (!e.isFile()) continue;
+    const m = /^pending-volume-end-vol-(\d{2})\.json$/u.exec(e.name);
+    if (!m) continue;
+    const rel = `${dirRel}/${e.name}`;
+    let raw: unknown;
+    try {
+      raw = await readJsonFile(join(rootDir, rel));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      warnings.push(`Failed to read pending volume-end audit marker: ${rel}. ${message}`);
+      continue;
+    }
+    const parsed = parsePendingVolumeEndAuditMarker(raw);
+    if (!parsed) {
+      warnings.push(`Ignoring invalid pending volume-end audit marker: ${rel}`);
+      continue;
+    }
+    out.push({ rel, marker: parsed });
+  }
+  out.sort((a, b) => a.marker.volume - b.marker.volume || a.marker.chapter_range[0] - b.marker.chapter_range[0]);
+  return out;
+}
+
 export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   if (!Number.isInteger(args.chapter) || args.chapter <= 0) {
     throw new NovelCliError(`--chapter must be an int >= 1`, 2);
@@ -376,6 +435,17 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   const volume = checkpoint.current_volume;
   const warnings: string[] = [];
   const plan: string[] = [];
+
+  // Best-effort volume range resolution (for plan + optional volume-end continuity audits).
+  // Never block commit on missing outline/contracts.
+  let volumeRange: { start: number; end: number } | null = null;
+  try {
+    volumeRange = await tryResolveVolumeChapterRange({ rootDir: args.rootDir, volume });
+  } catch {
+    volumeRange = null;
+  }
+  let isVolumeEnd = volumeRange !== null && args.chapter === volumeRange.end;
+  let shouldPeriodicContinuityAudit = args.chapter % 5 === 0 && !isVolumeEnd;
 
   const loadedProfile = await loadPlatformProfile(args.rootDir);
   if (!loadedProfile) warnings.push("Missing platform-profile.json; platform constraints will be skipped.");
@@ -455,23 +525,18 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   }
 
   // Optional: periodic continuity audits (non-blocking) on a fixed cadence.
-  if (args.chapter % 5 === 0) {
+  if (shouldPeriodicContinuityAudit) {
     const start = Math.max(1, args.chapter - 9);
     const end = args.chapter;
     plan.push(`WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(start)}-ch${pad3(end)}.json (+ latest.json)`);
   }
 
   // Optional: volume-end full continuity audit (non-blocking) when this is the last planned chapter of the volume.
-  try {
-    const volumeRange = await tryResolveVolumeChapterRange({ rootDir: args.rootDir, volume });
-    if (volumeRange && args.chapter === volumeRange.end) {
-      plan.push(`WRITE volumes/vol-${pad2(volume)}/continuity-report.json`);
-      plan.push(
-        `WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(volumeRange.start)}-ch${pad3(volumeRange.end)}.json (+ latest.json)`
-      );
-    }
-  } catch {
-    // ignore (plan is best-effort)
+  if (isVolumeEnd && volumeRange) {
+    plan.push(`WRITE volumes/vol-${pad2(volume)}/continuity-report.json`);
+    plan.push(
+      `WRITE logs/continuity/continuity-report-vol-${pad2(volume)}-ch${pad3(volumeRange.start)}-ch${pad3(volumeRange.end)}.json (+ latest.json)`
+    );
   }
 
   // Update checkpoint.
@@ -833,62 +898,110 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       updatedCheckpoint.hook_fix_count = 0;
       updatedCheckpoint.last_checkpoint_time = new Date().toISOString();
       await writeCheckpoint(args.rootDir, updatedCheckpoint);
-
-      // M6.7: sliding-window consistency audits (non-blocking).
-      // Every 5 committed chapters, audit the last 10 chapters; at volume end, run a full-volume audit.
-      const runAudit = async (scope: "periodic" | "volume_end", start: number, end: number): Promise<ContinuityReport> => {
-        const report = await computeContinuityReport({
-          rootDir: args.rootDir,
-          volume,
-          scope,
-          chapterRange: { start, end }
-        });
-        await writeContinuityLogs({ rootDir: args.rootDir, report });
-        if (scope === "volume_end") {
-          await writeVolumeContinuityReport({ rootDir: args.rootDir, report });
-        }
-        return report;
-      };
-
-      if (args.chapter % 5 === 0) {
-        try {
-          const start = Math.max(1, args.chapter - 9);
-          const end = args.chapter;
-          const report = await runAudit("periodic", start, end);
-          const nerOk = typeof report.stats.ner_ok === "number" ? report.stats.ner_ok : null;
-          const nerFailed = typeof report.stats.ner_failed === "number" ? report.stats.ner_failed : null;
-          if (nerOk === 0 && typeof nerFailed === "number" && nerFailed > 0) {
-            const sample = typeof report.stats.ner_failed_sample === "string" ? report.stats.ner_failed_sample : null;
-            const suffix = sample ? ` (sample: ${sample})` : "";
-            warnings.push(`Continuity audit degraded (periodic): NER failed for ${nerFailed} chapters; report may be empty.${suffix}`);
-          }
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          warnings.push(`Continuity audit skipped (periodic): ${message}`);
-        }
-      }
-
-      try {
-        const volumeRange = await tryResolveVolumeChapterRange({ rootDir: args.rootDir, volume });
-        if (volumeRange && args.chapter === volumeRange.end) {
-          const report = await runAudit("volume_end", volumeRange.start, volumeRange.end);
-          const nerOk = typeof report.stats.ner_ok === "number" ? report.stats.ner_ok : null;
-          const nerFailed = typeof report.stats.ner_failed === "number" ? report.stats.ner_failed : null;
-          if (nerOk === 0 && typeof nerFailed === "number" && nerFailed > 0) {
-            const sample = typeof report.stats.ner_failed_sample === "string" ? report.stats.ner_failed_sample : null;
-            const suffix = sample ? ` (sample: ${sample})` : "";
-            warnings.push(`Continuity audit degraded (volume_end): NER failed for ${nerFailed} chapters; report may be empty.${suffix}`);
-          }
-        }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        warnings.push(`Continuity audit skipped (volume_end): ${message}`);
-      }
     } catch (err) {
       await rollback();
       throw err;
     }
   });
+
+  // Post-commit (outside write-lock): optional sliding-window and volume-end continuity audits.
+  // These audits are non-blocking (best-effort): failures only add warnings.
+  const runContinuityAudit = async (scope: "periodic" | "volume_end", volume: number, start: number, end: number): Promise<ContinuityReport> => {
+    const report = await computeContinuityReport({
+      rootDir: args.rootDir,
+      volume,
+      scope,
+      chapterRange: { start, end }
+    });
+    await writeContinuityLogs({ rootDir: args.rootDir, report });
+    if (scope === "volume_end") {
+      await writeVolumeContinuityReport({ rootDir: args.rootDir, report });
+    }
+    return report;
+  };
+
+  const warnIfNerFullyDegraded = (scope: "periodic" | "volume_end", report: ContinuityReport): void => {
+    const nerOk = typeof report.stats.ner_ok === "number" ? report.stats.ner_ok : null;
+    const nerFailed = typeof report.stats.ner_failed === "number" ? report.stats.ner_failed : null;
+    if (nerOk === 0 && typeof nerFailed === "number" && nerFailed > 0) {
+      const sample = typeof report.stats.ner_failed_sample === "string" ? report.stats.ner_failed_sample : null;
+      const suffix = sample ? ` (sample: ${sample})` : "";
+      warnings.push(`Continuity audit degraded (${scope}): NER failed for ${nerFailed} chapters; report may be empty.${suffix}`);
+    }
+  };
+
+  // Re-resolve volume range for audits if we couldn't resolve it during planning.
+  if (!volumeRange) {
+    try {
+      volumeRange = await tryResolveVolumeChapterRange({ rootDir: args.rootDir, volume });
+    } catch {
+      volumeRange = null;
+    }
+    isVolumeEnd = volumeRange !== null && args.chapter === volumeRange.end;
+    shouldPeriodicContinuityAudit = args.chapter % 5 === 0 && !isVolumeEnd;
+  }
+
+  // Crash compensation for volume-end audits:
+  // - create a pending marker before running volume_end (so a crash leaves a durable "rerun needed" flag)
+  // - remove marker after successful report write
+  const volumeEndTasks = new Map<number, { start: number; end: number; markerRel: string }>();
+  const pendingMarkers = await listPendingVolumeEndAuditMarkers(args.rootDir, warnings);
+  for (const it of pendingMarkers) {
+    const [start, end] = it.marker.chapter_range;
+    const volumeReportAbs = join(args.rootDir, `volumes/vol-${pad2(it.marker.volume)}/continuity-report.json`);
+    if (await pathExists(volumeReportAbs)) {
+      // Marker was likely left behind; clear it.
+      try {
+        await removePath(join(args.rootDir, it.rel));
+      } catch {
+        // ignore
+      }
+      continue;
+    }
+    volumeEndTasks.set(it.marker.volume, { start, end, markerRel: it.rel });
+  }
+
+  if (isVolumeEnd && volumeRange) {
+    volumeEndTasks.set(volume, { start: volumeRange.start, end: volumeRange.end, markerRel: pendingVolumeEndMarkerRel(volume) });
+  }
+
+  for (const [taskVolume, task] of Array.from(volumeEndTasks.entries()).sort((a, b) => a[0] - b[0])) {
+    const markerAbs = join(args.rootDir, task.markerRel);
+    if (!(await pathExists(markerAbs))) {
+      try {
+        await writeJsonFile(markerAbs, {
+          schema_version: 1,
+          created_at: new Date().toISOString(),
+          volume: taskVolume,
+          chapter_range: [task.start, task.end]
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        warnings.push(`Failed to write pending volume-end audit marker: ${task.markerRel}. ${message}`);
+      }
+    }
+
+    try {
+      const report = await runContinuityAudit("volume_end", taskVolume, task.start, task.end);
+      warnIfNerFullyDegraded("volume_end", report);
+      await removePath(markerAbs);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      warnings.push(`Continuity audit skipped (volume_end): ${message}`);
+    }
+  }
+
+  if (shouldPeriodicContinuityAudit) {
+    try {
+      const start = Math.max(1, args.chapter - 9);
+      const end = args.chapter;
+      const report = await runContinuityAudit("periodic", volume, start, end);
+      warnIfNerFullyDegraded("periodic", report);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      warnings.push(`Continuity audit skipped (periodic): ${message}`);
+    }
+  }
 
   return { plan, warnings };
 }
