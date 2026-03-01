@@ -1,8 +1,8 @@
 ## 1. Platform Profile Extensions
 
-- [ ] 1.1 Extend `platform-profile.json` schema with `retention/title_policy`, `retention/hook_ledger`, `readability/mobile`, and `naming` fields
-- [ ] 1.2 Update built-in qidian/tomato defaults to include reasonable retention/readability/naming policies
-- [ ] 1.3 Add validation for new profile fields (fail fast with clear errors; do not hang pipeline)
+- [x] 1.1 Extend `platform-profile.json` schema with `retention/title_policy`, `retention/hook_ledger`, `readability/mobile`, and `naming` fields
+- [x] 1.2 Update built-in qidian/tomato defaults to include reasonable retention/readability/naming policies
+- [x] 1.3 Add validation for new profile fields (fail fast with clear errors; do not hang pipeline)
 
 ## 2. Title System
 

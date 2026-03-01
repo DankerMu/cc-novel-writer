@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "description": "platform-profile.json 默认模板库（init 阶段按平台选择并写入项目根目录的 platform-profile.json；平台绑定不可变）",
-  "last_updated": "2026-02-27",
+  "last_updated": "2026-03-01",
   "_comment": "Each entry under defaults is a full platform-profile.json object aligned with schemas/platform-profile.schema.json. Init SHOULD overwrite created_at and MAY apply user-confirmed overrides.",
   "defaults": {
     "qidian": {
@@ -39,12 +39,40 @@
         "genre_drive_type": "plot",
         "weight_profile_id": "plot:v1"
       },
-      "retention": null,
-      "_comment_retention": "TODO: retention policies (M7).",
-      "readability": null,
-      "_comment_readability": "TODO: readability policies (future milestone).",
-      "naming": null,
-      "_comment_naming": "TODO: naming policies (future milestone)."
+      "retention": {
+        "title_policy": {
+          "enabled": true,
+          "min_chars": 2,
+          "max_chars": 30,
+          "forbidden_patterns": ["^\\s*$", "^(?:无题|未命名|待定)$"],
+          "auto_fix": false
+        },
+        "hook_ledger": {
+          "enabled": true,
+          "fulfillment_window_chapters": 12,
+          "diversity_window_chapters": 5,
+          "max_same_type_streak": 2,
+          "min_distinct_types_in_window": 2,
+          "overdue_policy": "warn"
+        }
+      },
+      "_comment_retention": "Retention guardrails (M7): title policy + hook ledger windows/diversity. Defaults are enabled; enforcement/blocking is implemented in later pipeline steps (hook_ledger.overdue_policy defaults to warn).",
+      "readability": {
+        "mobile": {
+          "enabled": true,
+          "max_paragraph_chars": 320,
+          "max_consecutive_exposition_paragraphs": 3,
+          "blocking_severity": "hard_only"
+        }
+      },
+      "_comment_readability": "Mobile readability lint (M7): enabled, but only hard issues are allowed to block when implemented.",
+      "naming": {
+        "enabled": true,
+        "near_duplicate_threshold": 0.88,
+        "blocking_conflict_types": ["duplicate"],
+        "exemptions": {}
+      },
+      "_comment_naming": "Naming conflict lint (M7): enabled; only exact duplicates are configured as blocking by default."
     },
     "tomato": {
       "$schema": "schemas/platform-profile.schema.json",
@@ -81,12 +109,40 @@
         "genre_drive_type": "plot",
         "weight_profile_id": "plot:v1"
       },
-      "retention": null,
-      "_comment_retention": "TODO: retention policies (M7).",
-      "readability": null,
-      "_comment_readability": "TODO: readability policies (future milestone).",
-      "naming": null,
-      "_comment_naming": "TODO: naming policies (future milestone)."
+      "retention": {
+        "title_policy": {
+          "enabled": true,
+          "min_chars": 2,
+          "max_chars": 30,
+          "forbidden_patterns": ["^\\s*$", "^(?:无题|未命名|待定)$"],
+          "auto_fix": false
+        },
+        "hook_ledger": {
+          "enabled": true,
+          "fulfillment_window_chapters": 10,
+          "diversity_window_chapters": 5,
+          "max_same_type_streak": 2,
+          "min_distinct_types_in_window": 2,
+          "overdue_policy": "warn"
+        }
+      },
+      "_comment_retention": "Retention guardrails (M7): tomato tends to favor shorter windows; defaults are enabled; enforcement/blocking is implemented in later pipeline steps (hook_ledger.overdue_policy defaults to warn).",
+      "readability": {
+        "mobile": {
+          "enabled": true,
+          "max_paragraph_chars": 300,
+          "max_consecutive_exposition_paragraphs": 3,
+          "blocking_severity": "hard_only"
+        }
+      },
+      "_comment_readability": "Mobile readability lint (M7): enabled, but only hard issues are allowed to block when implemented.",
+      "naming": {
+        "enabled": true,
+        "near_duplicate_threshold": 0.88,
+        "blocking_conflict_types": ["duplicate"],
+        "exemptions": {}
+      },
+      "_comment_naming": "Naming conflict lint (M7): enabled; only exact duplicates are configured as blocking by default."
     }
   }
 }

@@ -201,8 +201,8 @@
       "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
       "properties": {
         "enabled": { "type": "boolean" },
-        "max_paragraph_chars": { "type": "integer", "minimum": 0 },
-        "max_consecutive_exposition_paragraphs": { "type": "integer", "minimum": 0 },
+        "max_paragraph_chars": { "type": "integer", "minimum": 1 },
+        "max_consecutive_exposition_paragraphs": { "type": "integer", "minimum": 1 },
         "blocking_severity": { "type": "string", "enum": ["hard_only", "soft_and_hard"] }
       }
     },
@@ -217,7 +217,7 @@
       "patternProperties": { "^_.*$": { "$ref": "#/$defs/comment_value" } },
       "properties": {
         "enabled": { "type": "boolean" },
-        "near_duplicate_threshold": { "type": "number", "minimum": 0 },
+        "near_duplicate_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
         "blocking_conflict_types": {
           "type": "array",
           "items": { "$ref": "#/$defs/naming_conflict_type" },
