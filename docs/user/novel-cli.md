@@ -142,3 +142,9 @@ chapter:048:review
 （人工处理后再重新 judge/commit）。
 
 > 这使得你可以在任何时刻中断并恢复：只要 `.checkpoint.json` 和 `staging/**` 未被破坏，`novel next` 就能给出确定性的下一步。
+
+## 平台画像与动态评分（M6）
+
+- `platform-profile.json`：平台画像/约束配置（字数/合规/信息负载/钩子策略/评分策略）。`platform` 一旦写入视为该项目的不可变绑定；若要更换平台，建议新建项目目录重新初始化。
+- `genre-weight-profiles.json`：质量评分动态权重库；QualityJudge 的权重以 `manifest.inline.scoring_weights` 为准（由 `platform-profile.json.scoring` + `genre-weight-profiles.json` 计算得到）。
+- 当 `platform-profile.json.hook_policy.required=true` 时，QualityJudge 会额外输出 `hook_strength`（章末钩子强度），并且 `novel next` 在必要时会插入 `hook-fix` 微步骤来补强章末钩子。

@@ -53,5 +53,5 @@
 
 ## 9. Documentation
 
-- [ ] 9.1 Update user docs to describe new config files and platform binding immutability
-- [ ] 9.2 Update quality rubric documentation to include `hook_strength` and dynamic weights
+- [x] 9.1 Update user docs to describe new config files and platform binding immutability
+- [x] 9.2 Update quality rubric documentation to include `hook_strength` and dynamic weights
