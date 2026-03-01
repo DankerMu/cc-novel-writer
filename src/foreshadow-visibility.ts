@@ -1,3 +1,4 @@
+import { rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { ensureDir, pathExists, readJsonFile, writeJsonFile } from "./fs-utils.js";
@@ -197,21 +198,26 @@ export async function writeForeshadowVisibilityLogs(args: {
     if (!isPlainObject(asOf)) return null;
     const chapter = (asOf as Record<string, unknown>).chapter;
     if (typeof chapter !== "number" || !Number.isInteger(chapter) || chapter < 0) return null;
-    const generated_at = typeof obj.generated_at === "string" ? obj.generated_at : null;
+    const rawTs = typeof obj.generated_at === "string" ? obj.generated_at : null;
+    const generated_at = rawTs && Number.isFinite(Date.parse(rawTs)) ? rawTs : null;
     return { chapter, generated_at };
   };
 
+  const next = { chapter: args.report.as_of.chapter, generated_at: args.report.generated_at };
   let shouldWriteLatest = true;
   if (await pathExists(latestAbs)) {
     try {
       const existing = parseLatest(await readJsonFile(latestAbs));
-      const next = { chapter: args.report.as_of.chapter, generated_at: args.report.generated_at };
       if (existing) {
         if (existing.chapter > next.chapter) {
           shouldWriteLatest = false;
         } else if (existing.chapter === next.chapter) {
           // If timestamps are comparable, keep the newer one; otherwise, overwrite.
-          if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
+          if (existing.generated_at) {
+            const a = Date.parse(existing.generated_at);
+            const b = Date.parse(next.generated_at);
+            if (Number.isFinite(a) && Number.isFinite(b) && a >= b) shouldWriteLatest = false;
+          }
         }
       }
     } catch {
@@ -220,7 +226,32 @@ export async function writeForeshadowVisibilityLogs(args: {
   }
 
   if (shouldWriteLatest) {
-    await writeJsonFile(latestAbs, args.report);
+    // Atomic replace to avoid partial/corrupted JSON on interruption.
+    const tmpAbs = join(dirAbs, `.tmp-foreshadowing-latest-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+    await writeJsonFile(tmpAbs, args.report);
+    try {
+      // Re-check right before publish to reduce (not eliminate) races without introducing a lock.
+      let stillWrite = true;
+      if (await pathExists(latestAbs)) {
+        try {
+          const existing2 = parseLatest(await readJsonFile(latestAbs));
+          if (existing2) {
+            if (existing2.chapter > next.chapter) {
+              stillWrite = false;
+            } else if (existing2.chapter === next.chapter && existing2.generated_at) {
+              const a = Date.parse(existing2.generated_at);
+              const b = Date.parse(next.generated_at);
+              if (Number.isFinite(a) && Number.isFinite(b) && a >= b) stillWrite = false;
+            }
+          }
+        } catch {
+          stillWrite = true;
+        }
+      }
+      if (stillWrite) await rename(tmpAbs, latestAbs);
+    } finally {
+      await rm(tmpAbs, { force: true }).catch(() => {});
+    }
   }
 
   return result;

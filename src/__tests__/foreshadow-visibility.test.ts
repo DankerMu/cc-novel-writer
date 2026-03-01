@@ -66,6 +66,7 @@ test("computeForeshadowVisibilityReport returns empty dormant list for empty inp
   });
 
   assert.deepEqual(report.dormant_items, []);
+  assert.equal(report.counts.dormant_total, 0);
   assert.deepEqual(report.counts.dormant_by_scope, { short: 0, medium: 0, long: 0 });
 });
 
@@ -113,6 +114,31 @@ test("writeForeshadowVisibilityLogs keeps latest.json monotonic by chapter (and 
   await writeForeshadowVisibilityLogs({ rootDir, report: mkReport(5, "2027-01-01T00:00:00.000Z"), historyRange: null });
   const raw3 = JSON.parse(await readFile(latestAbs, "utf8")) as ForeshadowVisibilityReport;
   assert.equal(raw3.generated_at, "2027-01-01T00:00:00.000Z");
+});
+
+test("writeForeshadowVisibilityLogs treats invalid existing generated_at as incomparable", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-foreshadow-log-bad-ts-test-"));
+
+  const mkReport = (chapter: number, generated_at: string): ForeshadowVisibilityReport => ({
+    schema_version: 1,
+    generated_at,
+    as_of: { chapter, volume: 1 },
+    platform: null,
+    genre_drive_type: null,
+    thresholds: { short: 6, medium: 12, long: 24 },
+    dormant_items: [],
+    counts: { dormant_total: 0, dormant_by_scope: { short: 0, medium: 0, long: 0 } }
+  });
+
+  await writeForeshadowVisibilityLogs({ rootDir, report: mkReport(5, "2026-01-01T00:00:00.000Z"), historyRange: null });
+  const latestAbs = join(rootDir, "logs", "foreshadowing", "latest.json");
+  const raw = JSON.parse(await readFile(latestAbs, "utf8")) as ForeshadowVisibilityReport;
+  (raw as unknown as Record<string, unknown>).generated_at = "zzz";
+  await writeFile(latestAbs, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+
+  await writeForeshadowVisibilityLogs({ rootDir, report: mkReport(5, "2026-01-02T00:00:00.000Z"), historyRange: null });
+  const raw2 = JSON.parse(await readFile(latestAbs, "utf8")) as ForeshadowVisibilityReport;
+  assert.equal(raw2.generated_at, "2026-01-02T00:00:00.000Z");
 });
 
 test("writeForeshadowVisibilityLogs writes visibility history under foreshadow-visibility-vol-*.json", async () => {
