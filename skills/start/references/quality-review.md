@@ -17,8 +17,8 @@
 2. **一致性检查（NER，窗口=10；自动每 5 章滑窗审计）**：
    - 章节范围：`[max(1, last_completed_chapter-9), last_completed_chapter]`
    - 实体抽取（优先确定性脚本，失败回退 LLM）：
-     - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh`：
-       - 逐章执行：`bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh chapters/chapter-{C:03d}.md`
+     - 若存在 `${NOVEL_CLI_ROOT}/scripts/run-ner.sh`：
+       - 逐章执行：`bash ${NOVEL_CLI_ROOT}/scripts/run-ner.sh chapters/chapter-{C:03d}.md`
        - stdout 必须为合法 JSON（schema 见 `skills/continue/references/continuity-checks.md`）；失败则记录原因并回退
      - 否则 / 脚本失败：基于 `summaries/`（必要时回看 `chapters/`）按同一 schema 抽取 entities，并为每类实体输出 `confidence`
    - 一致性规则（输出 issues，带 severity/confidence/evidence/suggestions）：

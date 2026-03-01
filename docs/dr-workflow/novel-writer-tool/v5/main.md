@@ -16,7 +16,7 @@
 
 ### 2.1 交付格式
 
-本产品以 **Claude Code Plugin** 形式交付，包含 3 个斜杠命令（Commands）、8 个专业 Agent 和 1 个共享知识技能（Skill）。[DR-018](../v4/dr/dr-018-plugin-api.md) [DR-020](../v4/dr/dr-020-single-command-ux.md)
+本产品以 **Claude Code Plugin** 形式交付，包含 3 个斜杠命令（Commands）、8 个专业 Agent 和 1 个共享知识技能（Skill）。~~DR-018~~ (已移除) [DR-020](../v4/dr/dr-020-single-command-ux.md)
 
 ```
 cc-novel-writer/
@@ -1406,7 +1406,7 @@ novel-project/
 
 | ID | 主题 | 核心结论 | 文档 |
 |----|------|---------|------|
-| DR-018 | Plugin API 格式 | commands/ vs skills/ 区分，agent 需 frontmatter | [查看](../v4/dr/dr-018-plugin-api.md) |
+| DR-018 | Plugin API 格式 | commands/ vs skills/ 区分，agent 需 frontmatter | 已随 CLI 转型移除 |
 | DR-019 | Haiku Summarizer | 升级为 Sonnet，成本 +$0.02/章，避免误差累积 | [查看](../v4/dr/dr-019-haiku-summarizer.md) |
 | DR-020 | 单主命令 UX | 三命令混合模式：/novel + /novel-continue + /novel-status | [查看](../v4/dr/dr-020-single-command-ux.md) |
 

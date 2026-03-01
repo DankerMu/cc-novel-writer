@@ -1,6 +1,6 @@
 # 小说创作方法论
 
-本知识库为 novel 插件系统提供共享方法论。入口 Skill（`/novel:continue`、`/novel:start`）在 context 组装阶段读取本目录下的 references，按需注入到各 Agent 的 prompt 中。
+本知识库为 novel CLI 系统提供共享方法论。入口 Skill（`/novel:continue`、`/novel:start`）在 context 组装阶段读取本目录下的 references，按需注入到各 Agent 的 prompt 中。
 
 ## 卷制滚动工作流
 
