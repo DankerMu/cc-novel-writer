@@ -330,17 +330,18 @@ export async function computeContinuityReport(args: {
   for (const group of locationGroups.values()) {
     if (group.locations.size < 2) continue;
     const locList = Array.from(group.locations.keys()).sort(compareStrings);
+
+    const highLocCount = Array.from(group.locations.values()).filter((e) => e.time_marker_confidence === "high").length;
+    const isHigh = highLocCount >= 2;
+    const severity: Severity = isHigh ? "high" : "medium";
+    const confidence: Confidence = isHigh ? "high" : "medium";
+
     const evidenceList = locList
       .map((loc) => {
         const ev = group.locations.get(loc)!;
         return { loc, ...ev };
       })
       .slice(0, 5);
-
-    const highLocs = evidenceList.filter((e) => e.time_marker_confidence === "high");
-    const isHigh = new Set(highLocs.map((e) => e.loc)).size >= 2;
-    const severity: Severity = isHigh ? "high" : "medium";
-    const confidence: Confidence = isHigh ? "high" : "medium";
 
     const locId = locList.map(idSafe).join("|");
     const id = `location_contradiction:char=${idSafe(group.character)}:time=${idSafe(group.time_marker)}:loc=${locId}`;
