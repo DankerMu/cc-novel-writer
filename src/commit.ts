@@ -927,6 +927,12 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           });
         }
 
+        if (readabilityLintReport.mode === "fallback" && readabilityLintReport.script_error) {
+          const detail = readabilityLintReport.script_error;
+          const msg = `Readability lint degraded: ${detail}`;
+          if (!warnings.some((w) => w.includes(detail))) warnings.push(msg);
+        }
+
         if (readabilityLintReport.has_blocking_issues) {
           const blocking = readabilityLintReport.policy?.blocking_severity ?? "hard_only";
           const blockingIssues =
@@ -938,7 +944,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           const suffix = blockingIssues.length > limit ? " …" : "";
           const details = detailsBase.length > 0 ? `${detailsBase}${suffix}` : "(details in readability lint report)";
           const scriptRel = readabilityLintReport.script?.rel_path ?? "scripts/lint-readability.sh";
-          const inspect = `bash ${scriptRel} ${rel.staging.chapterMd} platform-profile.json ${args.chapter}`;
+          const inspect = `bash "${scriptRel}" "${rel.staging.chapterMd}" "platform-profile.json" ${args.chapter}`;
           throw new NovelCliError(`Mobile readability blocking issue: ${details}. Inspect: ${inspect}`, 2);
         }
       }

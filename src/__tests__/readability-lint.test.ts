@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -101,6 +101,97 @@ test("computeReadabilityReport uses deterministic script output and derives bloc
   assert.equal(report.mode, "script");
   assert.equal(report.has_blocking_issues, true);
   assert.equal(report.status, "violation");
+});
+
+test("computeReadabilityReport trusts platform profile policy over script policy", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-readability-policy-wins-test-"));
+  await mkdir(join(rootDir, "scripts"), { recursive: true });
+
+  const profile = parsePlatformProfile(
+    makeProfileRaw({
+      compliance: { banned_words: [], duplicate_name_policy: "warn", script_paths: { lint_readability: "scripts/lint-readability.sh" } },
+      readability: makeReadabilityPolicy({ blocking_severity: "hard_only" })
+    }),
+    "platform-profile.json"
+  );
+
+  await writeFile(join(rootDir, "platform-profile.json"), `${JSON.stringify(profile, null, 2)}\n`, "utf8");
+  const chapterAbsPath = join(rootDir, "chapter.md");
+  await writeFile(chapterAbsPath, "# T\n正文\n", "utf8");
+
+  const scriptAbs = join(rootDir, "scripts", "lint-readability.sh");
+  const stubJson =
+    '{"schema_version":1,"generated_at":"2026-01-01T00:00:00.000Z","scope":{"chapter":1},"policy":{"enabled":true,"max_paragraph_chars":10,"max_consecutive_exposition_paragraphs":2,"blocking_severity":"soft_and_hard"},"issues":[{"id":"readability.mobile.overlong_paragraph","severity":"soft","summary":"Soft issue should not block when profile is hard_only."}]}';
+  const stubScript = `#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' '${stubJson}'\n`;
+  await writeFile(scriptAbs, stubScript, "utf8");
+
+  const report = await computeReadabilityReport({
+    rootDir,
+    chapter: 1,
+    chapterAbsPath,
+    chapterText: "# T\n正文\n",
+    platformProfile: profile
+  });
+
+  assert.equal(report.mode, "script");
+  assert.equal(report.policy?.blocking_severity, "hard_only");
+  assert.equal(report.has_blocking_issues, false);
+  assert.equal(report.status, "warn");
+});
+
+test("computeReadabilityReport falls back when lint_readability script path contains traversal segments", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-readability-traversal-test-"));
+
+  const profile = parsePlatformProfile(
+    makeProfileRaw({
+      compliance: { banned_words: [], duplicate_name_policy: "warn", script_paths: { lint_readability: "../evil.sh" } },
+      readability: makeReadabilityPolicy()
+    }),
+    "platform-profile.json"
+  );
+
+  const chapterAbsPath = join(rootDir, "chapter.md");
+  await writeFile(chapterAbsPath, "# T\n正文\n", "utf8");
+
+  const report = await computeReadabilityReport({
+    rootDir,
+    chapter: 1,
+    chapterAbsPath,
+    chapterText: "# T\n正文\n",
+    platformProfile: profile
+  });
+
+  assert.equal(report.mode, "fallback");
+  assert.ok(typeof report.script_error === "string" && report.script_error.includes("../evil.sh"));
+  assert.ok(typeof report.script_error === "string" && report.script_error.includes("must not contain '..'"));
+});
+
+test("computeReadabilityReport falls back when lint_readability script resolves outside project root (symlink)", async () => {
+  if (process.platform === "win32") return;
+
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-readability-symlink-test-"));
+  await mkdir(join(rootDir, "scripts"), { recursive: true });
+
+  const outsideDir = await mkdtemp(join(tmpdir(), "novel-readability-symlink-outside-"));
+  const outsideAbs = join(outsideDir, "lint-readability.sh");
+  await writeFile(outsideAbs, "#!/usr/bin/env bash\nset -euo pipefail\necho 'not-used'\n", "utf8");
+
+  await symlink(outsideAbs, join(rootDir, "scripts", "lint-readability.sh"));
+
+  const profile = parsePlatformProfile(makeProfileRaw({ readability: makeReadabilityPolicy() }), "platform-profile.json");
+  const chapterAbsPath = join(rootDir, "chapter.md");
+  await writeFile(chapterAbsPath, "# T\n正文\n", "utf8");
+
+  const report = await computeReadabilityReport({
+    rootDir,
+    chapter: 1,
+    chapterAbsPath,
+    chapterText: "# T\n正文\n",
+    platformProfile: profile
+  });
+
+  assert.equal(report.mode, "fallback");
+  assert.ok(typeof report.script_error === "string" && report.script_error.includes("Unsafe path outside project root"));
 });
 
 test("computeReadabilityReport falls back when deterministic script output is invalid JSON", async () => {
