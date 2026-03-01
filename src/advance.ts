@@ -19,6 +19,8 @@ function stageForStep(step: Step): PipelineStage {
       return "refined";
     case "judge":
       return "judged";
+    case "title-fix":
+      return "refined";
     case "hook-fix":
       return "refined";
     default:
@@ -47,6 +49,18 @@ export async function advanceCheckpointForStep(args: { rootDir: string; step: St
     if (args.step.stage === "draft") {
       if (typeof updated.revision_count !== "number") updated.revision_count = 0;
       updated.hook_fix_count = 0;
+      updated.title_fix_count = 0;
+    }
+
+    // Title-fix counts as a bounded micro-revision and invalidates the current eval.
+    if (args.step.stage === "title-fix") {
+      const prev = typeof updated.title_fix_count === "number" ? updated.title_fix_count : 0;
+      if (prev >= 1) {
+        throw new NovelCliError(`Title-fix already attempted for chapter ${args.step.chapter}; manual review required.`, 2);
+      }
+      updated.title_fix_count = prev + 1;
+      const rel = chapterRelPaths(args.step.chapter);
+      await removePath(join(args.rootDir, rel.staging.evalJson));
     }
 
     // Hook-fix counts as a bounded micro-revision and invalidates the current eval.

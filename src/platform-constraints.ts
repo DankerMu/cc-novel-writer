@@ -7,6 +7,7 @@ import type { NerEntity, NerOutput } from "./ner.js";
 import { runNer } from "./ner.js";
 import type { PlatformId, PlatformProfile, SeverityPolicy } from "./platform-profile.js";
 import { pad3 } from "./steps.js";
+import { computeTitlePolicyReport, type TitlePolicyReport } from "./title-policy.js";
 import { isPlainObject } from "./type-guards.js";
 
 const INFO_LOAD_WINDOW_CHAPTERS = 10;
@@ -66,6 +67,17 @@ export type PlatformConstraintsReport = {
     max_new_terms_per_1k_words: number;
     unknown_entities: Array<{ text: string; category: string; evidence: string | null }> | null;
     new_entities: Array<{ text: string; category: string; evidence: string | null }> | null;
+  };
+  retention: {
+    status: CheckStatus;
+    title_policy: {
+      status: TitlePolicyReport["status"];
+      enabled: boolean;
+      auto_fix: boolean;
+      title: { text: string | null; chars: number | null };
+      issues: ConstraintIssue[];
+      has_hard_violations: boolean;
+    };
   };
   issues: ConstraintIssue[];
   has_hard_violations: boolean;
@@ -542,6 +554,22 @@ export async function computePlatformConstraints(args: {
       ? "warn"
       : "pass";
 
+  const titleReport = computeTitlePolicyReport({ chapter: args.chapter, chapterText: args.chapterText, platformProfile: args.platformProfile });
+  const titleIssues: ConstraintIssue[] = titleReport.issues.map((i) => ({ ...i }));
+  issues.push(...titleIssues);
+
+  const retention: PlatformConstraintsReport["retention"] = {
+    status: titleReport.status,
+    title_policy: {
+      status: titleReport.status,
+      enabled: Boolean(titleReport.policy?.enabled),
+      auto_fix: Boolean(titleReport.policy?.auto_fix),
+      title: { text: titleReport.title.text, chars: titleReport.title.chars },
+      issues: titleIssues,
+      has_hard_violations: titleReport.has_hard_violations
+    }
+  };
+
   const hasHard = issues.some((i) => i.severity === "hard");
 
   return {
@@ -577,6 +605,7 @@ export async function computePlatformConstraints(args: {
       unknown_entities: unknownEntities,
       new_entities: newEntities
     },
+    retention,
     issues,
     has_hard_violations: hasHard
   };
@@ -613,6 +642,7 @@ export async function attachPlatformConstraintsToEval(args: {
     word_count: args.report.word_count,
     compliance: args.report.compliance,
     info_load: args.report.info_load,
+    retention: args.report.retention,
     has_hard_violations: args.report.has_hard_violations,
     issues: args.report.issues
   };

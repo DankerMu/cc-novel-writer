@@ -1,9 +1,10 @@
 import { join } from "node:path";
 
 import type { Checkpoint } from "./checkpoint.js";
-import { pathExists, readJsonFile } from "./fs-utils.js";
+import { pathExists, readJsonFile, readTextFile } from "./fs-utils.js";
 import { checkHookPolicy } from "./hook-policy.js";
 import { loadPlatformProfile } from "./platform-profile.js";
+import { computeTitlePolicyReport } from "./title-policy.js";
 import { chapterRelPaths, formatStepId } from "./steps.js";
 
 export type NextStepResult = {
@@ -76,10 +77,67 @@ async function checkHookPolicyForStage(args: {
   return null;
 }
 
+async function checkTitlePolicyForStage(args: {
+  projectRootDir: string;
+  stagePrefix: "refined" | "judged";
+  inflightChapter: number;
+  pipelineStage: string;
+  evidence: Record<string, unknown>;
+  titleFixCount: number;
+  chapterRelPath: string;
+}): Promise<NextStepResult | null> {
+  const loadedProfile = await loadPlatformProfile(args.projectRootDir);
+  if (!loadedProfile) return null;
+  const titlePolicy = loadedProfile.profile.retention?.title_policy;
+  if (!titlePolicy?.enabled) return null;
+
+  let chapterText: string;
+  try {
+    chapterText = await readTextFile(join(args.projectRootDir, args.chapterRelPath));
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "draft" }),
+      reason: `${args.stagePrefix}:title_read_failed`,
+      inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+      evidence: { ...args.evidence, titleFixCount: args.titleFixCount, error: message }
+    };
+  }
+
+  const report = computeTitlePolicyReport({ chapter: args.inflightChapter, chapterText, platformProfile: loadedProfile.profile });
+  if (report.status === "pass" || report.status === "skipped") return null;
+
+  const issueSummary = report.issues[0]?.summary ?? "title policy failing";
+  if (titlePolicy.auto_fix) {
+    if (args.titleFixCount < 1) {
+      return {
+        step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "title-fix" }),
+        reason: `${args.stagePrefix}:title_policy_fail:title-fix`,
+        inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+        evidence: { ...args.evidence, titleFixCount: args.titleFixCount, title_policy: { status: report.status, issue: issueSummary } }
+      };
+    }
+    return {
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "review" }),
+      reason: `${args.stagePrefix}:title_policy_fail:manual_review`,
+      inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+      evidence: { ...args.evidence, titleFixCount: args.titleFixCount, title_policy: { status: report.status, issue: issueSummary } }
+    };
+  }
+
+  return {
+    step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "review" }),
+    reason: `${args.stagePrefix}:title_policy_fail:manual_fix_required`,
+    inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+    evidence: { ...args.evidence, titleFixCount: args.titleFixCount, title_policy: { status: report.status, issue: issueSummary } }
+  };
+}
+
 export async function computeNextStep(projectRootDir: string, checkpoint: Checkpoint): Promise<NextStepResult> {
   const inflightChapter = typeof checkpoint.inflight_chapter === "number" ? checkpoint.inflight_chapter : null;
   const stage = normalizeStage(checkpoint.pipeline_stage);
   const hookFixCount = typeof checkpoint.hook_fix_count === "number" ? checkpoint.hook_fix_count : 0;
+  const titleFixCount = typeof checkpoint.title_fix_count === "number" ? checkpoint.title_fix_count : 0;
 
   // Fresh start.
   if (inflightChapter === null || stage === null || stage === "committed") {
@@ -163,6 +221,17 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
 
   if (stage === "refined") {
     if (!hasEval) {
+      const titleGate = await checkTitlePolicyForStage({
+        projectRootDir,
+        stagePrefix: "refined",
+        inflightChapter,
+        pipelineStage: stage,
+        evidence,
+        titleFixCount,
+        chapterRelPath: rel.staging.chapterMd
+      });
+      if (titleGate) return titleGate;
+
       return {
         step: formatStepId({ kind: "chapter", chapter: inflightChapter, stage: "judge" }),
         reason: "refined:missing_eval",
@@ -170,6 +239,17 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
         evidence
       };
     }
+
+    const titleGate = await checkTitlePolicyForStage({
+      projectRootDir,
+      stagePrefix: "refined",
+      inflightChapter,
+      pipelineStage: stage,
+      evidence,
+      titleFixCount,
+      chapterRelPath: rel.staging.chapterMd
+    });
+    if (titleGate) return titleGate;
 
     const hookGate = await checkHookPolicyForStage({
       projectRootDir,
@@ -199,6 +279,17 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
         evidence
       };
     }
+
+    const titleGate = await checkTitlePolicyForStage({
+      projectRootDir,
+      stagePrefix: "judged",
+      inflightChapter,
+      pipelineStage: stage,
+      evidence,
+      titleFixCount,
+      chapterRelPath: rel.staging.chapterMd
+    });
+    if (titleGate) return titleGate;
 
     const hookGate = await checkHookPolicyForStage({
       projectRootDir,

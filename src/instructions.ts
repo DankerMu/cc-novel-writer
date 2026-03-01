@@ -2,13 +2,14 @@ import { join } from "node:path";
 
 import type { Checkpoint } from "./checkpoint.js";
 import { NovelCliError } from "./errors.js";
-import { ensureDir, pathExists, readTextFile, writeJsonFile } from "./fs-utils.js";
+import { ensureDir, pathExists, readTextFile, writeJsonFile, writeTextFile } from "./fs-utils.js";
 import { loadContinuityLatestSummary } from "./consistency-auditor.js";
 import { computeForeshadowVisibilityReport, loadForeshadowGlobalItems } from "./foreshadow-visibility.js";
 import { computeEffectiveScoringWeights, loadGenreWeightProfiles } from "./scoring-weights.js";
 import { parseNovelAskQuestionSpec, type NovelAskQuestionSpec } from "./novel-ask.js";
 import { loadPlatformProfile } from "./platform-profile.js";
 import { resolveProjectRelativePath } from "./safe-path.js";
+import { computeTitlePolicyReport } from "./title-policy.js";
 import { chapterRelPaths, formatStepId, pad2, type Step } from "./steps.js";
 
 export type InstructionPacket = {
@@ -185,7 +186,56 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
     next_actions.push({
       kind: "command",
       command: `novel next`,
-      note: "After advance, compute the next deterministic step (may be hook-fix/review/commit)."
+      note: "After advance, compute the next deterministic step (may be title-fix/hook-fix/review/commit)."
+    });
+  } else if (args.step.stage === "title-fix") {
+    agent = { kind: "subagent", name: "chapter-writer" };
+    paths.chapter_draft = relIfExists(rel.staging.chapterMd, await pathExists(join(args.rootDir, rel.staging.chapterMd)));
+    inline.fix_mode = "title-fix";
+
+    const loadedPlatform = await loadPlatformProfile(args.rootDir);
+    if (!loadedPlatform) throw new NovelCliError("Missing required file: platform-profile.json (required for title-fix).", 2);
+    const titlePolicy = loadedPlatform.profile.retention?.title_policy ?? null;
+    if (!titlePolicy) {
+      throw new NovelCliError("platform-profile.json.retention.title_policy is required for title-fix.", 2);
+    }
+
+    // Snapshot the chapter before title-fix so validate can ensure body is byte-identical.
+    const beforeAbs = join(args.rootDir, rel.staging.chapterMd);
+    const before = await readTextFile(beforeAbs);
+    const snapshotRel = `staging/logs/title-fix-chapter-${String(args.step.chapter).padStart(3, "0")}-before.md`;
+    await writeTextFile(join(args.rootDir, snapshotRel), before);
+    paths.title_fix_before = snapshotRel;
+
+    const report = computeTitlePolicyReport({ chapter: args.step.chapter, chapterText: before, platformProfile: loadedPlatform.profile });
+    inline.title_policy = {
+      enabled: titlePolicy.enabled,
+      min_chars: titlePolicy.min_chars,
+      max_chars: titlePolicy.max_chars,
+      forbidden_patterns: titlePolicy.forbidden_patterns,
+      required_patterns: titlePolicy.required_patterns ?? null,
+      auto_fix: titlePolicy.auto_fix
+    };
+    inline.title_policy_report = {
+      status: report.status,
+      issues: report.issues.slice(0, 5)
+    };
+
+    inline.required_fixes = [
+      {
+        target: "chapter_title",
+        instruction:
+          "执行 title-fix：只修改章节 Markdown 的标题行（第一个非空行必须是 H1：`# ...`）。禁止改动正文任何字符（CLI 会校验 body byte-identical）。标题需满足 platform-profile.json.retention.title_policy 的长度与正则规则，且不得包含 compliance.banned_words。避免剧透，保留悬念与吸引力。"
+      }
+    ];
+
+    expected_outputs.push({ path: rel.staging.chapterMd, required: true, note: "Overwrite chapter draft with title-only fix (body must remain unchanged)." });
+    next_actions.push({ kind: "command", command: `novel validate ${stepId}` });
+    next_actions.push({ kind: "command", command: `novel advance ${stepId}` });
+    next_actions.push({
+      kind: "command",
+      command: `novel next`,
+      note: "After title-fix, compute the next deterministic step (typically judge)."
     });
   } else if (args.step.stage === "hook-fix") {
     agent = { kind: "subagent", name: "chapter-writer" };
@@ -211,11 +261,11 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
     agent = { kind: "cli", name: "manual-review" };
     paths.chapter_draft = relIfExists(rel.staging.chapterMd, await pathExists(join(args.rootDir, rel.staging.chapterMd)));
     paths.chapter_eval = relIfExists(rel.staging.evalJson, await pathExists(join(args.rootDir, rel.staging.evalJson)));
-    expected_outputs.push({ path: "(manual)", required: false, note: "Review required: hook policy still failing after bounded hook-fix." });
+    expected_outputs.push({ path: "(manual)", required: false, note: "Review required: guardrails still failing after bounded auto-fix." });
     next_actions.push({
       kind: "command",
       command: `novel instructions chapter:${String(args.step.chapter).padStart(3, "0")}:judge --json`,
-      note: "After manually editing the chapter ending, re-run QualityJudge."
+      note: "After manually fixing the chapter (title/hook/etc), re-run QualityJudge."
     });
   } else if (args.step.stage === "commit") {
     agent = { kind: "cli", name: "novel" };

@@ -15,6 +15,7 @@ export type Checkpoint = Record<string, unknown> & {
   inflight_chapter?: number | null;
   revision_count?: number;
   hook_fix_count?: number;
+  title_fix_count?: number;
   pending_actions?: unknown[];
   last_checkpoint_time?: string;
 };
@@ -94,6 +95,14 @@ function parseCheckpoint(data: unknown): Checkpoint {
     const hc = asInt(hookFix);
     if (hc === null || hc < 0) {
       throw new NovelCliError(".checkpoint.json.hook_fix_count must be an int >= 0 when present.", 2);
+    }
+  }
+
+  const titleFix = data.title_fix_count;
+  if (titleFix !== undefined) {
+    const tc = asInt(titleFix);
+    if (tc === null || tc < 0) {
+      throw new NovelCliError(".checkpoint.json.title_fix_count must be an int >= 0 when present.", 2);
     }
   }
 

@@ -6,9 +6,9 @@
 
 ## 2. Title System
 
-- [ ] 2.1 Implement title presence + policy validator (length/patterns/banned words)
-- [ ] 2.2 Add `title-fix` micro-step that edits only the H1 title line (bounded retries + escalation)
-- [ ] 2.3 Wire title report into pre-judge compliance/guardrail report and chapter logs
+- [x] 2.1 Implement title presence + policy validator (length/patterns/banned words)
+- [x] 2.2 Add `title-fix` micro-step that edits only the H1 title line (bounded retries + escalation)
+- [x] 2.3 Wire title report into pre-judge compliance/guardrail report and chapter logs
 
 ## 3. Mobile Readability Lint
 
