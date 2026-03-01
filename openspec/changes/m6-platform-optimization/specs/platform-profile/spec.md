@@ -6,7 +6,7 @@ The platform binding SHALL be one of:
 - `qidian`
 - `tomato`
 
-Once `platform-profile.json` is created, the platform binding MUST NOT change for the lifetime of the project.
+Once `platform-profile.json` is created, the platform binding (`platform`) and the narrative drive type (`scoring.genre_drive_type`) MUST NOT change for the lifetime of the project. Rationale: changing `genre_drive_type` invalidates all historical weight profiles and makes cross-chapter score comparisons meaningless.
 
 #### Scenario: Platform profile created during init
 - **WHEN** the user initializes a novel project and selects platform `qidian`

@@ -145,4 +145,12 @@ project/
 `platform-profile.json` 在项目初始化时生成，用于约束字数/信息负载/合规策略/章末钩子策略，并提供 QualityJudge 的动态权重输入（`scoring`）。  
 其中 `platform-profile.json.platform`（以及对应的叙事驱动类型 `scoring.genre_drive_type`）一旦写入，系统视为该项目的**不可变绑定**：后续不会被“更新设定”等操作改写。若要更换平台/驱动类型，建议新建项目目录重新初始化。
 
-`web-novel-cliche-lint.json` 为可选文件：缺失时 cliché lint 会降级跳过（不阻断流水线）；启用后若出现 `severity="hard"` 命中会阻断 `novel commit`。需要启用时可从 `templates/web-novel-cliche-lint.json` 复制到项目根目录并按需微调。
+`web-novel-cliche-lint.json` 为可选文件：缺失时 cliché lint 会降级跳过（不阻断流水线）。启用后三级 severity 行为如下：
+
+| severity | 行为 |
+|----------|------|
+| `warn` | 仅在日志中提示，不影响评分或流水线 |
+| `soft` | 作为评分信号降低 `style_naturalness` 维度得分，不阻断 commit |
+| `hard` | 阻断 `novel commit`，必须修改后重新提交 |
+
+需要启用时可从 `templates/web-novel-cliche-lint.json` 复制到项目根目录并按需微调。当前 cliché lint 由 `scripts/lint-cliche.sh` 脚本执行（通过 `platform-profile.json.compliance.script_paths.lint_cliche` 配置），尚未作为 Agent context manifest 的内联输入注入。

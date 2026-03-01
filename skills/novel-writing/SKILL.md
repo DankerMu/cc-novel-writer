@@ -50,9 +50,9 @@
 
 ## 质量评分标准
 
-8 维度加权评分（详见 `references/quality-rubric.md`）：
+8 维度加权评分（详见 `references/quality-rubric.md`）。下表为 **legacy fallback 默认值**；实际权重以 `manifest.inline.scoring_weights` 为准（来源：`platform-profile.json.scoring` + `genre-weight-profiles.json`）：
 
-| 维度 | 权重 |
+| 维度 | 默认权重 |
 |------|------|
 | 情节逻辑 | 18% |
 | 角色塑造 | 18% |

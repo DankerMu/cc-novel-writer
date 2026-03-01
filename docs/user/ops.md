@@ -86,7 +86,7 @@ ChapterWriter（初稿）→ Summarizer（摘要）→ StyleRefiner（润色）�
 
 > 角色退场有三重保护检查，不会意外删除仍在活跃的角色。
 >
-> **注意**：更新设定不会修改 `platform-profile.json`（平台绑定/叙事驱动类型（`genre_drive_type`）/阈值）。如需更换平台或驱动类型，建议新建项目目录重新初始化。
+> **注意**：更新设定不会修改 `platform-profile.json`（`platform` 与 `scoring.genre_drive_type` 为不可变绑定）。如需更换平台或驱动类型，建议新建项目目录重新初始化。
 
 ## 导入研究资料
 
