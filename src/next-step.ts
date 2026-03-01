@@ -118,7 +118,8 @@ async function checkTitlePolicyForStage(args: {
   if (report.status === "pass" || report.status === "skipped") return null;
   if (!report.has_hard_violations && !titlePolicy.auto_fix) return null;
 
-  const issueSummary = report.issues[0]?.summary ?? "title policy failing";
+  const primaryIssue = report.issues.find((i) => i.severity === "hard") ?? report.issues[0] ?? null;
+  const issueSummary = primaryIssue?.summary ?? "title policy failing";
   if (titlePolicy.auto_fix) {
     if (args.titleFixCount < 1) {
       return {

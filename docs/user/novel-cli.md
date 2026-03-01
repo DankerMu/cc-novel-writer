@@ -121,17 +121,18 @@ chapter:048:draft
 chapter:048:summarize
 ```
 
-4) 若已 refined 但 eval 缺失，会返回：
+4) 若已 refined 但 eval 缺失，通常会返回：
 ```
 chapter:048:judge
 ```
+（若启用 `platform-profile.json.retention.title_policy.enabled=true`：当 `auto_fix=true` 时可能先返回 `chapter:048:title-fix`；当 `auto_fix=false` 且存在 hard 违规则可能返回 `chapter:048:review`。）
 
 5) 若 eval 已存在，通常会返回：
 ```
 chapter:048:commit
 ```
 
-但当启用 `platform-profile.json.retention.title_policy.enabled=true` 且标题缺失/不合规时，可能改为返回：
+但当启用 `platform-profile.json.retention.title_policy.enabled=true` 且 `platform-profile.json.retention.title_policy.auto_fix=true` 且标题缺失/不合规时，可能改为返回：
 ```
 chapter:048:title-fix
 ```

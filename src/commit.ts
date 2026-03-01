@@ -558,6 +558,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
 
   if (loadedProfile) {
     plan.push(`WRITE logs/platform-constraints/platform-constraints-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
+    plan.push(`WRITE logs/retention/title-policy/title-policy-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
     plan.push(`PATCH ${rel.final.evalJson} (attach platform_constraints metadata)`);
   }
 
