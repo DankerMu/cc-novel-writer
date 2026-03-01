@@ -344,8 +344,8 @@ function parseMobileReadabilityPolicy(raw: unknown, file: string): MobileReadabi
   }
   return {
     enabled: requireBoolValue(obj.enabled, file, "readability.mobile.enabled"),
-    max_paragraph_chars: requireNonNegativeIntValue(obj.max_paragraph_chars, file, "readability.mobile.max_paragraph_chars"),
-    max_consecutive_exposition_paragraphs: requireNonNegativeIntValue(
+    max_paragraph_chars: requirePositiveIntValue(obj.max_paragraph_chars, file, "readability.mobile.max_paragraph_chars"),
+    max_consecutive_exposition_paragraphs: requirePositiveIntValue(
       obj.max_consecutive_exposition_paragraphs,
       file,
       "readability.mobile.max_consecutive_exposition_paragraphs"
@@ -367,6 +367,9 @@ function parseNamingPolicy(raw: unknown, file: string): NamingPolicy {
   const obj = raw as Record<string, unknown>;
   const enabled = requireBoolValue(obj.enabled, file, "naming.enabled");
   const near_duplicate_threshold = requireFiniteNonNegativeNumberValue(obj.near_duplicate_threshold, file, "naming.near_duplicate_threshold");
+  if (near_duplicate_threshold > 1) {
+    throw new NovelCliError(`Invalid ${file}: 'naming.near_duplicate_threshold' must be <= 1.`, 2);
+  }
 
   const rawTypes = requireStringArrayValue(obj.blocking_conflict_types, file, "naming.blocking_conflict_types", { allowEmpty: false });
   const blocking_conflict_types: NamingConflictType[] = [];
@@ -406,8 +409,17 @@ export function parsePlatformProfile(raw: unknown, file: string): PlatformProfil
   const compliance = parseCompliancePolicy(obj.compliance, file);
 
   // hook_policy is required in schemas/platform-profile.schema.json but optional here for backward compat with older files.
-  const hook_policy = isPlainObject(obj.hook_policy) ? parseHookPolicy(obj.hook_policy, file) : undefined;
-  const scoring = isPlainObject(obj.scoring) ? parseScoringPolicy(obj.scoring, file) : undefined;
+  let hook_policy: HookPolicy | undefined;
+  if (obj.hook_policy !== undefined) {
+    if (!isPlainObject(obj.hook_policy)) throw new NovelCliError(`Invalid ${file}: 'hook_policy' must be an object.`, 2);
+    hook_policy = parseHookPolicy(obj.hook_policy, file);
+  }
+
+  let scoring: ScoringPolicy | undefined;
+  if (obj.scoring !== undefined) {
+    if (!isPlainObject(obj.scoring)) throw new NovelCliError(`Invalid ${file}: 'scoring' must be an object.`, 2);
+    scoring = parseScoringPolicy(obj.scoring, file);
+  }
 
   const out: PlatformProfile = { schema_version, platform, created_at, word_count, info_load, compliance, hook_policy, scoring };
 
