@@ -179,7 +179,18 @@ export function computeTitlePolicyReport(args: {
 
     // Forbidden patterns.
     for (const [i, pattern] of titlePolicy.forbidden_patterns.entries()) {
-      const re = new RegExp(pattern);
+      let re: RegExp;
+      try {
+        re = new RegExp(pattern);
+      } catch {
+        issues.push({
+          id: `retention.title_policy.invalid_forbidden_pattern.${i}`,
+          severity: "soft",
+          summary: `Invalid forbidden_patterns regex: /${pattern}/ — skipped.`,
+          suggestion: "Fix the regex syntax in platform-profile.json."
+        });
+        continue;
+      }
       const m = re.exec(titleText);
       if (!m) continue;
       const match = (m[0] ?? "").trim();
@@ -194,7 +205,13 @@ export function computeTitlePolicyReport(args: {
 
     // Required patterns (OR semantics).
     if (titlePolicy.required_patterns && titlePolicy.required_patterns.length > 0) {
-      const ok = titlePolicy.required_patterns.some((p) => new RegExp(p).test(titleText));
+      const ok = titlePolicy.required_patterns.some((p) => {
+        try {
+          return new RegExp(p).test(titleText);
+        } catch {
+          return false;
+        }
+      });
       if (!ok) {
         issues.push({
           id: "retention.title_policy.required_pattern_missing",
