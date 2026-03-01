@@ -22,6 +22,27 @@ test("parsePlatformProfile loads legacy profile without retention/readability/na
   assert.equal(Object.prototype.hasOwnProperty.call(profile, "naming"), false);
 });
 
+test("parsePlatformProfile accepts explicit null retention/readability/naming", () => {
+  const raw = {
+    schema_version: 1,
+    platform: "qidian",
+    created_at: "2026-01-01T00:00:00Z",
+    word_count: { target_min: 1, target_max: 2, hard_min: 1, hard_max: 2 },
+    hook_policy: { required: true, min_strength: 3, allowed_types: ["question"], fix_strategy: "hook-fix" },
+    info_load: { max_new_entities_per_chapter: 0, max_unknown_entities_per_chapter: 0, max_new_terms_per_1k_words: 0 },
+    compliance: { banned_words: [], duplicate_name_policy: "warn" },
+    scoring: { genre_drive_type: "plot", weight_profile_id: "plot:v1" },
+    retention: null,
+    readability: null,
+    naming: null
+  };
+
+  const profile = parsePlatformProfile(raw, "platform-profile.json");
+  assert.equal(profile.retention, null);
+  assert.equal(profile.readability, null);
+  assert.equal(profile.naming, null);
+});
+
 test("parsePlatformProfile loads extended profile with retention/readability/naming", () => {
   const raw = {
     schema_version: 1,
@@ -70,6 +91,32 @@ test("parsePlatformProfile rejects unknown naming conflict types", () => {
   assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /blocking_conflict_types.*unknown type/i);
 });
 
+test("parsePlatformProfile rejects invalid retention.title_policy regex patterns", () => {
+  const raw = {
+    schema_version: 1,
+    platform: "qidian",
+    created_at: "2026-01-01T00:00:00Z",
+    word_count: { target_min: 1, target_max: 2, hard_min: 1, hard_max: 2 },
+    hook_policy: { required: true, min_strength: 3, allowed_types: ["question"], fix_strategy: "hook-fix" },
+    info_load: { max_new_entities_per_chapter: 0, max_unknown_entities_per_chapter: 0, max_new_terms_per_1k_words: 0 },
+    compliance: { banned_words: [], duplicate_name_policy: "warn" },
+    scoring: { genre_drive_type: "plot", weight_profile_id: "plot:v1" },
+    retention: {
+      title_policy: { enabled: true, min_chars: 2, max_chars: 30, forbidden_patterns: ["("], auto_fix: false },
+      hook_ledger: {
+        enabled: true,
+        fulfillment_window_chapters: 12,
+        diversity_window_chapters: 5,
+        max_same_type_streak: 2,
+        min_distinct_types_in_window: 2,
+        overdue_policy: "warn"
+      }
+    }
+  };
+
+  assert.throws(() => parsePlatformProfile(raw, "platform-profile.json"), /forbidden_patterns\[0\].*regex/i);
+});
+
 test("templates/platform-profile.json defaults parse as valid platform profiles", async () => {
   const raw = JSON.parse(await readFile("templates/platform-profile.json", "utf8")) as { defaults?: Record<string, unknown> };
   assert.ok(raw.defaults, "expected templates/platform-profile.json to have defaults");
@@ -81,4 +128,3 @@ test("templates/platform-profile.json defaults parse as valid platform profiles"
     assert.ok(profile.naming, `expected defaults.${platform}.naming to be present`);
   }
 });
-

@@ -277,6 +277,16 @@ function requireStringArrayValue(
   return uniq;
 }
 
+function assertValidRegexPattern(pattern: string, file: string, field: string, index: number): void {
+  try {
+    // eslint-disable-next-line no-new
+    new RegExp(pattern);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new NovelCliError(`Invalid ${file}: '${field}[${index}]' must be a valid regex pattern. ${message}`, 2);
+  }
+}
+
 function parseRetentionTitlePolicy(raw: unknown, file: string): RetentionTitlePolicy {
   if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'retention.title_policy' must be an object.`, 2);
   const obj = raw as Record<string, unknown>;
@@ -287,9 +297,11 @@ function parseRetentionTitlePolicy(raw: unknown, file: string): RetentionTitlePo
     throw new NovelCliError(`Invalid ${file}: 'retention.title_policy.min_chars' must be <= 'retention.title_policy.max_chars'.`, 2);
   }
   const forbidden_patterns = requireStringArrayValue(obj.forbidden_patterns, file, "retention.title_policy.forbidden_patterns", { allowEmpty: true });
+  forbidden_patterns.forEach((p, i) => assertValidRegexPattern(p, file, "retention.title_policy.forbidden_patterns", i));
   const required_patterns = obj.required_patterns === undefined
     ? undefined
     : requireStringArrayValue(obj.required_patterns, file, "retention.title_policy.required_patterns", { allowEmpty: true });
+  if (required_patterns) required_patterns.forEach((p, i) => assertValidRegexPattern(p, file, "retention.title_policy.required_patterns", i));
   const auto_fix = requireBoolValue(obj.auto_fix, file, "retention.title_policy.auto_fix");
   return {
     enabled,
@@ -315,7 +327,7 @@ function parseHookLedgerPolicy(raw: unknown, file: string): HookLedgerPolicy {
 }
 
 function parseRetentionPolicy(raw: unknown, file: string): RetentionPolicy {
-  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'retention' must be an object or null.`, 2);
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'retention' must be an object.`, 2);
   const obj = raw as Record<string, unknown>;
   return {
     title_policy: parseRetentionTitlePolicy(obj.title_policy, file),
@@ -343,7 +355,7 @@ function parseMobileReadabilityPolicy(raw: unknown, file: string): MobileReadabi
 }
 
 function parseReadabilityPolicy(raw: unknown, file: string): ReadabilityPolicy {
-  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'readability' must be an object or null.`, 2);
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'readability' must be an object.`, 2);
   const obj = raw as Record<string, unknown>;
   return { mobile: parseMobileReadabilityPolicy(obj.mobile, file) };
 }
@@ -351,7 +363,7 @@ function parseReadabilityPolicy(raw: unknown, file: string): ReadabilityPolicy {
 const VALID_NAMING_CONFLICT_TYPES = ["duplicate", "near_duplicate", "alias_collision"] as const;
 
 function parseNamingPolicy(raw: unknown, file: string): NamingPolicy {
-  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'naming' must be an object or null.`, 2);
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'naming' must be an object.`, 2);
   const obj = raw as Record<string, unknown>;
   const enabled = requireBoolValue(obj.enabled, file, "naming.enabled");
   const near_duplicate_threshold = requireFiniteNonNegativeNumberValue(obj.near_duplicate_threshold, file, "naming.near_duplicate_threshold");
