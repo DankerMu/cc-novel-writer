@@ -33,9 +33,9 @@ chapter_writer_manifest = {
   transition_hint: obj | null,          # 切线过渡
   hard_rules_list: [str],              # L1 禁止项列表（已格式化）
   foreshadowing_tasks: [obj],          # 本章伏笔任务子集
-  foreshadow_light_touch_tasks: [      # 可选：伏笔沉默超阈值时的“轻触提醒”（非剧透、不兑现）
+  foreshadow_light_touch_tasks?: [     # 可选：伏笔沉默超阈值时的“轻触提醒”（非剧透、不兑现）；为空则省略该字段
     {id: str, scope: str, status: str, chapters_since_last_update: int, instruction: str}
-  ] | null,
+  ],
   ai_blacklist_top10: [str],           # 有效黑名单前 10 词
   style_drift_directives: [str] | null, # 漂移纠偏指令（active 时注入）
 
