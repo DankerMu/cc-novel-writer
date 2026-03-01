@@ -81,9 +81,11 @@ novel-project/
     ├── continuity/                 # 一致性检查报告（NER）
     │   ├── latest.json
     │   └── continuity-report-vol-01-ch001-ch010.json
-    ├── foreshadowing/              # 伏笔盘点报告
-    │   ├── latest.json
-    │   └── foreshadowing-check-vol-01-ch001-ch010.json
+	    ├── foreshadowing/              # 伏笔（可见度 + 盘点）
+	    │   ├── latest.json                             # 可见度 latest（commit 后自动生成）
+	    │   ├── foreshadow-visibility-vol-01-ch001-ch010.json  # 可见度 history（可选）
+	    │   ├── foreshadowing-check-latest.json         # 盘点 latest（/novel:start 回顾落盘）
+	    │   └── foreshadowing-check-vol-01-ch001-ch010.json    # 盘点 history
     ├── storylines/                 # 故事线分析报告
     │   ├── rhythm-latest.json
     │   ├── rhythm-vol-01-ch001-ch010.json

@@ -590,7 +590,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   const foreshadowHistoryRange = resolveForeshadowVisibilityHistoryRange({ chapter: args.chapter, isVolumeEnd, volumeRange });
   if (foreshadowHistoryRange) {
     plan.push(
-      `WRITE logs/foreshadowing/foreshadowing-check-vol-${pad2(volume)}-ch${pad3(foreshadowHistoryRange.start)}-ch${pad3(
+      `WRITE logs/foreshadowing/foreshadow-visibility-vol-${pad2(volume)}-ch${pad3(foreshadowHistoryRange.start)}-ch${pad3(
         foreshadowHistoryRange.end
       )}.json`
     );

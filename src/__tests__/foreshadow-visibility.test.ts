@@ -84,3 +84,24 @@ test("writeForeshadowVisibilityLogs keeps latest.json monotonic by chapter (and 
   const raw3 = JSON.parse(await readFile(latestAbs, "utf8")) as ForeshadowVisibilityReport;
   assert.equal(raw3.generated_at, "2027-01-01T00:00:00.000Z");
 });
+
+test("writeForeshadowVisibilityLogs writes visibility history under foreshadow-visibility-vol-*.json", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-foreshadow-history-test-"));
+
+  const report: ForeshadowVisibilityReport = {
+    schema_version: 1,
+    generated_at: "2026-01-01T00:00:00.000Z",
+    as_of: { chapter: 10, volume: 1 },
+    platform: null,
+    genre_drive_type: null,
+    thresholds: { short: 6, medium: 12, long: 24 },
+    dormant_items: [],
+    counts: { dormant_total: 0, dormant_by_scope: { short: 0, medium: 0, long: 0 } }
+  };
+
+  const res = await writeForeshadowVisibilityLogs({ rootDir, report, historyRange: { start: 1, end: 10 } });
+  assert.equal(res.historyRel, "logs/foreshadowing/foreshadow-visibility-vol-01-ch001-ch010.json");
+  const raw = JSON.parse(await readFile(join(rootDir, res.historyRel!), "utf8")) as ForeshadowVisibilityReport;
+  assert.equal(raw.schema_version, 1);
+  assert.equal(raw.as_of.chapter, 10);
+});

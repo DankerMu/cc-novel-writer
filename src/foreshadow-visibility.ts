@@ -1,4 +1,4 @@
-import { rename, rm } from "node:fs/promises";
+import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 import { ensureDir, pathExists, readJsonFile, writeJsonFile } from "./fs-utils.js";
@@ -180,6 +180,16 @@ export async function writeForeshadowVisibilityLogs(args: {
 
   const latestRel = `${dirRel}/latest.json`;
   const latestAbs = join(args.rootDir, latestRel);
+
+  const result: { latestRel: string; historyRel?: string } = { latestRel };
+  if (args.historyRange) {
+    const start = args.historyRange.start;
+    const end = args.historyRange.end;
+    const historyRel = `${dirRel}/foreshadow-visibility-vol-${pad2(args.report.as_of.volume)}-ch${pad3(start)}-ch${pad3(end)}.json`;
+    await writeJsonFile(join(args.rootDir, historyRel), args.report);
+    result.historyRel = historyRel;
+  }
+
   const parseLatest = (raw: unknown): { chapter: number; generated_at: string | null } | null => {
     if (!isPlainObject(raw)) return null;
     const obj = raw as Record<string, unknown>;
@@ -192,66 +202,90 @@ export async function writeForeshadowVisibilityLogs(args: {
     return { chapter, generated_at };
   };
 
-  let shouldWriteLatest = true;
-  if (await pathExists(latestAbs)) {
+  const lockAbs = join(dirAbs, ".latest.lock");
+  const LOCK_STALE_MS = 30_000;
+  const LOCK_TIMEOUT_MS = 2_000;
+  const sleep = async (ms: number): Promise<void> => {
+    await new Promise((r) => setTimeout(r, ms));
+  };
+  const lockMtimeMs = async (): Promise<number | null> => {
     try {
-      const existing = parseLatest(await readJsonFile(latestAbs));
-      const next = { chapter: args.report.as_of.chapter, generated_at: args.report.generated_at };
-      if (existing) {
-        if (existing.chapter > next.chapter) {
-          shouldWriteLatest = false;
-        } else if (existing.chapter === next.chapter) {
-          if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
-        }
-      }
+      return (await stat(lockAbs)).mtimeMs;
     } catch {
-      shouldWriteLatest = true;
+      return null;
     }
-  }
+  };
 
-  if (shouldWriteLatest) {
-    const tmpAbs = join(dirAbs, `.tmp-foreshadowing-latest-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
-    await writeJsonFile(tmpAbs, args.report);
+  const acquireLock = async (): Promise<void> => {
+    const startMs = Date.now();
+    while (true) {
+      try {
+        await mkdir(lockAbs);
+        return;
+      } catch (err: unknown) {
+        const code = (err as { code?: string }).code;
+        if (code !== "EEXIST") throw err;
 
-    // Re-check right before replace to reduce TOCTOU regressions under concurrent post-commit maintenance.
-    let replaceLatest = true;
+        const mtimeMs = await lockMtimeMs();
+        if (mtimeMs !== null && Date.now() - mtimeMs > LOCK_STALE_MS) {
+          await rm(lockAbs, { recursive: true, force: true });
+          continue;
+        }
+
+        if (Date.now() - startMs > LOCK_TIMEOUT_MS) {
+          throw new Error(`Timed out acquiring foreshadow latest lock: ${lockAbs}`);
+        }
+
+        await sleep(50);
+        continue;
+      }
+    }
+  };
+
+  const releaseLock = async (): Promise<void> => {
+    try {
+      await rm(lockAbs, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  };
+
+  await acquireLock();
+  try {
+    let existing: { chapter: number; generated_at: string | null } | null = null;
     if (await pathExists(latestAbs)) {
       try {
-        const existing = parseLatest(await readJsonFile(latestAbs));
-        const next = { chapter: args.report.as_of.chapter, generated_at: args.report.generated_at };
-        if (existing) {
-          if (existing.chapter > next.chapter) replaceLatest = false;
-          if (existing.chapter === next.chapter && existing.generated_at && existing.generated_at >= next.generated_at) replaceLatest = false;
-        }
+        existing = parseLatest(await readJsonFile(latestAbs));
       } catch {
-        // If latest.json is malformed (e.g., partial write), allow overwrite with a valid report.
+        existing = null;
       }
     }
 
-    if (!replaceLatest) {
-      try {
-        await rm(tmpAbs, { force: true });
-      } catch {
-        // ignore
+    const next = { chapter: args.report.as_of.chapter, generated_at: args.report.generated_at };
+    let shouldWriteLatest = true;
+    if (existing) {
+      if (existing.chapter > next.chapter) {
+        shouldWriteLatest = false;
+      } else if (existing.chapter === next.chapter) {
+        if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
       }
-    } else {
-      await rename(tmpAbs, latestAbs);
+    }
 
-      // Best-effort cleanup if rename somehow didn't remove the temp file.
+    if (shouldWriteLatest) {
+      const tmpAbs = join(dirAbs, `.tmp-foreshadowing-latest-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+      await writeJsonFile(tmpAbs, args.report);
+      await rename(tmpAbs, latestAbs);
       try {
         if (await pathExists(tmpAbs)) await rm(tmpAbs, { force: true });
       } catch {
         // ignore
       }
     }
+  } finally {
+    await releaseLock();
   }
 
-  if (!args.historyRange) return { latestRel };
-  const start = args.historyRange.start;
-  const end = args.historyRange.end;
-  const historyRel = `${dirRel}/foreshadowing-check-vol-${pad2(args.report.as_of.volume)}-ch${pad3(start)}-ch${pad3(end)}.json`;
-  await writeJsonFile(join(args.rootDir, historyRel), args.report);
-  return { latestRel, historyRel };
+  return result;
 }
 
 export async function loadForeshadowGlobalItems(rootDir: string): Promise<ForeshadowRawItem[]> {
