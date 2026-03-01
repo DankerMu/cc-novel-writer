@@ -43,7 +43,7 @@ type ForeshadowRawItem = Record<string, unknown> & {
 };
 
 function safeInt(v: unknown): number | null {
-  return typeof v === "number" && Number.isInteger(v) ? v : null;
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null;
 }
 
 function safeString(v: unknown): string | null {
@@ -172,7 +172,39 @@ export async function writeForeshadowVisibilityLogs(args: {
   await ensureDir(dirAbs);
 
   const latestRel = `${dirRel}/latest.json`;
-  await writeJsonFile(join(args.rootDir, latestRel), args.report);
+  const latestAbs = join(args.rootDir, latestRel);
+  const parseLatest = (raw: unknown): { chapter: number; generated_at: string | null } | null => {
+    if (!isPlainObject(raw)) return null;
+    const obj = raw as Record<string, unknown>;
+    if (obj.schema_version !== 1) return null;
+    const asOf = obj.as_of;
+    if (!isPlainObject(asOf)) return null;
+    const chapter = (asOf as Record<string, unknown>).chapter;
+    if (typeof chapter !== "number" || !Number.isInteger(chapter) || chapter < 0) return null;
+    const generated_at = typeof obj.generated_at === "string" ? obj.generated_at : null;
+    return { chapter, generated_at };
+  };
+
+  let shouldWriteLatest = true;
+  if (await pathExists(latestAbs)) {
+    try {
+      const existing = parseLatest(await readJsonFile(latestAbs));
+      const next = { chapter: args.report.as_of.chapter, generated_at: args.report.generated_at };
+      if (existing) {
+        if (existing.chapter > next.chapter) {
+          shouldWriteLatest = false;
+        } else if (existing.chapter === next.chapter) {
+          if (existing.generated_at && existing.generated_at >= next.generated_at) shouldWriteLatest = false;
+        }
+      }
+    } catch {
+      shouldWriteLatest = true;
+    }
+  }
+
+  if (shouldWriteLatest) {
+    await writeJsonFile(latestAbs, args.report);
+  }
 
   if (!args.historyRange) return { latestRel };
   const start = args.historyRange.start;

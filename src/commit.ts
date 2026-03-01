@@ -261,14 +261,48 @@ async function updateForeshadowing(args: {
   warnings: string[];
   dryRun: boolean;
 }): Promise<void> {
+  if (args.foreshadowOps.length === 0) return;
+
   const globalRel = "foreshadowing/global.json";
   const globalAbs = join(args.rootDir, globalRel);
-  const globalRaw = (await pathExists(globalAbs)) ? await readJsonFile(globalAbs) : { foreshadowing: [] };
+  let globalRaw: unknown = { foreshadowing: [] };
+  if (await pathExists(globalAbs)) {
+    try {
+      globalRaw = await readJsonFile(globalAbs);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      args.warnings.push(`Failed to read ${globalRel}: ${message}. Skipping foreshadow merge for this commit.`);
+      return;
+    }
+  }
+
+  if (Array.isArray(globalRaw)) globalRaw = { foreshadowing: globalRaw };
+  if (!(isPlainObject(globalRaw) && Array.isArray((globalRaw as Record<string, unknown>).foreshadowing))) {
+    args.warnings.push(`Invalid ${globalRel}: expected a list or {foreshadowing:[...]}. Skipping foreshadow merge for this commit.`);
+    return;
+  }
+
   const global = normalizeForeshadowFile(globalRaw);
 
   const volumeRel = `volumes/vol-${pad2(args.checkpoint.current_volume)}/foreshadowing.json`;
   const volumeAbs = join(args.rootDir, volumeRel);
-  const volumeRaw = (await pathExists(volumeAbs)) ? await readJsonFile(volumeAbs) : null;
+  let volumeRaw: unknown = null;
+  if (await pathExists(volumeAbs)) {
+    try {
+      volumeRaw = await readJsonFile(volumeAbs);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      args.warnings.push(`Failed to read ${volumeRel}: ${message}. Proceeding without volume foreshadow metadata.`);
+      volumeRaw = null;
+    }
+  }
+
+  if (Array.isArray(volumeRaw)) volumeRaw = { foreshadowing: volumeRaw };
+  if (volumeRaw !== null && !(isPlainObject(volumeRaw) && Array.isArray((volumeRaw as Record<string, unknown>).foreshadowing))) {
+    args.warnings.push(`Ignoring invalid ${volumeRel}: expected a list or {foreshadowing:[...]}.`);
+    volumeRaw = null;
+  }
+
   const volume = normalizeForeshadowFile(volumeRaw);
   const volumeIndex = new Map(volume.foreshadowing.map((it) => [it.id, it]));
 
