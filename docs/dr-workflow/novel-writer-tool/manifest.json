@@ -56,11 +56,10 @@
       "score": 95,
       "new_dr_items": 0,
       "dr_reports": [
-        "dr/dr-018-plugin-api.md",
         "dr/dr-019-haiku-summarizer.md",
         "dr/dr-020-single-command-ux.md"
       ],
-      "notes": "v4 FINALIZE：Score 95/100。含 Spec-Driven Writing 体系（L1/L2/L3）+ Tech Spec（18 plugin files）。",
+      "notes": "v4 FINALIZE：Score 95/100。含 Spec-Driven Writing 体系（L1/L2/L3）+ Tech Spec。DR-018 (Plugin API) 已随 CLI 转型移除。",
       "timestamp": "2026-02-21T23:00:00+08:00"
     },
     {

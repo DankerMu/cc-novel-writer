@@ -1,16 +1,6 @@
----
-name: novel-writing
-description: >
-  小说创作共享方法论知识库（内部引用，非用户直接调用）。
-  包含卷制滚动工作流、Spec-Driven Writing 四层规范体系、多线叙事管理、去 AI 化四层策略、8 维度质量评分标准。
-  This skill is a passive reference library. It should not be triggered by user queries.
-  Entry skills (/novel:start, /novel:continue) read its references/ directory
-  and inject content into Agent contexts programmatically.
----
-
 # 小说创作方法论
 
-本知识库为 novel 插件系统提供共享方法论。入口 Skill（`/novel:continue`、`/novel:start`）在 context 组装阶段读取本目录下的 references，按需注入到各 Agent 的 prompt 中。
+本知识库为 novel CLI 系统提供共享方法论。入口 Skill（`/novel:continue`、`/novel:start`）在 context 组装阶段读取本目录下的 references，按需注入到各 Agent 的 prompt 中。
 
 ## 卷制滚动工作流
 

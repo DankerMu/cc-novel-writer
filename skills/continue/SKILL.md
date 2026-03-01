@@ -1,12 +1,3 @@
----
-name: continue
-description: >
-  该技能用于续写小说的下一章或批量续写多章。支持参数 [N] 指定章数（默认 1，建议不超过 5）。
-  This skill should be used when the user says "续写", "继续写", "写下一章", "继续创作",
-  "写N章", "批量续写", "恢复中断的章节", "断点续写", or selects "继续写作" from /novel:start.
-  Requires project to be in WRITING or CHAPTER_REWRITE state.
----
-
 # 续写命令
 
 你是小说续写调度器。你的任务是读取当前进度，按流水线依次调度 Agent 完成 N 章续写。
@@ -172,8 +163,8 @@ mkdir -p staging/chapters staging/summaries staging/state staging/storylines sta
      - 事实层：`foreshadowing/global.json`（如不存在则视为空）
      - 计划层：`volumes/vol-{V:02d}/foreshadowing.json`（如不存在则视为空）
    - 优先确定性脚本（M3+ 扩展点；见 `docs/dr-workflow/novel-writer-tool/final/spec/06-extensions.md`）：
-     - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh`：
-       - 执行（超时 10 秒）：`timeout 10 bash ${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh {C}`
+     - 若存在 `${NOVEL_CLI_ROOT}/scripts/query-foreshadow.sh`：
+       - 执行（超时 10 秒）：`timeout 10 bash ${NOVEL_CLI_ROOT}/scripts/query-foreshadow.sh {C}`
        - 若退出码为 0 且 stdout 为合法 JSON 且 `.items` 为 list → `foreshadowing_tasks = .items`
        - 否则（脚本缺失/失败/输出非 JSON）→ 回退规则过滤（不得阻断流水线）
    - 规则过滤回退（确定性；详见 `references/foreshadowing.md`）：
@@ -254,8 +245,8 @@ for chapter_num in range(start, start + remaining_N):
 
   4. QualityJudge Agent → 质量评估（双轨验收）
      （可选确定性工具）中文 NER 实体抽取（用于一致性/LS-001 辅助信号）：
-       - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh`：
-         - 执行：`bash ${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh staging/chapters/chapter-{C:03d}.md`
+       - 若存在 `${NOVEL_CLI_ROOT}/scripts/run-ner.sh`：
+         - 执行：`bash ${NOVEL_CLI_ROOT}/scripts/run-ner.sh staging/chapters/chapter-{C:03d}.md`
          - 若退出码为 0 且 stdout 为合法 JSON → 记为 `ner_entities_json`，写入 quality_judge_manifest.ner_entities
        - 若脚本不存在/失败/输出非 JSON → `ner_entities_json = null`，不得阻断流水线（QualityJudge 回退 LLM 抽取 + confidence）
      （可选）注入最近一致性检查摘要（供 LS-001 参考，不直接替代正文判断）：
@@ -264,8 +255,8 @@ for chapter_num in range(start, start + remaining_N):
          - 注入到 quality_judge_manifest.continuity_report_summary
        - 若文件不存在/读取失败/JSON 无效 → continuity_report_summary = null，不得阻断流水线
      （可选确定性工具）黑名单精确命中统计：
-       - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh`：
-         - 执行：`bash ${CLAUDE_PLUGIN_ROOT}/scripts/lint-blacklist.sh staging/chapters/chapter-{C:03d}.md ai-blacklist.json`
+       - 若存在 `${NOVEL_CLI_ROOT}/scripts/lint-blacklist.sh`：
+         - 执行：`bash ${NOVEL_CLI_ROOT}/scripts/lint-blacklist.sh staging/chapters/chapter-{C:03d}.md ai-blacklist.json`
          - 若退出码为 0 且 stdout 为合法 JSON → 记为 `blacklist_lint_json`，写入 quality_judge_manifest.blacklist_lint
        - 若脚本不存在/失败/输出非 JSON → `blacklist_lint_json = null`，不得阻断流水线（回退 LLM 估计）
      输入: quality_judge_manifest（inline 计算值 + 文件路径；cross_references 来自 staging/state/chapter-{C:03d}-crossref.json）

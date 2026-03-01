@@ -123,7 +123,7 @@
 - 若存在 `target_resolve_range = [start, end]` 且 `last_completed_chapter > end`：标记为 **超期**。
 - `scope == "long"`：不做超期提示。
 
-## 5) `${CLAUDE_PLUGIN_ROOT}/scripts/query-foreshadow.sh`（可选确定性扩展点）
+## 5) `${NOVEL_CLI_ROOT}/scripts/query-foreshadow.sh`（可选确定性扩展点）
 
 - 输入：`<chapter_num>`
 - 输出：stdout JSON（exit 0），其中 `.items` 为“本章相关伏笔条目子集”（list of objects，字段建议与 global 条目一致：`id/description/scope/status/target_resolve_range/...`）

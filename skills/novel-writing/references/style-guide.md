@@ -1,6 +1,6 @@
 # 去 AI 化规则详解
 
-本文档定义 novel 插件系统的完整去 AI 化策略，供 ChapterWriter、StyleRefiner、QualityJudge 参考。
+本文档定义 novel CLI 系统的完整去 AI 化策略，供 ChapterWriter、StyleRefiner、QualityJudge 参考。
 
 ## Layer 1: 风格锚定（输入层）
 
@@ -52,7 +52,7 @@ ChapterWriter prompt 中注入以下硬约束：
 - 情感描写类：不禁、莫名、油然而生、心中暗道、嘴角微微上扬
 - 过渡连接类：与此同时、值得一提的是、毫无疑问
 - 形容夸张类：宛如、恍若、仿佛置身于
-- 详见 `${CLAUDE_PLUGIN_ROOT}/templates/ai-blacklist.json`
+- 详见 `${NOVEL_CLI_ROOT}/templates/ai-blacklist.json`
 
 ### 2.2 角色语癖
 
@@ -139,7 +139,7 @@ StyleRefiner 对初稿逐项执行：
 
 ### 黑名单维护机制
 
-- **初始化**：`${CLAUDE_PLUGIN_ROOT}/templates/ai-blacklist.json` 提供 ≥ 30 个常见 AI 高频中文用语
+- **初始化**：`${NOVEL_CLI_ROOT}/templates/ai-blacklist.json` 提供 ≥ 30 个常见 AI 高频中文用语
 - **持续更新**：QualityJudge 检测到新高频 AI 用语时，建议追加到黑名单
 - **用户自定义**：用户可手动添加/删除
 - **误伤保护**：如果某个黑名单词是用户风格样本中的高频词，自动豁免

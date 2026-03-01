@@ -4,7 +4,7 @@
 
 ## 准备
 
-- 安装 Claude Code CLI 并启用 `novel` 插件
+- 安装 Claude Code CLI 并配置 `novel` CLI
 - 准备一个空目录作为项目根目录
 - （可选）准备 1-3 章自己写的文字作为风格样本
 

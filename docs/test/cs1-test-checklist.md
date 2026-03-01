@@ -1,7 +1,7 @@
 # CS1 测试清单 — Quick Start Polish & Docs
 
 **版本**：0.2.0
-**前置**：重新安装插件，确认版本 0.2.0，无 hooks duplicate error
+**前置**：安装 CLI，确认版本 0.2.0
 
 ---
 

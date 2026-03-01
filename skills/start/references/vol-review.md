@@ -4,7 +4,7 @@
 2. **全卷一致性报告（NER）**：
    - 章节范围：优先使用本卷 `outline.md` 解析得到的 `[chapter_start, chapter_end]`；若解析失败则退化为”本卷 evaluations/ 与 summaries/ 中匹配 `chapter-(\d{3})` 的章节号集合，取 min/max 作为范围”
    - 实体抽取与报告 schema：见 `skills/continue/references/continuity-checks.md`
-   - 若存在 `${CLAUDE_PLUGIN_ROOT}/scripts/run-ner.sh`：逐章执行抽取；否则回退 LLM（优先 summaries，必要时回看 chapters），按同一 schema 抽取 entities，并为每类实体输出 confidence
+   - 若存在 `${NOVEL_CLI_ROOT}/scripts/run-ner.sh`：逐章执行抽取；否则回退 LLM（优先 summaries，必要时回看 chapters），按同一 schema 抽取 entities，并为每类实体输出 confidence
    - 输出 timeline/location/relationship/mapping 等 issues（含 severity/confidence/evidence/suggestions）
    - 落盘：
      - 写入 `volumes/vol-{V:02d}/continuity-report.json`

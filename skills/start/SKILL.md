@@ -1,14 +1,3 @@
----
-name: start
-description: >
-  This skill is the main entry point for the novel creation system. It should be used when the user
-  wants to create a new novel project, plan a new volume, review volume quality, update world settings,
-  import research materials, or recover from an error state. Automatically detects project state and
-  recommends the next action.
-  Triggered by: /novel:start, "创建新项目", "规划新卷", "卷末回顾", "质量回顾", "更新设定",
-  "导入研究资料", "开始写小说", "新建故事".
----
-
 # 小说创作主入口
 
 你是一位专业的小说项目管理者。你的任务是检测当前项目状态，向用户推荐最合理的下一步操作，并派发对应的 Agent 执行。
@@ -225,10 +214,10 @@ Skill → 状态映射：
 
 > 仅当 `platform-profile.json` 不存在时执行。
 
-1) 从 `${CLAUDE_PLUGIN_ROOT}/templates/platform-profile.json` 读取对应平台默认值（`defaults.{platform}`）并生成一份**候选 platform profile**（暂存在变量，不写盘）：
+1) 从 `${NOVEL_CLI_ROOT}/templates/platform-profile.json` 读取对应平台默认值（`defaults.{platform}`）并生成一份**候选 platform profile**（暂存在变量，不写盘）：
 - 将 `created_at` 设置为当前时间（ISO-8601）
 - 将 `scoring.genre_drive_type` 设为上一步选择的 `genre_drive_type`
-- 从 `${CLAUDE_PLUGIN_ROOT}/templates/genre-weight-profiles.json` 读取 `default_profile_by_drive_type`，设置 `scoring.weight_profile_id`
+- 从 `${NOVEL_CLI_ROOT}/templates/genre-weight-profiles.json` 读取 `default_profile_by_drive_type`，设置 `scoring.weight_profile_id`
 
 2) 用 AskUserQuestion 询问是否覆盖默认阈值：
 ```
@@ -325,7 +314,7 @@ Skill → 状态映射：
 ##### Step C: 初始化项目结构
 
 1. 创建项目目录结构（参考 `docs/dr-workflow/novel-writer-tool/final/prd/09-data.md` §9.1）
-2. 从 `${CLAUDE_PLUGIN_ROOT}/templates/` 复制模板文件到项目目录（至少生成以下文件）：
+2. 从 `${NOVEL_CLI_ROOT}/templates/` 复制模板文件到项目目录（至少生成以下文件）：
    - `brief.md`：从 `brief-template.md` 复制并用用户输入填充占位符（包含 `platform` / `genre_drive_type` / `platform_constraints_summary`）
    - `style-profile.json`：从 `style-profile-template.json` 复制（后续由 StyleAnalyzer 填充）
    - `ai-blacklist.json`：从 `ai-blacklist.json` 复制
@@ -466,4 +455,4 @@ Skill → 状态映射：
 - 单次 `/novel:start` **每个动作**（创建项目、规划卷、回顾等）建议 ≤5 个 AskUserQuestion；若用户从创建流程直接进入卷规划，轮次计数重置
 - 推荐项始终标记 `(Recommended)`
 - 所有用户交互使用中文
-- 「查看帮助」选项：输出插件核心命令列表（`/novel:start`、`/novel:continue`、`/novel:status`）+ 用户文档路径（`docs/user/quick-start.md`）
+- 「查看帮助」选项：输出 CLI 核心命令列表（`/novel:start`、`/novel:continue`、`/novel:status`）+ 用户文档路径（`docs/user/quick-start.md`）

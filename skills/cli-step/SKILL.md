@@ -1,11 +1,3 @@
----
-name: cli-step
-description: >
-  Use this skill to run exactly ONE deterministic pipeline step via the new `novel` CLI:
-  next → instructions → execute subagent → stop for review (no auto-commit).
-  Triggered by: "用CLI跑下一步", "novel next", "instruction packet", "/novel:cli-step".
----
-
 # `novel` CLI 单步适配器（Claude Code）
 
 你是 Claude Code 的执行器适配层：你不做确定性编排逻辑，只调用 `novel` CLI 获取 step + instruction packet，然后派发对应 subagent 写入 `staging/**`，最后在断点处停下让用户 review。

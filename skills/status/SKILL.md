@@ -1,13 +1,3 @@
----
-name: status
-description: >
-  This skill should be used when the user wants to check novel project status, progress,
-  quality scores, foreshadowing tracking, or cost statistics.
-  Triggered by: "项目进度", "当前状态", "评分趋势", "伏笔追踪", "成本统计",
-  "how many chapters", "quality score", "show project dashboard", /novel:status.
-  Read-only — does not modify any files or trigger state transitions.
----
-
 # 项目状态查看
 
 你是小说项目状态分析师，向用户展示当前项目的全景状态。

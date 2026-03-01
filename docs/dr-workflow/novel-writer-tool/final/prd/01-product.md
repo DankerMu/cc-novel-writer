@@ -15,7 +15,7 @@
 
 ### 2.1 交付格式
 
-本产品以 **Claude Code Plugin** 形式交付（plugin name: `novel`），包含 4 个技能（Skills）和 9 个专业 Agent。其中 3 个技能为用户入口（`/novel:start`、`/novel:continue`、`/novel:status`），1 个为共享知识库。Plugin skills 遵循官方命名空间规则 `/{plugin-name}:{skill-name}`。[DR-018](../../v4/dr/dr-018-plugin-api.md) [DR-020](../../v4/dr/dr-020-single-command-ux.md)
+本产品以 **Claude Code Plugin** 形式交付（plugin name: `novel`），包含 4 个技能（Skills）和 9 个专业 Agent。其中 3 个技能为用户入口（`/novel:start`、`/novel:continue`、`/novel:status`），1 个为共享知识库。Plugin skills 遵循官方命名空间规则 `/{plugin-name}:{skill-name}`。~~DR-018~~ (已随 CLI 转型移除)[DR-020](../../v4/dr/dr-020-single-command-ux.md)
 
 ```
 cc-novel-writer/
