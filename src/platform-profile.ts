@@ -39,6 +39,51 @@ export type ScoringPolicy = {
   weight_overrides?: Record<string, number>;
 };
 
+export type RetentionTitlePolicy = {
+  enabled: boolean;
+  min_chars: number;
+  max_chars: number;
+  forbidden_patterns: string[];
+  required_patterns?: string[];
+  auto_fix: boolean;
+};
+
+export type HookLedgerPolicy = {
+  enabled: boolean;
+  fulfillment_window_chapters: number;
+  diversity_window_chapters: number;
+  max_same_type_streak: number;
+  min_distinct_types_in_window: number;
+  overdue_policy: SeverityPolicy;
+};
+
+export type RetentionPolicy = {
+  title_policy: RetentionTitlePolicy;
+  hook_ledger: HookLedgerPolicy;
+};
+
+export type MobileReadabilityBlockingSeverity = "hard_only" | "soft_and_hard";
+
+export type MobileReadabilityPolicy = {
+  enabled: boolean;
+  max_paragraph_chars: number;
+  max_consecutive_exposition_paragraphs: number;
+  blocking_severity: MobileReadabilityBlockingSeverity;
+};
+
+export type ReadabilityPolicy = {
+  mobile: MobileReadabilityPolicy;
+};
+
+export type NamingConflictType = "duplicate" | "near_duplicate" | "alias_collision";
+
+export type NamingPolicy = {
+  enabled: boolean;
+  near_duplicate_threshold: number;
+  blocking_conflict_types: NamingConflictType[];
+  exemptions?: Record<string, unknown>;
+};
+
 export type PlatformProfile = {
   schema_version: number;
   platform: PlatformId;
@@ -48,6 +93,9 @@ export type PlatformProfile = {
   compliance: CompliancePolicy;
   hook_policy?: HookPolicy;
   scoring?: ScoringPolicy;
+  retention?: RetentionPolicy | null;
+  readability?: ReadabilityPolicy | null;
+  naming?: NamingPolicy | null;
 };
 
 function requireIntField(obj: Record<string, unknown>, field: string, file: string): number {
@@ -187,6 +235,153 @@ function parseScoringPolicy(raw: unknown, file: string): ScoringPolicy {
   return out;
 }
 
+function requireBoolValue(value: unknown, file: string, field: string): boolean {
+  if (typeof value !== "boolean") throw new NovelCliError(`Invalid ${file}: '${field}' must be a boolean.`, 2);
+  return value;
+}
+
+function requireNonNegativeIntValue(value: unknown, file: string, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new NovelCliError(`Invalid ${file}: '${field}' must be an int >= 0.`, 2);
+  }
+  return value;
+}
+
+function requirePositiveIntValue(value: unknown, file: string, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new NovelCliError(`Invalid ${file}: '${field}' must be an int >= 1.`, 2);
+  }
+  return value;
+}
+
+function requireFiniteNonNegativeNumberValue(value: unknown, file: string, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new NovelCliError(`Invalid ${file}: '${field}' must be a finite number >= 0.`, 2);
+  }
+  return value;
+}
+
+function requireStringArrayValue(
+  value: unknown,
+  file: string,
+  field: string,
+  opts: { allowEmpty: boolean }
+): string[] {
+  if (!Array.isArray(value) || !value.every((v) => typeof v === "string" && v.trim().length > 0)) {
+    throw new NovelCliError(`Invalid ${file}: '${field}' must be a string array (no empty items).`, 2);
+  }
+  const uniq = Array.from(new Set(value.map((v) => v.trim()))).filter((v) => v.length > 0);
+  if (!opts.allowEmpty && uniq.length === 0) {
+    throw new NovelCliError(`Invalid ${file}: '${field}' must be a non-empty string array.`, 2);
+  }
+  return uniq;
+}
+
+function parseRetentionTitlePolicy(raw: unknown, file: string): RetentionTitlePolicy {
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'retention.title_policy' must be an object.`, 2);
+  const obj = raw as Record<string, unknown>;
+  const enabled = requireBoolValue(obj.enabled, file, "retention.title_policy.enabled");
+  const min_chars = requireNonNegativeIntValue(obj.min_chars, file, "retention.title_policy.min_chars");
+  const max_chars = requireNonNegativeIntValue(obj.max_chars, file, "retention.title_policy.max_chars");
+  if (min_chars > max_chars) {
+    throw new NovelCliError(`Invalid ${file}: 'retention.title_policy.min_chars' must be <= 'retention.title_policy.max_chars'.`, 2);
+  }
+  const forbidden_patterns = requireStringArrayValue(obj.forbidden_patterns, file, "retention.title_policy.forbidden_patterns", { allowEmpty: true });
+  const required_patterns = obj.required_patterns === undefined
+    ? undefined
+    : requireStringArrayValue(obj.required_patterns, file, "retention.title_policy.required_patterns", { allowEmpty: true });
+  const auto_fix = requireBoolValue(obj.auto_fix, file, "retention.title_policy.auto_fix");
+  return {
+    enabled,
+    min_chars,
+    max_chars,
+    forbidden_patterns,
+    ...(required_patterns ? { required_patterns } : {}),
+    auto_fix
+  };
+}
+
+function parseHookLedgerPolicy(raw: unknown, file: string): HookLedgerPolicy {
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'retention.hook_ledger' must be an object.`, 2);
+  const obj = raw as Record<string, unknown>;
+  return {
+    enabled: requireBoolValue(obj.enabled, file, "retention.hook_ledger.enabled"),
+    fulfillment_window_chapters: requirePositiveIntValue(obj.fulfillment_window_chapters, file, "retention.hook_ledger.fulfillment_window_chapters"),
+    diversity_window_chapters: requirePositiveIntValue(obj.diversity_window_chapters, file, "retention.hook_ledger.diversity_window_chapters"),
+    max_same_type_streak: requirePositiveIntValue(obj.max_same_type_streak, file, "retention.hook_ledger.max_same_type_streak"),
+    min_distinct_types_in_window: requirePositiveIntValue(obj.min_distinct_types_in_window, file, "retention.hook_ledger.min_distinct_types_in_window"),
+    overdue_policy: requireSeverityPolicy(obj.overdue_policy, file, "retention.hook_ledger.overdue_policy")
+  };
+}
+
+function parseRetentionPolicy(raw: unknown, file: string): RetentionPolicy {
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'retention' must be an object or null.`, 2);
+  const obj = raw as Record<string, unknown>;
+  return {
+    title_policy: parseRetentionTitlePolicy(obj.title_policy, file),
+    hook_ledger: parseHookLedgerPolicy(obj.hook_ledger, file)
+  };
+}
+
+function parseMobileReadabilityPolicy(raw: unknown, file: string): MobileReadabilityPolicy {
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'readability.mobile' must be an object.`, 2);
+  const obj = raw as Record<string, unknown>;
+  const blocking = typeof obj.blocking_severity === "string" ? obj.blocking_severity : null;
+  if (blocking !== "hard_only" && blocking !== "soft_and_hard") {
+    throw new NovelCliError(`Invalid ${file}: 'readability.mobile.blocking_severity' must be 'hard_only' or 'soft_and_hard'.`, 2);
+  }
+  return {
+    enabled: requireBoolValue(obj.enabled, file, "readability.mobile.enabled"),
+    max_paragraph_chars: requireNonNegativeIntValue(obj.max_paragraph_chars, file, "readability.mobile.max_paragraph_chars"),
+    max_consecutive_exposition_paragraphs: requireNonNegativeIntValue(
+      obj.max_consecutive_exposition_paragraphs,
+      file,
+      "readability.mobile.max_consecutive_exposition_paragraphs"
+    ),
+    blocking_severity: blocking
+  };
+}
+
+function parseReadabilityPolicy(raw: unknown, file: string): ReadabilityPolicy {
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'readability' must be an object or null.`, 2);
+  const obj = raw as Record<string, unknown>;
+  return { mobile: parseMobileReadabilityPolicy(obj.mobile, file) };
+}
+
+const VALID_NAMING_CONFLICT_TYPES = ["duplicate", "near_duplicate", "alias_collision"] as const;
+
+function parseNamingPolicy(raw: unknown, file: string): NamingPolicy {
+  if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: 'naming' must be an object or null.`, 2);
+  const obj = raw as Record<string, unknown>;
+  const enabled = requireBoolValue(obj.enabled, file, "naming.enabled");
+  const near_duplicate_threshold = requireFiniteNonNegativeNumberValue(obj.near_duplicate_threshold, file, "naming.near_duplicate_threshold");
+
+  const rawTypes = requireStringArrayValue(obj.blocking_conflict_types, file, "naming.blocking_conflict_types", { allowEmpty: false });
+  const blocking_conflict_types: NamingConflictType[] = [];
+  for (const t of rawTypes) {
+    if (!(VALID_NAMING_CONFLICT_TYPES as readonly string[]).includes(t)) {
+      throw new NovelCliError(
+        `Invalid ${file}: 'naming.blocking_conflict_types' contains unknown type '${t}' (allowed: ${VALID_NAMING_CONFLICT_TYPES.join(", ")}).`,
+        2
+      );
+    }
+    blocking_conflict_types.push(t as NamingConflictType);
+  }
+
+  const out: NamingPolicy = {
+    enabled,
+    near_duplicate_threshold,
+    blocking_conflict_types: Array.from(new Set(blocking_conflict_types))
+  };
+
+  if (obj.exemptions !== undefined) {
+    if (!isPlainObject(obj.exemptions)) throw new NovelCliError(`Invalid ${file}: 'naming.exemptions' must be an object.`, 2);
+    out.exemptions = obj.exemptions as Record<string, unknown>;
+  }
+
+  return out;
+}
+
 export function parsePlatformProfile(raw: unknown, file: string): PlatformProfile {
   if (!isPlainObject(raw)) throw new NovelCliError(`Invalid ${file}: expected a JSON object.`, 2);
   const obj = raw as Record<string, unknown>;
@@ -202,7 +397,19 @@ export function parsePlatformProfile(raw: unknown, file: string): PlatformProfil
   const hook_policy = isPlainObject(obj.hook_policy) ? parseHookPolicy(obj.hook_policy, file) : undefined;
   const scoring = isPlainObject(obj.scoring) ? parseScoringPolicy(obj.scoring, file) : undefined;
 
-  return { schema_version, platform, created_at, word_count, info_load, compliance, hook_policy, scoring };
+  const out: PlatformProfile = { schema_version, platform, created_at, word_count, info_load, compliance, hook_policy, scoring };
+
+  if (obj.retention !== undefined) {
+    out.retention = obj.retention === null ? null : parseRetentionPolicy(obj.retention, file);
+  }
+  if (obj.readability !== undefined) {
+    out.readability = obj.readability === null ? null : parseReadabilityPolicy(obj.readability, file);
+  }
+  if (obj.naming !== undefined) {
+    out.naming = obj.naming === null ? null : parseNamingPolicy(obj.naming, file);
+  }
+
+  return out;
 }
 
 export async function loadPlatformProfile(rootDir: string): Promise<{ relPath: string; profile: PlatformProfile } | null> {
