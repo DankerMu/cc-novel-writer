@@ -85,7 +85,7 @@ QualityJudge 采用双轨验收：
 1. **合规检查**（硬门槛）：L1/L2/L3/LS 逐条校验，有 high-confidence 违规即强制修订
 2. **质量评分**（软评估）：8 维度加权评分
 
-> **注意（动态权重）**：实际评分权重以 `platform-profile.json.scoring` + `genre-weight-profiles.json` 计算得到的 `packet.manifest.inline.scoring_weights` 为准（commit 后也会写入 `evaluations/*-eval.json.scoring_weights`）；下表仅为 **legacy fallback 默认值**（当未提供 `scoring_weights` 时使用）。
+> **注意（动态权重）**：实际评分权重以 `platform-profile.json.scoring` + `genre-weight-profiles.json` 计算得到的 instruction packet JSON 的 `manifest.inline.scoring_weights` 为准（commit 后也会写入 `evaluations/*-eval.json.scoring_weights`）；下表仅为 **legacy fallback 默认值**（当未提供 `scoring_weights` 时使用）。
 >
 > 当 `platform-profile.json.hook_policy.required=true` 时，会额外启用 **章末钩子强度**（`hook_strength`，1–5 分）维度；若低于 `hook_policy.min_strength`，`novel next` 可能返回 `chapter:NNN:hook-fix`（只改章末 1–2 段；最多一次）或 `...:review`。未启用时该维度权重为 0，不影响综合分。
 >
@@ -145,4 +145,4 @@ project/
 `platform-profile.json` 在项目初始化时生成，用于约束字数/信息负载/合规策略/章末钩子策略，并提供 QualityJudge 的动态权重输入（`scoring`）。  
 其中 `platform-profile.json.platform`（以及对应的叙事驱动类型 `scoring.genre_drive_type`）一旦写入，系统视为该项目的**不可变绑定**：后续不会被“更新设定”等操作改写。若要更换平台/驱动类型，建议新建项目目录重新初始化。
 
-`web-novel-cliche-lint.json` 为可选文件：缺失时 cliché lint 会降级跳过（不阻断流水线）。需要启用时可从 `templates/web-novel-cliche-lint.json` 复制到项目根目录并按需微调。
+`web-novel-cliche-lint.json` 为可选文件：缺失时 cliché lint 会降级跳过（不阻断流水线）；启用后若出现 `severity="hard"` 命中会阻断 `novel commit`。需要启用时可从 `templates/web-novel-cliche-lint.json` 复制到项目根目录并按需微调。
