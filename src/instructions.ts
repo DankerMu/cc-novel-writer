@@ -2,7 +2,7 @@ import { join } from "node:path";
 
 import type { Checkpoint } from "./checkpoint.js";
 import { NovelCliError } from "./errors.js";
-import { ensureDir, pathExists, readTextFile, writeJsonFile, writeTextFile } from "./fs-utils.js";
+import { ensureDir, pathExists, readTextFile, writeJsonFile, writeTextFileIfMissing } from "./fs-utils.js";
 import { loadContinuityLatestSummary } from "./consistency-auditor.js";
 import { computeForeshadowVisibilityReport, loadForeshadowGlobalItems } from "./foreshadow-visibility.js";
 import { computeEffectiveScoringWeights, loadGenreWeightProfiles } from "./scoring-weights.js";
@@ -10,7 +10,7 @@ import { parseNovelAskQuestionSpec, type NovelAskQuestionSpec } from "./novel-as
 import { loadPlatformProfile } from "./platform-profile.js";
 import { resolveProjectRelativePath } from "./safe-path.js";
 import { computeTitlePolicyReport } from "./title-policy.js";
-import { chapterRelPaths, formatStepId, pad2, type Step } from "./steps.js";
+import { chapterRelPaths, formatStepId, pad2, titleFixSnapshotRel, type Step } from "./steps.js";
 
 export type InstructionPacket = {
   version: 1;
@@ -203,11 +203,8 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
     // Snapshot the chapter before title-fix so validate can ensure body is byte-identical.
     const beforeAbs = join(args.rootDir, rel.staging.chapterMd);
     const before = await readTextFile(beforeAbs);
-    const snapshotRel = `staging/logs/title-fix-chapter-${String(args.step.chapter).padStart(3, "0")}-before.md`;
-    const snapshotAbs = join(args.rootDir, snapshotRel);
-    if (!(await pathExists(snapshotAbs))) {
-      await writeTextFile(snapshotAbs, before);
-    }
+    const snapshotRel = titleFixSnapshotRel(args.step.chapter);
+    await writeTextFileIfMissing(join(args.rootDir, snapshotRel), before);
     paths.title_fix_before = snapshotRel;
 
     const report = computeTitlePolicyReport({ chapter: args.step.chapter, chapterText: before, platformProfile: loadedPlatform.profile });

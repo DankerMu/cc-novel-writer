@@ -45,6 +45,17 @@ export async function writeTextFile(path: string, contents: string): Promise<voi
   }
 }
 
+export async function writeTextFileIfMissing(path: string, contents: string): Promise<void> {
+  try {
+    await ensureDir(dirname(path));
+    await writeFile(path, contents, { encoding: "utf8", flag: "wx" });
+  } catch (err: unknown) {
+    if (err && typeof err === "object" && "code" in err && (err as { code?: unknown }).code === "EEXIST") return;
+    const message = err instanceof Error ? err.message : String(err);
+    throw new NovelCliError(`Failed to write file: ${path}. ${message}`);
+  }
+}
+
 export async function writeJsonFile(path: string, payload: unknown): Promise<void> {
   await writeTextFile(path, `${JSON.stringify(payload, null, 2)}\n`);
 }
@@ -57,4 +68,3 @@ export async function removePath(path: string): Promise<void> {
     throw new NovelCliError(`Failed to remove path: ${path}. ${message}`);
   }
 }
-

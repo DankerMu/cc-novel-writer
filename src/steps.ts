@@ -19,6 +19,10 @@ export function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+export function titleFixSnapshotRel(chapter: number): string {
+  return `staging/logs/title-fix-chapter-${pad3(chapter)}-before.md`;
+}
+
 export function formatStepId(step: Step): string {
   if (step.kind !== "chapter") throw new NovelCliError(`Unsupported step kind: ${(step as Step).kind}`, 2);
   return `chapter:${pad3(step.chapter)}:${step.stage}`;

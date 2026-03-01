@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { parsePlatformProfile } from "../platform-profile.js";
-import { assertTitleFixOnlyChangedH1, computeTitlePolicyReport, extractChapterTitleFromMarkdown } from "../title-policy.js";
+import {
+  assertTitleFixOnlyChangedTitleLine,
+  computeTitlePolicyReport,
+  extractChapterTitleFromMarkdown,
+  stripFirstAtxHeadingLine
+} from "../title-policy.js";
 
 function makeProfileRaw(extra: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -73,8 +78,45 @@ test("computeTitlePolicyReport detects missing H1 title as hard violation when e
   assert.ok(report.issues.some((i) => i.id.includes("missing_h1")));
 });
 
+test("computeTitlePolicyReport returns pass when title complies", () => {
+  const profile = parsePlatformProfile(
+    makeProfileRaw({ retention: makeRetention({ title_policy: makeTitlePolicy({ forbidden_patterns: [], required_patterns: [] }) }) }),
+    "platform-profile.json"
+  );
+  const report = computeTitlePolicyReport({ chapter: 1, chapterText: "# 合规标题\n正文", platformProfile: profile });
+  assert.equal(report.status, "pass");
+  assert.equal(report.issues.length, 0);
+});
+
+test("computeTitlePolicyReport flags empty title as hard violation", () => {
+  const profile = parsePlatformProfile(
+    makeProfileRaw({ retention: makeRetention({ title_policy: makeTitlePolicy({ forbidden_patterns: [], required_patterns: [] }) }) }),
+    "platform-profile.json"
+  );
+  const report = computeTitlePolicyReport({ chapter: 1, chapterText: "#   \n正文", platformProfile: profile });
+  assert.equal(report.status, "violation");
+  assert.equal(report.has_hard_violations, true);
+  assert.ok(report.issues.some((i) => i.id.includes("empty_title")));
+});
+
+test("computeTitlePolicyReport flags too-short title as warn (soft)", () => {
+  const profile = parsePlatformProfile(
+    makeProfileRaw({
+      retention: makeRetention({ title_policy: makeTitlePolicy({ min_chars: 5, forbidden_patterns: [], required_patterns: [] }) })
+    }),
+    "platform-profile.json"
+  );
+  const report = computeTitlePolicyReport({ chapter: 1, chapterText: "# 短\n正文", platformProfile: profile });
+  assert.equal(report.status, "warn");
+  assert.equal(report.has_hard_violations, false);
+  assert.ok(report.issues.some((i) => i.id.includes("too_short")));
+});
+
 test("computeTitlePolicyReport flags too-long title as warn (soft)", () => {
-  const profile = parsePlatformProfile(makeProfileRaw({ retention: makeRetention({ title_policy: makeTitlePolicy({ max_chars: 3, required_patterns: [] }) }) }), "platform-profile.json");
+  const profile = parsePlatformProfile(
+    makeProfileRaw({ retention: makeRetention({ title_policy: makeTitlePolicy({ max_chars: 3, required_patterns: [] }) }) }),
+    "platform-profile.json"
+  );
   const report = computeTitlePolicyReport({ chapter: 1, chapterText: "# 太长的标题\n正文", platformProfile: profile });
   assert.equal(report.status, "warn");
   assert.equal(report.has_hard_violations, false);
@@ -89,34 +131,64 @@ test("computeTitlePolicyReport flags required-pattern mismatch as warn (soft)", 
 });
 
 test("computeTitlePolicyReport flags forbidden pattern matches as warn (soft)", () => {
-  const profile = parsePlatformProfile(makeProfileRaw({ retention: makeRetention({ title_policy: makeTitlePolicy({ required_patterns: [] }) }) }), "platform-profile.json");
+  const profile = parsePlatformProfile(
+    makeProfileRaw({ retention: makeRetention({ title_policy: makeTitlePolicy({ required_patterns: [] }) }) }),
+    "platform-profile.json"
+  );
   const report = computeTitlePolicyReport({ chapter: 1, chapterText: "# 这是剧透\n正文", platformProfile: profile });
   assert.equal(report.status, "warn");
   assert.ok(report.issues.some((i) => i.id.includes("forbidden_pattern")));
 });
 
 test("computeTitlePolicyReport flags banned words in title as hard violation", () => {
-  const profile = parsePlatformProfile(makeProfileRaw({ retention: makeRetention({ title_policy: makeTitlePolicy({ forbidden_patterns: [], required_patterns: [] }) }) }), "platform-profile.json");
+  const profile = parsePlatformProfile(
+    makeProfileRaw({ retention: makeRetention({ title_policy: makeTitlePolicy({ forbidden_patterns: [], required_patterns: [] }) }) }),
+    "platform-profile.json"
+  );
   const report = computeTitlePolicyReport({ chapter: 1, chapterText: "# 禁词来了\n正文", platformProfile: profile });
   assert.equal(report.status, "violation");
   assert.equal(report.has_hard_violations, true);
   assert.ok(report.issues.some((i) => i.id.includes("banned_words")));
 });
 
-test("assertTitleFixOnlyChangedH1 allows inserting a new title line", () => {
+test("stripFirstAtxHeadingLine strips the first ATX heading line (keeps bytes elsewhere)", () => {
+  const before = "\n## 旧标题\r\n正文\n";
+  const out = stripFirstAtxHeadingLine(before);
+  assert.equal(out.removed_line, "## 旧标题");
+  assert.equal(out.stripped, "\n正文\n");
+});
+
+test("stripFirstAtxHeadingLine returns unchanged when first non-empty line is not a heading", () => {
+  const before = "\n正文\n# 标题\n";
+  const out = stripFirstAtxHeadingLine(before);
+  assert.equal(out.removed_line, null);
+  assert.equal(out.stripped, before);
+});
+
+test("stripFirstAtxHeadingLine handles heading-only files without trailing newline", () => {
+  const before = "# 标题";
+  const out = stripFirstAtxHeadingLine(before);
+  assert.equal(out.removed_line, "# 标题");
+  assert.equal(out.stripped, "");
+});
+
+test("assertTitleFixOnlyChangedTitleLine allows inserting a new title line", () => {
   const before = "\n正文第一段\n第二段\n";
   const after = "\n# 新标题\n正文第一段\n第二段\n";
-  assert.doesNotThrow(() => assertTitleFixOnlyChangedH1({ before, after, file: "chapters/chapter-001.md" }));
+  assert.doesNotThrow(() => assertTitleFixOnlyChangedTitleLine({ before, after, file: "chapters/chapter-001.md" }));
 });
 
-test("assertTitleFixOnlyChangedH1 allows promoting an existing ATX heading to H1", () => {
+test("assertTitleFixOnlyChangedTitleLine allows promoting an existing ATX heading to H1", () => {
   const before = "## 旧标题\n正文\n";
   const after = "# 旧标题\n正文\n";
-  assert.doesNotThrow(() => assertTitleFixOnlyChangedH1({ before, after, file: "chapters/chapter-001.md" }));
+  assert.doesNotThrow(() => assertTitleFixOnlyChangedTitleLine({ before, after, file: "chapters/chapter-001.md" }));
 });
 
-test("assertTitleFixOnlyChangedH1 rejects body changes", () => {
+test("assertTitleFixOnlyChangedTitleLine rejects body changes", () => {
   const before = "# 标题\n正文\n";
   const after = "# 新标题\n正文改了\n";
-  assert.throws(() => assertTitleFixOnlyChangedH1({ before, after, file: "chapters/chapter-001.md" }), /only change.*title line/i);
+  assert.throws(
+    () => assertTitleFixOnlyChangedTitleLine({ before, after, file: "chapters/chapter-001.md" }),
+    /only change.*title line/i
+  );
 });

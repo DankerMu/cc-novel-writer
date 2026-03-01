@@ -6,8 +6,8 @@ import { pathExists, readJsonFile, readTextFile } from "./fs-utils.js";
 import { checkHookPolicy } from "./hook-policy.js";
 import { loadPlatformProfile } from "./platform-profile.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
-import { chapterRelPaths, formatStepId, type Step } from "./steps.js";
-import { assertTitleFixOnlyChangedH1, extractChapterTitleFromMarkdown } from "./title-policy.js";
+import { chapterRelPaths, formatStepId, titleFixSnapshotRel, type Step } from "./steps.js";
+import { assertTitleFixOnlyChangedTitleLine, extractChapterTitleFromMarkdown } from "./title-policy.js";
 import { isPlainObject } from "./type-guards.js";
 
 export type ValidateReport = {
@@ -123,12 +123,12 @@ export async function validateStep(args: { rootDir: string; checkpoint: Checkpoi
     const content = await readTextFile(absChapter);
     if (content.trim().length === 0) throw new NovelCliError(`Empty draft file: ${rel.staging.chapterMd}`, 2);
 
-    const snapshotRel = `staging/logs/title-fix-chapter-${String(args.step.chapter).padStart(3, "0")}-before.md`;
+    const snapshotRel = titleFixSnapshotRel(args.step.chapter);
     const snapshotAbs = join(args.rootDir, snapshotRel);
     requireFile(await pathExists(snapshotAbs), snapshotRel);
     const before = await readTextFile(snapshotAbs);
 
-    assertTitleFixOnlyChangedH1({ before, after: content, file: rel.staging.chapterMd });
+    assertTitleFixOnlyChangedTitleLine({ before, after: content, file: rel.staging.chapterMd });
 
     const title = extractChapterTitleFromMarkdown(content);
     if (!title.has_h1 || !title.title_text) {

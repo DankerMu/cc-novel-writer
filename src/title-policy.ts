@@ -246,7 +246,9 @@ export async function writeTitlePolicyLogs(args: {
   return { latestRel, historyRel };
 }
 
-export function stripFirstH1TitleLine(text: string): { stripped: string; removed_line: string | null } {
+// Strip the first non-empty ATX heading line (H1–H6) from the original text.
+// This is used for the title-fix body guard: it intentionally treats `## ...` as a title-line candidate so title-fix can promote it to `# ...`.
+export function stripFirstAtxHeadingLine(text: string): { stripped: string; removed_line: string | null } {
   let scanIdx = 0;
 
   const findNextLine = (): { line: string; start: number; end: number } | null => {
@@ -283,9 +285,9 @@ export function stripFirstH1TitleLine(text: string): { stripped: string; removed
   }
 }
 
-export function assertTitleFixOnlyChangedH1(args: { before: string; after: string; file: string }): void {
-  const b = stripFirstH1TitleLine(args.before);
-  const a = stripFirstH1TitleLine(args.after);
+export function assertTitleFixOnlyChangedTitleLine(args: { before: string; after: string; file: string }): void {
+  const b = stripFirstAtxHeadingLine(args.before);
+  const a = stripFirstAtxHeadingLine(args.after);
   if (b.stripped !== a.stripped) {
     throw new NovelCliError(
       `Invalid ${args.file}: title-fix must only change the first title line; chapter body changed.`,

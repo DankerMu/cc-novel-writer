@@ -8,6 +8,7 @@ import type { Checkpoint } from "../checkpoint.js";
 import { advanceCheckpointForStep } from "../advance.js";
 import { buildInstructionPacket } from "../instructions.js";
 import { computeNextStep } from "../next-step.js";
+import { titleFixSnapshotRel } from "../steps.js";
 import { validateStep } from "../validate.js";
 
 async function writeJson(absPath: string, payload: unknown): Promise<void> {
@@ -76,6 +77,17 @@ test("computeNextStep returns review after title-fix was already attempted", asy
   assert.equal(next.step, "chapter:001:review");
 });
 
+test("computeNextStep returns review on hard title violations when auto_fix=false", async () => {
+  const rootDir = await setupProjectDir();
+  await writeJson(join(rootDir, "platform-profile.json"), makePlatformProfileRaw({ enabled: true, auto_fix: false }));
+  await mkdir(join(rootDir, "staging/chapters"), { recursive: true });
+  await writeFile(join(rootDir, "staging/chapters/chapter-001.md"), "正文\n", "utf8");
+
+  const checkpoint: Checkpoint = { last_completed_chapter: 0, current_volume: 1, pipeline_stage: "refined", inflight_chapter: 1, title_fix_count: 0 };
+  const next = await computeNextStep(rootDir, checkpoint);
+  assert.equal(next.step, "chapter:001:review");
+});
+
 test("computeNextStep does not block on warn-only title issues when auto_fix=false", async () => {
   const rootDir = await setupProjectDir();
   await writeJson(join(rootDir, "platform-profile.json"), makePlatformProfileRaw({ enabled: true, auto_fix: false, max_chars: 3 }));
@@ -98,6 +110,19 @@ test("computeNextStep returns title-fix on warn-only title issues when auto_fix=
   assert.equal(next.step, "chapter:001:title-fix");
 });
 
+test("computeNextStep returns title-fix on judged stage when eval exists and title violates policy (auto_fix=true)", async () => {
+  const rootDir = await setupProjectDir();
+  await writeJson(join(rootDir, "platform-profile.json"), makePlatformProfileRaw({ enabled: true, auto_fix: true }));
+  await mkdir(join(rootDir, "staging/chapters"), { recursive: true });
+  await writeFile(join(rootDir, "staging/chapters/chapter-001.md"), "正文\n", "utf8");
+  await mkdir(join(rootDir, "staging/evaluations"), { recursive: true });
+  await writeJson(join(rootDir, "staging/evaluations/chapter-001-eval.json"), {});
+
+  const checkpoint: Checkpoint = { last_completed_chapter: 0, current_volume: 1, pipeline_stage: "judged", inflight_chapter: 1, title_fix_count: 0 };
+  const next = await computeNextStep(rootDir, checkpoint);
+  assert.equal(next.step, "chapter:001:title-fix");
+});
+
 test("title-fix snapshot is write-once (rerunning instructions does not bypass body guard)", async () => {
   const rootDir = await setupProjectDir();
   await writeJson(join(rootDir, "platform-profile.json"), makePlatformProfileRaw({ enabled: true, auto_fix: true }));
@@ -115,7 +140,7 @@ test("title-fix snapshot is write-once (rerunning instructions does not bypass b
     writeManifest: false
   });
 
-  const snapshotRel = "staging/logs/title-fix-chapter-001-before.md";
+  const snapshotRel = titleFixSnapshotRel(1);
   const snapshotAbs = join(rootDir, snapshotRel);
   const snapshot1 = await readFile(snapshotAbs, "utf8");
 
@@ -146,12 +171,13 @@ test("advance draft cleans up title-fix snapshot to avoid stale reuse", async ()
   const chapterAbs = join(rootDir, "staging/chapters/chapter-001.md");
   await writeFile(chapterAbs, "# 标题\n正文\n", "utf8");
   await mkdir(join(rootDir, "staging/logs"), { recursive: true });
-  await writeFile(join(rootDir, "staging/logs/title-fix-chapter-001-before.md"), "old snapshot\n", "utf8");
+  const snapshotRel = titleFixSnapshotRel(1);
+  await writeFile(join(rootDir, snapshotRel), "old snapshot\n", "utf8");
 
   const checkpoint: Checkpoint = { last_completed_chapter: 0, current_volume: 1, pipeline_stage: null, inflight_chapter: null, title_fix_count: 1 };
   await writeJson(join(rootDir, ".checkpoint.json"), checkpoint);
 
   await advanceCheckpointForStep({ rootDir, step: { kind: "chapter", chapter: 1, stage: "draft" } });
   // validate cleanup is best-effort; the file should be gone.
-  await assert.rejects(() => readFile(join(rootDir, "staging/logs/title-fix-chapter-001-before.md"), "utf8"));
+  await assert.rejects(() => readFile(join(rootDir, snapshotRel), "utf8"));
 });

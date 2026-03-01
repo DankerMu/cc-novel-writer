@@ -84,6 +84,7 @@ async function checkTitlePolicyForStage(args: {
   pipelineStage: string;
   evidence: Record<string, unknown>;
   titleFixCount: number;
+  hasChapter: boolean;
   chapterRelPath: string;
 }): Promise<NextStepResult | null> {
   const loadedProfile = await loadPlatformProfile(args.projectRootDir);
@@ -91,13 +92,22 @@ async function checkTitlePolicyForStage(args: {
   const titlePolicy = loadedProfile.profile.retention?.title_policy;
   if (!titlePolicy?.enabled) return null;
 
+  if (!args.hasChapter) {
+    return {
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "draft" }),
+      reason: `${args.stagePrefix}:missing_chapter`,
+      inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
+      evidence: { ...args.evidence, titleFixCount: args.titleFixCount }
+    };
+  }
+
   let chapterText: string;
   try {
     chapterText = await readTextFile(join(args.projectRootDir, args.chapterRelPath));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return {
-      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "draft" }),
+      step: formatStepId({ kind: "chapter", chapter: args.inflightChapter, stage: "review" }),
       reason: `${args.stagePrefix}:title_read_failed`,
       inflight: { chapter: args.inflightChapter, pipeline_stage: args.pipelineStage },
       evidence: { ...args.evidence, titleFixCount: args.titleFixCount, error: message }
@@ -229,6 +239,7 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
         pipelineStage: stage,
         evidence,
         titleFixCount,
+        hasChapter,
         chapterRelPath: rel.staging.chapterMd
       });
       if (titleGate) return titleGate;
@@ -248,6 +259,7 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
       pipelineStage: stage,
       evidence,
       titleFixCount,
+      hasChapter,
       chapterRelPath: rel.staging.chapterMd
     });
     if (titleGate) return titleGate;
@@ -288,6 +300,7 @@ export async function computeNextStep(projectRootDir: string, checkpoint: Checkp
       pipelineStage: stage,
       evidence,
       titleFixCount,
+      hasChapter,
       chapterRelPath: rel.staging.chapterMd
     });
     if (titleGate) return titleGate;
