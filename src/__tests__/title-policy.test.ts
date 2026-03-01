@@ -109,9 +109,14 @@ test("assertTitleFixOnlyChangedH1 allows inserting a new title line", () => {
   assert.doesNotThrow(() => assertTitleFixOnlyChangedH1({ before, after, file: "chapters/chapter-001.md" }));
 });
 
+test("assertTitleFixOnlyChangedH1 allows promoting an existing ATX heading to H1", () => {
+  const before = "## 旧标题\n正文\n";
+  const after = "# 旧标题\n正文\n";
+  assert.doesNotThrow(() => assertTitleFixOnlyChangedH1({ before, after, file: "chapters/chapter-001.md" }));
+});
+
 test("assertTitleFixOnlyChangedH1 rejects body changes", () => {
   const before = "# 标题\n正文\n";
   const after = "# 新标题\n正文改了\n";
-  assert.throws(() => assertTitleFixOnlyChangedH1({ before, after, file: "chapters/chapter-001.md" }), /only change.*H1/i);
+  assert.throws(() => assertTitleFixOnlyChangedH1({ before, after, file: "chapters/chapter-001.md" }), /only change.*title line/i);
 });
-

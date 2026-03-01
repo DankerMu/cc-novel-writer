@@ -32,6 +32,7 @@
 - `paths.style_drift` → 风格漂移纠偏（可选，存在时读取）
 - `paths.chapter_contract` → L3 章节契约 JSON
 - `paths.chapter_eval` → 章节评估 JSON（可选；hook-fix/修订时提供，含 hook_type/hook_strength/evidence 等信息，便于定向修复）
+- `paths.title_fix_before` → title-fix 前的章节快照（可选；仅 title-fix 模式下提供，用于确认正文 byte-identical）
 - `paths.volume_outline` → 本卷大纲全文
 - `paths.current_state` → 角色当前状态 JSON
 - `paths.world_rules` → L1 世界规则（可选）
@@ -133,3 +134,4 @@
   - `paths.chapter_eval`：可选，存在时读取以获取 hook/证据等上下文
   - 读取优先级调整：先读 `chapter_draft`（现有正文），再读 `chapter_eval`（如存在）+ `required_fixes` 定位需修改段落，最后读 style_profile 确保修订风格一致。定向修改指定段落，保持其余内容不变
   - **hook-fix 微修模式**（当 `required_fixes` 明确要求修复章末钩子时）：只允许改动最后 1–2 段（或末尾 ~10%），不得新增关键事件/新设定/新命名角色；目标是在不影响既有 state/crossref 的前提下补强章末钩子
+  - **title-fix 微修模式**（当 `fix_mode="title-fix"` 或 `required_fixes` 要求修复标题时）：只允许修改第一处标题行（第一个非空行必须是 Markdown H1：`# ...`），禁止改动正文任何字符（包括空格/标点/换行差异）；标题需满足 `platform-profile.json.retention.title_policy` 的长度/正则/禁词约束，避免剧透，保持悬念与吸引力

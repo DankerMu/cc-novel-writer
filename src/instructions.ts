@@ -204,7 +204,10 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
     const beforeAbs = join(args.rootDir, rel.staging.chapterMd);
     const before = await readTextFile(beforeAbs);
     const snapshotRel = `staging/logs/title-fix-chapter-${String(args.step.chapter).padStart(3, "0")}-before.md`;
-    await writeTextFile(join(args.rootDir, snapshotRel), before);
+    const snapshotAbs = join(args.rootDir, snapshotRel);
+    if (!(await pathExists(snapshotAbs))) {
+      await writeTextFile(snapshotAbs, before);
+    }
     paths.title_fix_before = snapshotRel;
 
     const report = computeTitlePolicyReport({ chapter: args.step.chapter, chapterText: before, platformProfile: loadedPlatform.profile });

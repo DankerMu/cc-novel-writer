@@ -106,6 +106,7 @@ async function checkTitlePolicyForStage(args: {
 
   const report = computeTitlePolicyReport({ chapter: args.inflightChapter, chapterText, platformProfile: loadedProfile.profile });
   if (report.status === "pass" || report.status === "skipped") return null;
+  if (!report.has_hard_violations && !titlePolicy.auto_fix) return null;
 
   const issueSummary = report.issues[0]?.summary ?? "title policy failing";
   if (titlePolicy.auto_fix) {

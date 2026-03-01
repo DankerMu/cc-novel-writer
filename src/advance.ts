@@ -5,7 +5,7 @@ import { readCheckpoint, writeCheckpoint } from "./checkpoint.js";
 import { NovelCliError } from "./errors.js";
 import { removePath } from "./fs-utils.js";
 import { withWriteLock } from "./lock.js";
-import { chapterRelPaths, type Step } from "./steps.js";
+import { chapterRelPaths, pad3, type Step } from "./steps.js";
 import { validateStep } from "./validate.js";
 
 function stageForStep(step: Step): PipelineStage {
@@ -50,6 +50,7 @@ export async function advanceCheckpointForStep(args: { rootDir: string; step: St
       if (typeof updated.revision_count !== "number") updated.revision_count = 0;
       updated.hook_fix_count = 0;
       updated.title_fix_count = 0;
+      await removePath(join(args.rootDir, `staging/logs/title-fix-chapter-${pad3(args.step.chapter)}-before.md`));
     }
 
     // Title-fix counts as a bounded micro-revision and invalidates the current eval.

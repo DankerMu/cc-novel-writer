@@ -131,7 +131,13 @@ chapter:048:judge
 chapter:048:commit
 ```
 
-但当启用 `platform-profile.json.hook_policy.required=true` 且章末钩子缺失/偏弱时，可能改为返回：
+但当启用 `platform-profile.json.retention.title_policy.enabled=true` 且标题缺失/不合规时，可能改为返回：
+```
+chapter:048:title-fix
+```
+（自动一次：只允许修改**标题行**，正文必须 byte-identical；若仍不满足则返回 `chapter:048:review` 进入人工处理）。
+
+当启用 `platform-profile.json.hook_policy.required=true` 且章末钩子缺失/偏弱时，可能改为返回：
 ```
 chapter:048:hook-fix
 ```

@@ -70,7 +70,8 @@ export function extractChapterTitleFromMarkdown(text: string): {
   const first = extractFirstNonEmptyLine(text);
   if (!first) return { has_h1: false, line_no: null, raw_line: null, title_text: null };
 
-  const m = /^#(?!#)\s*(.*)$/u.exec(first.line);
+  // CommonMark: up to 3 leading spaces allowed; allow optional BOM for robustness.
+  const m = /^(?:\uFEFF)? {0,3}#(?!#)\s*(.*)$/u.exec(first.line);
   if (!m) return { has_h1: false, line_no: first.line_no, raw_line: first.line, title_text: null };
 
   const title_text = (m[1] ?? "").trim();
@@ -273,7 +274,8 @@ export function stripFirstH1TitleLine(text: string): { stripped: string; removed
     if (trimmed.length === 0) {
       continue;
     }
-    if (!/^#(?!#)\s*.*$/u.test(next.line)) {
+    // Treat the first non-empty ATX heading (H1–H6, up to 3 leading spaces) as the title-line candidate.
+    if (!/^(?:\uFEFF)? {0,3}#{1,6}(?!#)\s*.*$/u.test(next.line)) {
       return { stripped: text, removed_line: null };
     }
     const stripped = text.slice(0, next.start) + text.slice(next.end);
@@ -286,7 +288,7 @@ export function assertTitleFixOnlyChangedH1(args: { before: string; after: strin
   const a = stripFirstH1TitleLine(args.after);
   if (b.stripped !== a.stripped) {
     throw new NovelCliError(
-      `Invalid ${args.file}: title-fix must only change the first H1 title line; chapter body changed.`,
+      `Invalid ${args.file}: title-fix must only change the first title line; chapter body changed.`,
       2
     );
   }
