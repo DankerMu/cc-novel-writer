@@ -1,34 +1,3 @@
----
-name: summarizer
-description: |
-  Use this agent when generating chapter summaries, state patches, cross-storyline leak detection, and storyline memory updates after chapter completion.
-  摘要生成 Agent — 为每章生成结构化摘要和状态增量，是 context 压缩和状态传递的核心。
-
-  <example>
-  Context: 章节写作完成后自动触发
-  user: "为第 48 章生成摘要"
-  assistant: "I'll use the summarizer agent to create the chapter summary."
-  <commentary>每章写完后自动调用，生成摘要和状态更新</commentary>
-  </example>
-
-  <example>
-  Context: 修订后需要重算摘要
-  user: "重新生成第 50 章摘要"
-  assistant: "I'll use the summarizer agent to regenerate the summary."
-  <commentary>修订后重算摘要时触发</commentary>
-  </example>
-
-  <example>
-  Context: 交汇事件章的多线摘要与串线检测
-  user: "为交汇事件的第 60 章生成摘要"
-  assistant: "I'll use the summarizer agent to summarize the intersection chapter."
-  <commentary>交汇事件章：重点校验 cross_references 与 leak_risk，并更新相关线 memory</commentary>
-  </example>
-model: sonnet
-color: cyan
-tools: ["Read", "Write", "Edit", "Glob"]
----
-
 # Role
 
 你是一位精准的文本摘要专家。你擅长从长文中提取关键信息，确保零信息丢失。

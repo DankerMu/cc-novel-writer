@@ -1,54 +1,38 @@
-# novel — 中文网文多 Agent 协作创作系统
+# novel-writer-cli — 中文网文 AI 协作创作 CLI
 
-Claude Code 插件，9 个 AI Agent 协作完成网文创作全流程：世界观构建 → 卷级规划 → 章节续写 → 风格润色 → 质量验收 → 周期性一致性审计。内置去 AI 化四层策略和 Spec-Driven 规范体系，产出接近人类写手的长篇中文网络小说。
+确定性编排 CLI + 9 个 AI Agent 协作完成网文创作全流程：世界观构建 → 卷级规划 → 章节续写 → 风格润色 → 质量验收 → 周期性一致性审计。内置去 AI 化四层策略和 Spec-Driven 规范体系，产出接近人类写手的长篇中文网络小说。
+
+> **注**：本仓库为 CLI 版本，负责确定性编排与多 Agent 调度。Claude Code Plugin 版本见 [novel-writer-plugin](https://github.com/DankerMu/novel-writer-plugin)。
 
 ## 快速开始
 
 ### 前置条件
 
+- Node.js 18+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 已安装并登录
 - Python 3.10+（评估脚本需要）
 
 ### 安装
 
-**方式一：Marketplace 安装（推荐）**
 
-```bash
-# 1. 添加 marketplace（只需一次）
-claude plugin marketplace add DankerMu/cc-novel-writer
 
-# 2. 安装插件
-claude plugin install novel
-```
+### 基本用法
 
-安装后在任意目录启动 `claude` 即可使用 `/novel:start` 等命令。
 
-**方式二：`--plugin-dir` 按会话加载**
 
-```bash
-# 克隆到本地
-git clone https://github.com/DankerMu/cc-novel-writer.git ~/cc-novel-writer
+`novel` CLI **不调用任何 LLM API**，只负责确定性编排：读取 checkpoint、生成 instruction packet、校验产物、推进状态。LLM 执行由 Claude Code 或 Codex 等外部执行器完成。
 
-# 启动时挂载插件
-mkdir ~/my-novel && cd ~/my-novel
-claude --plugin-dir ~/cc-novel-writer
-```
+详见 [CLI 完整文档](docs/user/novel-cli.md)。
 
-> **Tip**：添加 alias 省去每次输入路径：`alias novel='claude --plugin-dir ~/cc-novel-writer'`
+### 三个入口命令（Claude Code 集成）
 
-### 三个入口命令
+在 Claude Code 中可直接使用 Skill 命令：
 
 | 命令 | 用途 |
 |------|------|
 | `/novel:start` | 从创作纲领（brief）冷启动一个新项目 |
 | `/novel:continue` | 续写下一章 / 推进到下一卷 |
 | `/novel:status` | 查看当前项目进度、状态与统计 |
-
-### `novel` CLI（确定性编排核心）
-
-除 Claude Code 插件外，本仓库也提供不调用 LLM 的 `novel` CLI：负责 `next/instructions/validate/advance/commit/lock` 等确定性编排能力，便于 Codex CLI、纯终端脚本与 CI 使用。
-
-详见：`docs/user/novel-cli.md`。
 
 **30 秒体验**：执行 `/novel:start`，按提示填写题材、主角和核心冲突，系统自动创建项目结构并试写 3 章。详见 [快速起步指南](docs/user/quick-start.md)。
 
@@ -62,24 +46,19 @@ claude --plugin-dir ~/cc-novel-writer
 | `brainstorming` | 结构化脑暴（世界观/角色/情节设计） | 同上 |
 | `deep-research` | 多源信息综合研究 | 同上 |
 
-系统会在创建项目时自动检测题材，对需要事实查证的类型（历史、科幻、军事等）主动建议先做背景研究。
+## 架构概览
 
-## 工作原理
+### CLI 编排层
 
-### 卷制滚动工作流
+`novel` CLI 是确定性编排核心，不依赖 LLM：
 
-网文采用「边写边想」模式，以卷（30-50 章）为单位滚动推进：
 
-```
-卷规划 → 日更续写（每章流水线） → 定期检查（每 5 章一次，窗口=10） → 卷末回顾 → 下一卷
-```
 
-每章经过完整流水线：
-
-```
-ChapterWriter → Summarizer → StyleRefiner → QualityJudge
-    续写           摘要+状态       去AI润色        双轨验收
-```
+- **next**：从 `.checkpoint.json` + `staging/` 计算下一步
+- **instructions**：生成 instruction packet（JSON），作为编排→执行器的稳定边界
+- **validate**：校验 staging 产物合规性
+- **advance**：推进 checkpoint 状态
+- **commit**：将 staging 事务提交到正式目录，更新 `state/` 与 `foreshadowing/`
 
 ### 9 Agent 协作体系
 
@@ -100,20 +79,27 @@ ChapterWriter → Summarizer → StyleRefiner → QualityJudge
 写小说如同写代码——规范先行，验收对齐规范：
 
 | 层级 | 内容 | 约束强度 |
-|------|------|---------|
+|------|------|----------|
 | **L1** 世界规则 | `rules.json` — 不可违反的硬约束 | 铁律 |
 | **L2** 角色契约 | `contracts/` — 能力/行为边界 | 可变更需走协议 |
 | **L3** 章节契约 | `chapter-contracts/` — 前/后置条件 | 可协商须留痕 |
 | **LS** 故事线 | `storylines.json` — 多线叙事约束 | 跨线泄漏为硬违规 |
 
+### 卷制滚动工作流
+
+网文采用「边写边想」模式，以卷（30-50 章）为单位滚动推进：
+
+
+
+每章经过完整流水线：
+
+
+
 ### 质量门控
 
 8 维度加权评分（1-5 分）：
 
-```
-情节逻辑(18%) + 角色塑造(18%) + 沉浸感(15%) + 风格自然度(15%)
-+ 伏笔处理(10%) + 节奏(8%) + 情感冲击(8%) + 故事线连贯(8%)
-```
+
 
 五档门控决策：≥4.0 通过 → ≥3.5 二次润色 → ≥3.0 自动修订 → ≥2.0 人工审核 → <2.0 强制重写。关键章节启用 Sonnet + Opus 双裁判。
 
@@ -128,82 +114,13 @@ ChapterWriter → Summarizer → StyleRefiner → QualityJudge
 
 ## 项目结构
 
-```
-.claude-plugin/plugin.json     插件入口
-agents/                        9 个 Agent 定义
-  chapter-writer.md
-  character-weaver.md
-  consistency-auditor.md
-  plot-architect.md
-  quality-judge.md
-  style-analyzer.md
-  style-refiner.md
-  summarizer.md
-  world-builder.md
-skills/
-  start/SKILL.md               /novel:start 冷启动
-  continue/SKILL.md            /novel:continue 续写
-  status/SKILL.md              /novel:status 状态
-  novel-writing/               共享方法论知识库
-    SKILL.md
-    references/
-      quality-rubric.md        8 维度评分标准
-      style-guide.md           去 AI 化策略
-templates/
-  brief-template.md            创作纲领模板
-  ai-blacklist.json            AI 高频用语黑名单（38 词）
-  web-novel-cliche-lint.json   网文套路词 / 模板腔 lint 词库模板（M6）
-  platform-profile.json        平台画像默认模板（qidian/tomato；M6）
-  genre-weight-profiles.json   题材驱动权重 profiles（M6）
-  style-profile-template.json  风格指纹模板
-hooks/hooks.json               SessionStart 自动注入 context
-scripts/
-  inject-context.sh            Context 注入（checkpoint + 摘要）
-  audit-staging-path.sh        Staging 路径审计
-  run-ner.sh                   中文 NER 命名实体识别
-  query-foreshadow.sh          伏笔查询
-  lint-blacklist.sh            AI 黑名单命中统计
-  lint-cliche.sh               网文套路词 / 模板腔命中统计（M6）
-  calibrate-quality-judge.sh   QualityJudge 校准（Pearson r + 阈值建议）
-  run-regression.sh            回归运行（合规率 + 评分汇总）
-  compare-regression-runs.sh   回归 run 对比
-  lib/                         共享 Python 模块
-eval/
-  datasets/                    人工标注数据集（JSONL）
-  schema/                      标注 schema（JSON Schema）
-  fixtures/                    脚本冒烟测试 fixture
-  labeling-guide.md            标注指南
-docs/
-  user/                        用户文档
-    quick-start.md               30 分钟快速起步
-    ops.md                       常用操作
-    spec-system.md               四层规范体系
-    storylines.md                多线叙事指南
-  test/                        测试清单
-  prd/                         产品需求文档（11 章）
-  spec/                        技术规范（6 章 + 9 Agent 独立定义）
-```
+
 
 ## 评估与回归
 
 项目内置完整的评估基础设施，用于校准 QualityJudge 并跟踪质量回归：
 
-```bash
-# 校准：计算 judge vs 人工标注的 Pearson 相关系数 + 阈值建议
-scripts/calibrate-quality-judge.sh \
-  --project <novel_project_dir> \
-  --labels eval/datasets/m2-30ch/v1/labels-*.jsonl
 
-# 回归运行：统计合规率 + 评分分布
-scripts/run-regression.sh \
-  --project <novel_project_dir> \
-  [--archive eval/runs/]
-
-# 对比两次回归运行
-scripts/compare-regression-runs.sh \
-  eval/runs/<run_a>/summary.json \
-  eval/runs/<run_b>/summary.json
-```
 
 ## CI
 
@@ -221,6 +138,7 @@ PR 合入 `main` 自动触发：
 | **M2** | Context 组装与状态机（Orchestrator + Spec 注入 + Hooks） | 已完成 |
 | **M3** | 质量门控与分析（5 档门控 + 双裁判 + NER + 伏笔 + 回归） | 已完成 |
 | **M4** | 端到端打磨（Quick Start + 跨卷 + E2E 基准） | 进行中 |
+| **M5** | CLI 编排核心（确定性编排 + instruction packet + Codex 集成） | 进行中 |
 
 详见 [progress.md](progress.md)。
 
