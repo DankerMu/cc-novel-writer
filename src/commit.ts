@@ -22,6 +22,7 @@ import {
   attachReadabilityLintToEval,
   computeReadabilityReport,
   precomputeReadabilityReport,
+  summarizeReadabilityIssues,
   writeReadabilityLogs
 } from "./readability-lint.js";
 import { attachScoringWeightsToEval, loadGenreWeightProfiles } from "./scoring-weights.js";
@@ -932,9 +933,10 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
             blocking === "soft_and_hard"
               ? readabilityLintReport.issues.filter((i) => i.severity === "soft" || i.severity === "hard")
               : readabilityLintReport.issues.filter((i) => i.severity === "hard");
-          const summaries = blockingIssues.map((i) => i.summary).slice(0, 3);
-          const suffix = blockingIssues.length > 3 ? " …" : "";
-          const details = summaries.length > 0 ? `${summaries.join(" | ")}${suffix}` : "(details in readability lint report)";
+          const limit = 3;
+          const detailsBase = summarizeReadabilityIssues(blockingIssues, limit);
+          const suffix = blockingIssues.length > limit ? " …" : "";
+          const details = detailsBase.length > 0 ? `${detailsBase}${suffix}` : "(details in readability lint report)";
           const scriptRel = readabilityLintReport.script?.rel_path ?? "scripts/lint-readability.sh";
           const inspect = `bash ${scriptRel} ${rel.staging.chapterMd} platform-profile.json ${args.chapter}`;
           throw new NovelCliError(`Mobile readability blocking issue: ${details}. Inspect: ${inspect}`, 2);
@@ -1050,17 +1052,17 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           titlePolicyWritten = true;
           await writeTitlePolicyLogs({ rootDir: args.rootDir, chapter: args.chapter, report: titleReport });
         }
+      }
 
-        if (readabilityLintReport) {
-          readabilityLintWritten = true;
-          const { historyRel: readabilityHistoryRel } = await writeReadabilityLogs({ rootDir: args.rootDir, chapter: args.chapter, report: readabilityLintReport });
-          await attachReadabilityLintToEval({
-            evalAbsPath: join(args.rootDir, rel.final.evalJson),
-            evalRelPath: rel.final.evalJson,
-            reportRelPath: readabilityHistoryRel,
-            report: readabilityLintReport
-          });
-        }
+      if (loadedProfile && readabilityLintReport) {
+        readabilityLintWritten = true;
+        const { historyRel: readabilityHistoryRel } = await writeReadabilityLogs({ rootDir: args.rootDir, chapter: args.chapter, report: readabilityLintReport });
+        await attachReadabilityLintToEval({
+          evalAbsPath: join(args.rootDir, rel.final.evalJson),
+          evalRelPath: rel.final.evalJson,
+          reportRelPath: readabilityHistoryRel,
+          report: readabilityLintReport
+        });
       }
 
       if (loadedCliche && clicheLintReport) {

@@ -1,12 +1,13 @@
 import { execFile } from "node:child_process";
-import { isAbsolute, join } from "node:path";
+import { realpath, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { NovelCliError } from "./errors.js";
 import { fingerprintFile, fingerprintTextFile, fingerprintsMatch, type FileFingerprint } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, writeJsonFile } from "./fs-utils.js";
 import type { MobileReadabilityBlockingSeverity, PlatformProfile, SeverityPolicy } from "./platform-profile.js";
-import { rejectPathTraversalInput } from "./safe-path.js";
+import { assertInsideProjectRoot, resolveProjectRelativePath } from "./safe-path.js";
 import { pad3 } from "./steps.js";
 import { isPlainObject } from "./type-guards.js";
 
@@ -414,19 +415,35 @@ async function tryRunDeterministicScript(args: {
 }): Promise<ScriptAttempt> {
   const scriptRel = args.scriptRelPath.trim();
   if (scriptRel.length === 0) return { status: "error", error: "Invalid lint_readability script path: empty string." };
-  if (isAbsolute(scriptRel)) return { status: "error", error: "Invalid lint_readability script path: must be project-relative (not absolute)." };
+
+  const label = "platform-profile.json.compliance.script_paths.lint_readability";
+  let scriptAbs: string;
   try {
-    rejectPathTraversalInput(scriptRel, "platform-profile.json.compliance.script_paths.lint_readability");
+    scriptAbs = resolveProjectRelativePath(args.rootDir, scriptRel, label);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { status: "error", error: message };
   }
 
-  const scriptAbs = join(args.rootDir, scriptRel);
   if (!(await pathExists(scriptAbs))) return { status: "missing" };
 
+  // Resolve symlinks to prevent unexpected execution outside project root.
+  let execAbs = scriptAbs;
   try {
-    const { stdout } = await execFileAsync("bash", [scriptAbs, args.chapterAbsPath, args.platformProfileAbsPath, String(args.chapter)], {
+    const rootReal = await realpath(args.rootDir);
+    execAbs = await realpath(scriptAbs);
+    assertInsideProjectRoot(rootReal, execAbs);
+    const st = await stat(execAbs);
+    if (!st.isFile()) {
+      return { status: "error", error: `Invalid lint_readability script path: must point to a file. (${label})` };
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { status: "error", error: message };
+  }
+
+  try {
+    const { stdout } = await execFileAsync("bash", [execAbs, args.chapterAbsPath, args.platformProfileAbsPath, String(args.chapter)], {
       maxBuffer: 10 * 1024 * 1024,
       timeout: 10_000,
       killSignal: "SIGKILL"
@@ -520,6 +537,15 @@ export async function computeReadabilityReport(args: {
         platformProfile: args.platformProfile,
         scriptError: `${scriptPrefix}${attempted.error}`,
         scriptRelPath: scriptRelPath.trim()
+      });
+    }
+    if (attempted.status === "missing") {
+      const rel = scriptRelPath.trim();
+      return computeFallbackReport({
+        chapter: args.chapter,
+        chapterText: args.chapterText,
+        platformProfile: args.platformProfile,
+        ...(rel.length > 0 ? { scriptError: `${rel}: missing`, scriptRelPath: rel } : {})
       });
     }
   }
