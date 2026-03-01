@@ -21,8 +21,11 @@
 1. **题材**：玄幻 / 都市 / 科幻 / 历史 / 悬疑 等
 2. **主角概念**：一句话描述——谁 + 起始处境
 3. **核心冲突**：一句话描述——主角要克服什么
+4. **平台画像**：确认发布平台与叙事驱动类型（`genre_drive_type`），用于生成 `platform-profile.json` + `genre-weight-profiles.json`
 
-> 这 3 项在同一轮交互中完成，不会反复追问。
+> 第 1-3 项在同一轮交互中完成；平台画像（平台 + `genre_drive_type`）会在后续 gate 中确认，写入 `platform-profile.json` 后不会重复追问/覆盖。
+>
+> `platform-profile.json.platform` 与 `platform-profile.json.scoring.genre_drive_type` 一旦写入视为该项目的不可变绑定；若要更换平台/驱动类型，建议新建项目目录重新初始化。
 
 ## Step 2: 选择风格来源
 

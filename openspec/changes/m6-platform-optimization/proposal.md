@@ -12,7 +12,7 @@
 
 ## What Changes
 
-新增“平台画像（platform_profile）+ 题材驱动类型（genre_drive_type）”作为写作流水线的一等输入，并将其固化为可落盘、可审计、可复用的配置（一本书只绑定一个平台，初始化后不可变）。后续所有约束（字数区间、信息负载阈值、钩子权重、合规词库）均从 `platform_profile(qidian|tomato)` 读取。
+新增”平台画像（platform_profile）+ 叙事驱动类型（genre_drive_type）”作为写作流水线的一等输入，并将其固化为可落盘、可审计、可复用的配置（一本书只绑定一个平台，初始化后不可变）。后续所有约束（字数区间、信息负载阈值、钩子权重、合规词库）均从 `platform_profile(qidian|tomato)` 读取。
 
 7 个优化方向（以 platform_profile 进行参数化）：
 

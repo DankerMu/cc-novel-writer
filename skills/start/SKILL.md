@@ -187,7 +187,7 @@ Skill → 状态映射：
 
 ##### Step B.4: 平台画像 + 驱动类型（M6 gate；支持回退）
 
-目标：在写入 `platform-profile.json` 之前，完成一次**显式 review gate**，把平台绑定、题材驱动类型、关键阈值确认下来（对齐 `NOVEL_ASK` 语义：可审计、可恢复、跨执行器一致）。
+目标：在写入 `platform-profile.json` 之前，完成一次**显式 review gate**，把平台绑定、叙事驱动类型、关键阈值确认下来（对齐 `NOVEL_ASK` 语义：可审计、可恢复、跨执行器一致）。
 
 **B.4.1 平台绑定（immutable）**
 
