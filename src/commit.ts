@@ -12,6 +12,7 @@ import {
 import { NovelCliError } from "./errors.js";
 import { fingerprintsMatch, hashText } from "./fingerprint.js";
 import { ensureDir, pathExists, readJsonFile, readTextFile, removePath, writeJsonFile } from "./fs-utils.js";
+import { computeForeshadowVisibilityReport, loadForeshadowGlobalItems, writeForeshadowVisibilityLogs } from "./foreshadow-visibility.js";
 import { checkHookPolicy } from "./hook-policy.js";
 import { withWriteLock } from "./lock.js";
 import { computeContinuityReport, tryResolveVolumeChapterRange, writeContinuityLogs, writeVolumeContinuityReport, type ContinuityReport } from "./consistency-auditor.js";
@@ -539,6 +540,17 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     );
   }
 
+  // Optional: foreshadow visibility maintenance (non-blocking).
+  // This generates a dormancy view + non-spoiler light-touch reminder tasks.
+  plan.push(`WRITE logs/foreshadowing/latest.json`);
+  if (isVolumeEnd && volumeRange) {
+    plan.push(`WRITE logs/foreshadowing/foreshadowing-check-vol-${pad2(volume)}-ch${pad3(volumeRange.start)}-ch${pad3(volumeRange.end)}.json`);
+  } else if (args.chapter % 10 === 0) {
+    const start = Math.max(1, args.chapter - 9);
+    const end = args.chapter;
+    plan.push(`WRITE logs/foreshadowing/foreshadowing-check-vol-${pad2(volume)}-ch${pad3(start)}-ch${pad3(end)}.json`);
+  }
+
   // Update checkpoint.
   plan.push(`UPDATE .checkpoint.json (commit chapter ${args.chapter})`);
 
@@ -1001,6 +1013,32 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       const message = err instanceof Error ? err.message : String(err);
       warnings.push(`Continuity audit skipped (periodic): ${message}`);
     }
+  }
+
+  // Post-commit (outside write-lock): foreshadow visibility maintenance (non-blocking).
+  try {
+    const platform = loadedProfile?.profile.platform ?? null;
+    const genreDriveType = typeof loadedProfile?.profile.scoring?.genre_drive_type === "string" ? loadedProfile.profile.scoring.genre_drive_type : null;
+    const items = await loadForeshadowGlobalItems(args.rootDir);
+    const report = computeForeshadowVisibilityReport({
+      items,
+      asOfChapter: args.chapter,
+      volume,
+      platform,
+      genreDriveType
+    });
+
+    const historyRange =
+      isVolumeEnd && volumeRange
+        ? { start: volumeRange.start, end: volumeRange.end }
+        : args.chapter % 10 === 0
+          ? { start: Math.max(1, args.chapter - 9), end: args.chapter }
+          : null;
+
+    await writeForeshadowVisibilityLogs({ rootDir: args.rootDir, report, historyRange });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    warnings.push(`Foreshadow visibility maintenance skipped: ${message}`);
   }
 
   return { plan, warnings };
