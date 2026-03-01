@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { parsePlatformProfile } from "../platform-profile.js";
-import { computeReadabilityReport } from "../readability-lint.js";
+import { computeReadabilityReport, writeReadabilityLogs, type ReadabilityReport } from "../readability-lint.js";
 
 function makeProfileRaw(extra: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -101,4 +101,79 @@ test("computeReadabilityReport uses deterministic script output and derives bloc
   assert.equal(report.mode, "script");
   assert.equal(report.has_blocking_issues, true);
   assert.equal(report.status, "violation");
+});
+
+test("computeReadabilityReport falls back when deterministic script output is invalid JSON", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-readability-bad-json-test-"));
+  await mkdir(join(rootDir, "scripts"), { recursive: true });
+
+  const profile = parsePlatformProfile(makeProfileRaw({ readability: makeReadabilityPolicy() }), "platform-profile.json");
+  await writeFile(join(rootDir, "platform-profile.json"), `${JSON.stringify(profile, null, 2)}\n`, "utf8");
+
+  const chapterAbsPath = join(rootDir, "chapter.md");
+  await writeFile(chapterAbsPath, "# T\n正文\n", "utf8");
+
+  await writeFile(join(rootDir, "scripts", "lint-readability.sh"), "#!/usr/bin/env bash\nset -euo pipefail\necho 'not-json'\n", "utf8");
+
+  const report = await computeReadabilityReport({
+    rootDir,
+    chapter: 1,
+    chapterAbsPath,
+    chapterText: "# T\n正文\n",
+    platformProfile: profile
+  });
+
+  assert.equal(report.mode, "fallback");
+  assert.ok(typeof report.script_error === "string" && report.script_error.includes("scripts/lint-readability.sh"));
+  assert.equal(report.has_blocking_issues, false);
+});
+
+test("computeReadabilityReport falls back when deterministic script returns wrong scope.chapter", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-readability-wrong-chapter-test-"));
+  await mkdir(join(rootDir, "scripts"), { recursive: true });
+
+  const profile = parsePlatformProfile(makeProfileRaw({ readability: makeReadabilityPolicy() }), "platform-profile.json");
+  await writeFile(join(rootDir, "platform-profile.json"), `${JSON.stringify(profile, null, 2)}\n`, "utf8");
+
+  const chapterAbsPath = join(rootDir, "chapter.md");
+  await writeFile(chapterAbsPath, "# T\n正文\n", "utf8");
+
+  const wrongScopeJson =
+    '{"schema_version":1,"generated_at":"2026-01-01T00:00:00.000Z","scope":{"chapter":2},"policy":{"enabled":true,"max_paragraph_chars":10,"max_consecutive_exposition_paragraphs":2,"blocking_severity":"hard_only"},"issues":[]}';
+  await writeFile(
+    join(rootDir, "scripts", "lint-readability.sh"),
+    `#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' '${wrongScopeJson}'\n`,
+    "utf8"
+  );
+
+  const report = await computeReadabilityReport({
+    rootDir,
+    chapter: 1,
+    chapterAbsPath,
+    chapterText: "# T\n正文\n",
+    platformProfile: profile
+  });
+
+  assert.equal(report.mode, "fallback");
+  assert.ok(typeof report.script_error === "string" && report.script_error.includes("scope.chapter=2"));
+  assert.equal(report.has_blocking_issues, false);
+});
+
+test("writeReadabilityLogs writes history under readability-report-chapter-*.json", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-readability-logs-test-"));
+
+  const report: ReadabilityReport = {
+    schema_version: 1,
+    generated_at: "2026-01-01T00:00:00.000Z",
+    scope: { chapter: 1 },
+    policy: null,
+    mode: "fallback",
+    status: "pass",
+    issues: [],
+    has_blocking_issues: false
+  };
+
+  const out = await writeReadabilityLogs({ rootDir, chapter: 1, report });
+  assert.equal(out.latestRel, "logs/readability/latest.json");
+  assert.equal(out.historyRel, "logs/readability/readability-report-chapter-001.json");
 });

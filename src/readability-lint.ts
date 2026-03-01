@@ -302,6 +302,27 @@ function parseBlockingSeverity(value: unknown): MobileReadabilityBlockingSeverit
   throw new NovelCliError(`Invalid readability lint output: policy.blocking_severity must be 'hard_only' or 'soft_and_hard'.`, 2);
 }
 
+function requireInt(value: unknown, ctx: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new NovelCliError(`Invalid readability lint output: ${ctx} must be an int.`, 2);
+  }
+  return value;
+}
+
+function requireBool(value: unknown, ctx: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new NovelCliError(`Invalid readability lint output: ${ctx} must be a boolean.`, 2);
+  }
+  return value;
+}
+
+function requireNonEmptyString(value: unknown, ctx: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new NovelCliError(`Invalid readability lint output: ${ctx} must be a non-empty string.`, 2);
+  }
+  return value.trim();
+}
+
 function parseScriptReport(raw: unknown): ReadabilityReport {
   if (!isPlainObject(raw)) throw new NovelCliError("Invalid readability lint output: expected JSON object.", 2);
   const obj = raw as Record<string, unknown>;
@@ -313,21 +334,17 @@ function parseScriptReport(raw: unknown): ReadabilityReport {
   const scopeRaw = obj.scope;
   if (!isPlainObject(scopeRaw)) throw new NovelCliError("Invalid readability lint output: scope must be an object.", 2);
   const scopeObj = scopeRaw as Record<string, unknown>;
-  const chapter = scopeObj.chapter;
-  if (typeof chapter !== "number" || !Number.isInteger(chapter) || chapter <= 0) {
-    throw new NovelCliError("Invalid readability lint output: scope.chapter must be an int >= 1.", 2);
-  }
+  const chapter = requireInt(scopeObj.chapter, "scope.chapter");
+  if (chapter <= 0) throw new NovelCliError("Invalid readability lint output: scope.chapter must be an int >= 1.", 2);
 
   const policyRaw = obj.policy;
   if (!isPlainObject(policyRaw)) throw new NovelCliError("Invalid readability lint output: policy must be an object.", 2);
   const policyObj = policyRaw as Record<string, unknown>;
-  const enabled = Boolean(policyObj.enabled);
-  const maxParagraph = policyObj.max_paragraph_chars;
-  const maxExpo = policyObj.max_consecutive_exposition_paragraphs;
-  if (typeof maxParagraph !== "number" || !Number.isInteger(maxParagraph) || maxParagraph < 1) {
-    throw new NovelCliError("Invalid readability lint output: policy.max_paragraph_chars must be an int >= 1.", 2);
-  }
-  if (typeof maxExpo !== "number" || !Number.isInteger(maxExpo) || maxExpo < 1) {
+  const enabled = requireBool(policyObj.enabled, "policy.enabled");
+  const maxParagraph = requireInt(policyObj.max_paragraph_chars, "policy.max_paragraph_chars");
+  if (maxParagraph < 1) throw new NovelCliError("Invalid readability lint output: policy.max_paragraph_chars must be an int >= 1.", 2);
+  const maxExpo = requireInt(policyObj.max_consecutive_exposition_paragraphs, "policy.max_consecutive_exposition_paragraphs");
+  if (maxExpo < 1) {
     throw new NovelCliError("Invalid readability lint output: policy.max_consecutive_exposition_paragraphs must be an int >= 1.", 2);
   }
   const blocking = parseBlockingSeverity(policyObj.blocking_severity);
@@ -335,21 +352,30 @@ function parseScriptReport(raw: unknown): ReadabilityReport {
   const issuesRaw = obj.issues;
   if (!Array.isArray(issuesRaw)) throw new NovelCliError("Invalid readability lint output: issues must be an array.", 2);
   const issues: ReadabilityIssue[] = [];
-  for (const it of issuesRaw) {
-    if (!isPlainObject(it)) continue;
+  for (const [idx, it] of issuesRaw.entries()) {
+    if (!isPlainObject(it)) throw new NovelCliError(`Invalid readability lint output: issues[${idx}] must be an object.`, 2);
     const rec = it as Record<string, unknown>;
-    const id = typeof rec.id === "string" ? rec.id.trim() : "";
-    const summary = typeof rec.summary === "string" ? rec.summary.trim() : "";
-    if (id.length === 0 || summary.length === 0) continue;
-    const severity = parseSeverity(rec.severity, `issues[].severity`);
+    const id = requireNonEmptyString(rec.id, `issues[${idx}].id`);
+    const severity = parseSeverity(rec.severity, `issues[${idx}].severity`);
+    const summary = requireNonEmptyString(rec.summary, `issues[${idx}].summary`);
     const issue: ReadabilityIssue = { id, severity, summary };
-    if (typeof rec.evidence === "string" && rec.evidence.trim().length > 0) issue.evidence = rec.evidence.trim();
-    if (typeof rec.suggestion === "string" && rec.suggestion.trim().length > 0) issue.suggestion = rec.suggestion.trim();
-    if (typeof rec.paragraph_index === "number" && Number.isInteger(rec.paragraph_index) && rec.paragraph_index > 0) {
-      issue.paragraph_index = rec.paragraph_index;
+    if (rec.evidence !== undefined && rec.evidence !== null) {
+      const evidence = requireNonEmptyString(rec.evidence, `issues[${idx}].evidence`);
+      issue.evidence = evidence;
     }
-    if (typeof rec.paragraph_chars === "number" && Number.isInteger(rec.paragraph_chars) && rec.paragraph_chars >= 0) {
-      issue.paragraph_chars = rec.paragraph_chars;
+    if (rec.suggestion !== undefined && rec.suggestion !== null) {
+      const suggestion = requireNonEmptyString(rec.suggestion, `issues[${idx}].suggestion`);
+      issue.suggestion = suggestion;
+    }
+    if (rec.paragraph_index !== undefined && rec.paragraph_index !== null) {
+      const paragraph_index = requireInt(rec.paragraph_index, `issues[${idx}].paragraph_index`);
+      if (paragraph_index <= 0) throw new NovelCliError(`Invalid readability lint output: issues[${idx}].paragraph_index must be >= 1.`, 2);
+      issue.paragraph_index = paragraph_index;
+    }
+    if (rec.paragraph_chars !== undefined && rec.paragraph_chars !== null) {
+      const paragraph_chars = requireInt(rec.paragraph_chars, `issues[${idx}].paragraph_chars`);
+      if (paragraph_chars < 0) throw new NovelCliError(`Invalid readability lint output: issues[${idx}].paragraph_chars must be >= 0.`, 2);
+      issue.paragraph_chars = paragraph_chars;
     }
     issues.push(issue);
   }
@@ -408,6 +434,9 @@ async function tryRunDeterministicScript(args: {
     const trimmed = stdout.trim();
     const parsed = JSON.parse(trimmed) as unknown;
     const report = parseScriptReport(parsed);
+    if (report.scope.chapter !== args.chapter) {
+      return { status: "error", error: `Invalid readability lint output: scope.chapter=${report.scope.chapter}, expected ${args.chapter}.` };
+    }
     return { status: "ok", report: { ...report, mode: "script", script: { rel_path: scriptRel } } };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -466,7 +495,23 @@ export async function computeReadabilityReport(args: {
       scriptRelPath,
       chapter: args.chapter
     });
-    if (attempted.status === "ok") return attempted.report;
+    if (attempted.status === "ok") {
+      const expectedPolicy: NonNullable<ReadabilityReport["policy"]> = {
+        enabled: policy.enabled,
+        max_paragraph_chars: policy.max_paragraph_chars,
+        max_consecutive_exposition_paragraphs: policy.max_consecutive_exposition_paragraphs,
+        blocking_severity: policy.blocking_severity
+      };
+
+      const issues = attempted.report.issues;
+      const blocking = policy.blocking_severity;
+      return {
+        ...attempted.report,
+        policy: expectedPolicy,
+        status: computeStatus({ blocking, issues }),
+        has_blocking_issues: computeHasBlockingIssues({ blocking, issues })
+      };
+    }
     if (attempted.status === "error") {
       const scriptPrefix = scriptRelPath.trim().length > 0 ? `${scriptRelPath.trim()}: ` : "";
       return computeFallbackReport({
@@ -507,7 +552,7 @@ export async function writeReadabilityLogs(args: {
   const dirAbs = join(args.rootDir, dirRel);
   await ensureDir(dirAbs);
 
-  const historyRel = `${dirRel}/readability-lint-chapter-${pad3(args.chapter)}.json`;
+  const historyRel = `${dirRel}/readability-report-chapter-${pad3(args.chapter)}.json`;
   const latestRel = `${dirRel}/latest.json`;
 
   await writeJsonFile(join(args.rootDir, historyRel), args.report);

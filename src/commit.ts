@@ -565,7 +565,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   if (loadedProfile) {
     plan.push(`WRITE logs/platform-constraints/platform-constraints-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
     plan.push(`WRITE logs/retention/title-policy/title-policy-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
-    plan.push(`WRITE logs/readability/readability-lint-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
+    plan.push(`WRITE logs/readability/readability-report-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
     plan.push(`PATCH ${rel.final.evalJson} (attach platform_constraints metadata)`);
     plan.push(`PATCH ${rel.final.evalJson} (attach readability_lint metadata)`);
   }
@@ -678,7 +678,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     const originalTitlePolicyHistory = originalTitlePolicyHistoryExists ? await readTextFile(titlePolicyHistoryAbs) : null;
 
     const readabilityLintLatestAbs = join(args.rootDir, "logs/readability/latest.json");
-    const readabilityLintHistoryAbs = join(args.rootDir, `logs/readability/readability-lint-chapter-${pad3(args.chapter)}.json`);
+    const readabilityLintHistoryAbs = join(args.rootDir, `logs/readability/readability-report-chapter-${pad3(args.chapter)}.json`);
     const originalReadabilityLintLatestExists = loadedProfile ? await pathExists(readabilityLintLatestAbs) : false;
     const originalReadabilityLintLatest = originalReadabilityLintLatestExists ? await readTextFile(readabilityLintLatestAbs) : null;
     const originalReadabilityLintHistoryExists = loadedProfile ? await pathExists(readabilityLintHistoryAbs) : false;
@@ -935,7 +935,9 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           const summaries = blockingIssues.map((i) => i.summary).slice(0, 3);
           const suffix = blockingIssues.length > 3 ? " …" : "";
           const details = summaries.length > 0 ? `${summaries.join(" | ")}${suffix}` : "(details in readability lint report)";
-          throw new NovelCliError(`Mobile readability blocking issue: ${details}`, 2);
+          const scriptRel = readabilityLintReport.script?.rel_path ?? "scripts/lint-readability.sh";
+          const inspect = `bash ${scriptRel} ${rel.staging.chapterMd} platform-profile.json ${args.chapter}`;
+          throw new NovelCliError(`Mobile readability blocking issue: ${details}. Inspect: ${inspect}`, 2);
         }
       }
 
