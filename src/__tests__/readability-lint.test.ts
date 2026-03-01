@@ -1,0 +1,104 @@
+import assert from "node:assert/strict";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+import { parsePlatformProfile } from "../platform-profile.js";
+import { computeReadabilityReport } from "../readability-lint.js";
+
+function makeProfileRaw(extra: Record<string, unknown>): Record<string, unknown> {
+  return {
+    schema_version: 1,
+    platform: "qidian",
+    created_at: "2026-01-01T00:00:00Z",
+    word_count: { target_min: 1, target_max: 2, hard_min: 1, hard_max: 2 },
+    hook_policy: { required: false, min_strength: 3, allowed_types: ["question"], fix_strategy: "hook-fix" },
+    info_load: { max_new_entities_per_chapter: 0, max_unknown_entities_per_chapter: 0, max_new_terms_per_1k_words: 0 },
+    compliance: { banned_words: [], duplicate_name_policy: "warn" },
+    scoring: { genre_drive_type: "plot", weight_profile_id: "plot:v1" },
+    ...extra
+  };
+}
+
+function makeReadabilityPolicy(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    mobile: {
+      enabled: true,
+      max_paragraph_chars: 10,
+      max_consecutive_exposition_paragraphs: 2,
+      blocking_severity: "hard_only",
+      ...overrides
+    }
+  };
+}
+
+test("computeReadabilityReport skips when readability.mobile is missing/disabled", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-readability-skip-test-"));
+  const profile = parsePlatformProfile(makeProfileRaw({ readability: null }), "platform-profile.json");
+  const report = await computeReadabilityReport({
+    rootDir,
+    chapter: 1,
+    chapterAbsPath: join(rootDir, "chapter.md"),
+    chapterText: "# T\n正文",
+    platformProfile: profile
+  });
+  assert.equal(report.status, "skipped");
+  assert.equal(report.issues.length, 0);
+});
+
+test("computeReadabilityReport fallback flags overlong paragraphs and mixed punctuation (warn-only)", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-readability-fallback-test-"));
+  const profile = parsePlatformProfile(makeProfileRaw({ readability: makeReadabilityPolicy({ max_paragraph_chars: 5 }) }), "platform-profile.json");
+
+  const chapterText = '第一段太长太长太长, A. 但是用了全角，。\n\n第二段。';
+  const report = await computeReadabilityReport({
+    rootDir,
+    chapter: 1,
+    chapterAbsPath: join(rootDir, "chapter.md"),
+    chapterText,
+    platformProfile: profile
+  });
+
+  assert.equal(report.mode, "fallback");
+  assert.equal(report.has_blocking_issues, false);
+  assert.equal(report.status, "warn");
+  assert.ok(report.issues.some((i) => i.id === "readability.mobile.overlong_paragraph"));
+  assert.ok(report.issues.some((i) => i.id === "readability.mobile.mixed_comma_styles"));
+  assert.ok(report.issues.some((i) => i.id === "readability.mobile.mixed_period_styles"));
+});
+
+test("computeReadabilityReport uses deterministic script output and derives blocking status from policy", async () => {
+  const rootDir = await mkdtemp(join(tmpdir(), "novel-readability-script-test-"));
+  await mkdir(join(rootDir, "scripts"), { recursive: true });
+
+  const profile = parsePlatformProfile(
+    makeProfileRaw({
+      compliance: { banned_words: [], duplicate_name_policy: "warn", script_paths: { lint_readability: "scripts/lint-readability.sh" } },
+      readability: makeReadabilityPolicy({ blocking_severity: "soft_and_hard" })
+    }),
+    "platform-profile.json"
+  );
+
+  await writeFile(join(rootDir, "platform-profile.json"), `${JSON.stringify(profile, null, 2)}\n`, "utf8");
+  const chapterAbsPath = join(rootDir, "chapter.md");
+  await writeFile(chapterAbsPath, "# T\n正文\n", "utf8");
+
+  const scriptAbs = join(rootDir, "scripts", "lint-readability.sh");
+  const stubJson =
+    '{"schema_version":1,"generated_at":"2026-01-01T00:00:00.000Z","scope":{"chapter":1},"policy":{"enabled":true,"max_paragraph_chars":10,"max_consecutive_exposition_paragraphs":2,"blocking_severity":"soft_and_hard"},"issues":[{"id":"readability.mobile.overlong_paragraph","severity":"soft","summary":"Soft but blocking when configured."}]}';
+  const stubScript = `#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' '${stubJson}'\n`;
+  await writeFile(scriptAbs, stubScript, "utf8");
+
+  const report = await computeReadabilityReport({
+    rootDir,
+    chapter: 1,
+    chapterAbsPath,
+    chapterText: "# T\n正文\n",
+    platformProfile: profile
+  });
+
+  assert.equal(report.mode, "script");
+  assert.equal(report.has_blocking_issues, true);
+  assert.equal(report.status, "violation");
+});

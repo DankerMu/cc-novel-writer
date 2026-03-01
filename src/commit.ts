@@ -18,6 +18,12 @@ import { withWriteLock } from "./lock.js";
 import { computeContinuityReport, tryResolveVolumeChapterRange, writeContinuityLogs, writeVolumeContinuityReport, type ContinuityReport } from "./consistency-auditor.js";
 import { attachPlatformConstraintsToEval, computePlatformConstraints, precomputeInfoLoadNer, writePlatformConstraintsLogs } from "./platform-constraints.js";
 import { loadPlatformProfile } from "./platform-profile.js";
+import {
+  attachReadabilityLintToEval,
+  computeReadabilityReport,
+  precomputeReadabilityReport,
+  writeReadabilityLogs
+} from "./readability-lint.js";
 import { attachScoringWeightsToEval, loadGenreWeightProfiles } from "./scoring-weights.js";
 import { rejectPathTraversalInput } from "./safe-path.js";
 import { chapterRelPaths, pad2, pad3 } from "./steps.js";
@@ -559,7 +565,9 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
   if (loadedProfile) {
     plan.push(`WRITE logs/platform-constraints/platform-constraints-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
     plan.push(`WRITE logs/retention/title-policy/title-policy-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
+    plan.push(`WRITE logs/readability/readability-lint-chapter-${pad3(args.chapter)}.json (+ latest.json)`);
     plan.push(`PATCH ${rel.final.evalJson} (attach platform_constraints metadata)`);
+    plan.push(`PATCH ${rel.final.evalJson} (attach readability_lint metadata)`);
   }
 
   if (loadedCliche) {
@@ -623,6 +631,17 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
 
   if (precomputedClicheLint?.error) warnings.push(precomputedClicheLint.error);
 
+  const precomputedReadabilityLint = loadedProfile
+    ? await precomputeReadabilityReport({
+        rootDir: args.rootDir,
+        chapter: args.chapter,
+        chapterAbsPath: chapterAbs,
+        platformProfile: loadedProfile.profile
+      })
+    : null;
+
+  if (precomputedReadabilityLint?.error) warnings.push(precomputedReadabilityLint.error);
+
   await withWriteLock(args.rootDir, { chapter: args.chapter }, async () => {
     const checkpointAbs = join(args.rootDir, ".checkpoint.json");
     const stateAbs = join(args.rootDir, rel.final.stateCurrentJson);
@@ -658,6 +677,13 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     const originalTitlePolicyHistoryExists = loadedProfile ? await pathExists(titlePolicyHistoryAbs) : false;
     const originalTitlePolicyHistory = originalTitlePolicyHistoryExists ? await readTextFile(titlePolicyHistoryAbs) : null;
 
+    const readabilityLintLatestAbs = join(args.rootDir, "logs/readability/latest.json");
+    const readabilityLintHistoryAbs = join(args.rootDir, `logs/readability/readability-lint-chapter-${pad3(args.chapter)}.json`);
+    const originalReadabilityLintLatestExists = loadedProfile ? await pathExists(readabilityLintLatestAbs) : false;
+    const originalReadabilityLintLatest = originalReadabilityLintLatestExists ? await readTextFile(readabilityLintLatestAbs) : null;
+    const originalReadabilityLintHistoryExists = loadedProfile ? await pathExists(readabilityLintHistoryAbs) : false;
+    const originalReadabilityLintHistory = originalReadabilityLintHistoryExists ? await readTextFile(readabilityLintHistoryAbs) : null;
+
     const clicheLintLatestAbs = join(args.rootDir, "logs/cliche-lint/latest.json");
     const clicheLintHistoryAbs = join(args.rootDir, `logs/cliche-lint/cliche-lint-chapter-${pad3(args.chapter)}.json`);
     const originalClicheLintLatestExists = loadedCliche ? await pathExists(clicheLintLatestAbs) : false;
@@ -668,6 +694,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
     const moved: Array<{ from: string; to: string }> = [];
     let platformConstraintsWritten = false;
     let titlePolicyWritten = false;
+    let readabilityLintWritten = false;
     let clicheLintWritten = false;
 
     const rollback = async (): Promise<void> => {
@@ -785,6 +812,30 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
         }
       }
 
+      if (readabilityLintWritten) {
+        try {
+          if (originalReadabilityLintLatestExists && originalReadabilityLintLatest !== null) {
+            await ensureDir(dirname(readabilityLintLatestAbs));
+            await writeFile(readabilityLintLatestAbs, originalReadabilityLintLatest, "utf8");
+          } else {
+            await removePath(readabilityLintLatestAbs);
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          if (originalReadabilityLintHistoryExists && originalReadabilityLintHistory !== null) {
+            await ensureDir(dirname(readabilityLintHistoryAbs));
+            await writeFile(readabilityLintHistoryAbs, originalReadabilityLintHistory, "utf8");
+          } else {
+            await removePath(readabilityLintHistoryAbs);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       if (clicheLintWritten) {
         try {
           if (originalClicheLintLatestExists && originalClicheLintLatest !== null) {
@@ -851,6 +902,42 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
               return { size: s.size, mtime_ms: s.mtimeMs, content_hash: hashText(chapterText) };
             })()
           : null;
+
+      let readabilityLintReport: Awaited<ReturnType<typeof computeReadabilityReport>> | null = null;
+      if (loadedProfile && chapterText !== null) {
+        const pre = precomputedReadabilityLint;
+        if (
+          pre &&
+          pre.status === "pass" &&
+          pre.report &&
+          pre.chapter_fingerprint &&
+          chapterFingerprintNow &&
+          fingerprintsMatch(pre.chapter_fingerprint, chapterFingerprintNow)
+        ) {
+          readabilityLintReport = pre.report;
+        } else {
+          readabilityLintReport = await computeReadabilityReport({
+            rootDir: args.rootDir,
+            chapter: args.chapter,
+            chapterAbsPath: chapterAbs,
+            chapterText,
+            platformProfile: loadedProfile.profile,
+            preferDeterministicScript: true
+          });
+        }
+
+        if (readabilityLintReport.has_blocking_issues) {
+          const blocking = readabilityLintReport.policy?.blocking_severity ?? "hard_only";
+          const blockingIssues =
+            blocking === "soft_and_hard"
+              ? readabilityLintReport.issues.filter((i) => i.severity === "soft" || i.severity === "hard")
+              : readabilityLintReport.issues.filter((i) => i.severity === "hard");
+          const summaries = blockingIssues.map((i) => i.summary).slice(0, 3);
+          const suffix = blockingIssues.length > 3 ? " …" : "";
+          const details = summaries.length > 0 ? `${summaries.join(" | ")}${suffix}` : "(details in readability lint report)";
+          throw new NovelCliError(`Mobile readability blocking issue: ${details}`, 2);
+        }
+      }
 
       let platformConstraintsReport: Awaited<ReturnType<typeof computePlatformConstraints>> | null = null;
       if (loadedProfile && chapterText !== null) {
@@ -960,6 +1047,17 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
           const titleReport = computeTitlePolicyReport({ chapter: args.chapter, chapterText, platformProfile: loadedProfile.profile });
           titlePolicyWritten = true;
           await writeTitlePolicyLogs({ rootDir: args.rootDir, chapter: args.chapter, report: titleReport });
+        }
+
+        if (readabilityLintReport) {
+          readabilityLintWritten = true;
+          const { historyRel: readabilityHistoryRel } = await writeReadabilityLogs({ rootDir: args.rootDir, chapter: args.chapter, report: readabilityLintReport });
+          await attachReadabilityLintToEval({
+            evalAbsPath: join(args.rootDir, rel.final.evalJson),
+            evalRelPath: rel.final.evalJson,
+            reportRelPath: readabilityHistoryRel,
+            report: readabilityLintReport
+          });
         }
       }
 
