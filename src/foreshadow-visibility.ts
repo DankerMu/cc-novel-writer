@@ -203,6 +203,8 @@ export async function writeForeshadowVisibilityLogs(args: {
   };
 
   const lockAbs = join(dirAbs, ".latest.lock");
+  const lockOwnerAbs = join(lockAbs, "owner.json");
+  const lockToken = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const LOCK_STALE_MS = 30_000;
   const LOCK_TIMEOUT_MS = 2_000;
   const sleep = async (ms: number): Promise<void> => {
@@ -221,6 +223,12 @@ export async function writeForeshadowVisibilityLogs(args: {
     while (true) {
       try {
         await mkdir(lockAbs);
+        try {
+          await writeJsonFile(lockOwnerAbs, { token: lockToken, pid: process.pid, started_at: new Date().toISOString() });
+        } catch (err) {
+          await rm(lockAbs, { recursive: true, force: true });
+          throw err;
+        }
         return;
       } catch (err: unknown) {
         const code = (err as { code?: string }).code;
@@ -242,8 +250,20 @@ export async function writeForeshadowVisibilityLogs(args: {
     }
   };
 
+  const stillOwnLock = async (): Promise<boolean> => {
+    try {
+      const raw = await readJsonFile(lockOwnerAbs);
+      if (!isPlainObject(raw)) return false;
+      const obj = raw as Record<string, unknown>;
+      return obj.token === lockToken;
+    } catch {
+      return false;
+    }
+  };
+
   const releaseLock = async (): Promise<void> => {
     try {
+      if (!(await stillOwnLock())) return;
       await rm(lockAbs, { recursive: true, force: true });
     } catch {
       // ignore
@@ -272,9 +292,18 @@ export async function writeForeshadowVisibilityLogs(args: {
     }
 
     if (shouldWriteLatest) {
+      if (!(await stillOwnLock())) return result;
       const tmpAbs = join(dirAbs, `.tmp-foreshadowing-latest-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
       await writeJsonFile(tmpAbs, args.report);
-      await rename(tmpAbs, latestAbs);
+      if (await stillOwnLock()) {
+        await rename(tmpAbs, latestAbs);
+      } else {
+        try {
+          await rm(tmpAbs, { force: true });
+        } catch {
+          // ignore
+        }
+      }
       try {
         if (await pathExists(tmpAbs)) await rm(tmpAbs, { force: true });
       } catch {
