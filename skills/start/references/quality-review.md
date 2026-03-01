@@ -63,7 +63,7 @@
    - 报告落盘（回归友好）：
      - 创建目录（幂等）：`mkdir -p logs/foreshadowing logs/storylines`
      - 写入 `logs/foreshadowing/foreshadowing-check-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
-     - 同步写入/覆盖 `logs/foreshadowing/latest.json`
+     - 同步写入/覆盖 `logs/foreshadowing/foreshadowing-check-latest.json`（避免覆盖 `logs/foreshadowing/latest.json`；后者用于 commit 阶段的“伏笔可见度报告”）
      - 写入 `logs/storylines/broken-bridges-vol-{V:02d}-ch{start:03d}-ch{end:03d}.json`
      - 同步写入/覆盖 `logs/storylines/broken-bridges-latest.json`
 5. **故事线节奏分析（简报）**（周期性每 10 章；不阻断写作）：

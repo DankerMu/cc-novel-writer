@@ -1,3 +1,4 @@
+import { rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { ensureDir, pathExists, readJsonFile, writeJsonFile } from "./fs-utils.js";
@@ -75,7 +76,13 @@ export function deriveForeshadowDormancyThresholds(genreDriveType: string | null
 }
 
 function normalizeForeshadowList(raw: unknown): ForeshadowRawItem[] {
-  const list = Array.isArray(raw) ? raw : isPlainObject(raw) && Array.isArray((raw as Record<string, unknown>).foreshadowing) ? (raw as any).foreshadowing : [];
+  let list: unknown[] = [];
+  if (Array.isArray(raw)) {
+    list = raw;
+  } else if (isPlainObject(raw)) {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.foreshadowing)) list = obj.foreshadowing;
+  }
   const out: ForeshadowRawItem[] = [];
   for (const it of list) {
     if (!isPlainObject(it)) continue;
@@ -203,7 +210,40 @@ export async function writeForeshadowVisibilityLogs(args: {
   }
 
   if (shouldWriteLatest) {
-    await writeJsonFile(latestAbs, args.report);
+    const tmpAbs = join(dirAbs, `.tmp-foreshadowing-latest-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+    await writeJsonFile(tmpAbs, args.report);
+
+    // Re-check right before replace to reduce TOCTOU regressions under concurrent post-commit maintenance.
+    let replaceLatest = true;
+    if (await pathExists(latestAbs)) {
+      try {
+        const existing = parseLatest(await readJsonFile(latestAbs));
+        const next = { chapter: args.report.as_of.chapter, generated_at: args.report.generated_at };
+        if (existing) {
+          if (existing.chapter > next.chapter) replaceLatest = false;
+          if (existing.chapter === next.chapter && existing.generated_at && existing.generated_at >= next.generated_at) replaceLatest = false;
+        }
+      } catch {
+        // If latest.json is malformed (e.g., partial write), allow overwrite with a valid report.
+      }
+    }
+
+    if (!replaceLatest) {
+      try {
+        await rm(tmpAbs, { force: true });
+      } catch {
+        // ignore
+      }
+    } else {
+      await rename(tmpAbs, latestAbs);
+
+      // Best-effort cleanup if rename somehow didn't remove the temp file.
+      try {
+        if (await pathExists(tmpAbs)) await rm(tmpAbs, { force: true });
+      } catch {
+        // ignore
+      }
+    }
   }
 
   if (!args.historyRange) return { latestRel };

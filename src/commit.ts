@@ -413,6 +413,16 @@ function pendingVolumeEndMarkerRel(volume: number): string {
   return `logs/continuity/pending-volume-end-vol-${pad2(volume)}.json`;
 }
 
+function resolveForeshadowVisibilityHistoryRange(args: {
+  chapter: number;
+  isVolumeEnd: boolean;
+  volumeRange: { start: number; end: number } | null;
+}): { start: number; end: number } | null {
+  if (args.isVolumeEnd && args.volumeRange) return { start: args.volumeRange.start, end: args.volumeRange.end };
+  if (args.chapter % 10 === 0) return { start: Math.max(1, args.chapter - 9), end: args.chapter };
+  return null;
+}
+
 function parsePendingVolumeEndAuditMarker(raw: unknown): PendingVolumeEndAuditMarker | null {
   if (!isPlainObject(raw)) return null;
   const obj = raw as Record<string, unknown>;
@@ -576,13 +586,14 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
 
   // Optional: foreshadow visibility maintenance (non-blocking).
   // This generates a dormancy view + non-spoiler light-touch reminder tasks.
-  plan.push(`WRITE logs/foreshadowing/latest.json`);
-  if (isVolumeEnd && volumeRange) {
-    plan.push(`WRITE logs/foreshadowing/foreshadowing-check-vol-${pad2(volume)}-ch${pad3(volumeRange.start)}-ch${pad3(volumeRange.end)}.json`);
-  } else if (args.chapter % 10 === 0) {
-    const start = Math.max(1, args.chapter - 9);
-    const end = args.chapter;
-    plan.push(`WRITE logs/foreshadowing/foreshadowing-check-vol-${pad2(volume)}-ch${pad3(start)}-ch${pad3(end)}.json`);
+  plan.push(`WRITE logs/foreshadowing/latest.json (monotonic)`);
+  const foreshadowHistoryRange = resolveForeshadowVisibilityHistoryRange({ chapter: args.chapter, isVolumeEnd, volumeRange });
+  if (foreshadowHistoryRange) {
+    plan.push(
+      `WRITE logs/foreshadowing/foreshadowing-check-vol-${pad2(volume)}-ch${pad3(foreshadowHistoryRange.start)}-ch${pad3(
+        foreshadowHistoryRange.end
+      )}.json`
+    );
   }
 
   // Update checkpoint.
@@ -1062,12 +1073,7 @@ export async function commitChapter(args: CommitArgs): Promise<CommitResult> {
       genreDriveType
     });
 
-    const historyRange =
-      isVolumeEnd && volumeRange
-        ? { start: volumeRange.start, end: volumeRange.end }
-        : args.chapter % 10 === 0
-          ? { start: Math.max(1, args.chapter - 9), end: args.chapter }
-          : null;
+    const historyRange = resolveForeshadowVisibilityHistoryRange({ chapter: args.chapter, isVolumeEnd, volumeRange });
 
     await writeForeshadowVisibilityLogs({ rootDir: args.rootDir, report, historyRange });
   } catch (err: unknown) {

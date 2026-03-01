@@ -556,7 +556,7 @@ for chapter_num in range(start, start + remaining_N):
 - 每完成 5 章（last_completed_chapter % 5 == 0）：输出质量简报（均分 + 低分章节 + 主要风险）+ 风格漂移检测结果（是否生成/清除 style-drift.json）+ 一致性滑窗审计（stride=5, window=10，更新 `logs/continuity/latest.json`），并提示用户可运行 `/novel:start` 进入“质量回顾/调整方向”
 - 每完成 10 章（last_completed_chapter % 10 == 0）：触发周期性盘点提醒（建议运行 `/novel:start` → “质量回顾”，将汇总展示：
   - 一致性报告：`logs/continuity/latest.json` 与 `logs/continuity/continuity-report-*.json`（每 5 章自动更新）
-  - 伏笔盘点与桥梁检查：`logs/foreshadowing/latest.json`、`logs/storylines/broken-bridges-latest.json`
+  - 伏笔可见度/盘点与桥梁检查：`logs/foreshadowing/latest.json`（可见度）/`logs/foreshadowing/foreshadowing-check-latest.json`（盘点）、`logs/storylines/broken-bridges-latest.json`
   - 故事线节奏分析：`logs/storylines/rhythm-latest.json`）
 - 到达本卷末尾章节：提示用户执行 `/novel:start` 进行卷末回顾
 

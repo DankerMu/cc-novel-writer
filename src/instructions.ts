@@ -121,7 +121,7 @@ export async function buildInstructionPacket(args: BuildArgs): Promise<Record<st
       }));
       if (tasks.length > 0) inline.foreshadow_light_touch_tasks = tasks;
     } catch {
-      // ignore
+      inline.foreshadow_light_touch_degraded = true;
     }
     expected_outputs.push({ path: rel.staging.chapterMd, required: true });
     next_actions.push({ kind: "command", command: `novel validate ${stepId}` });
